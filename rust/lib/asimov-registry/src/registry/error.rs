@@ -26,8 +26,14 @@ pub enum AddModuleError {
 }
 
 #[derive(Debug, Error)]
-#[error("failed to read module README at `{0}`: {1}")]
-pub struct ReadReadmeError(pub PathBuf, #[source] pub io::Error);
+pub enum ReadReadmeError {
+    #[error("module is not installed")]
+    NotInstalled,
+    #[error("error while checking whether module is installed: {0}")]
+    IsModuleInstalled(#[from] IsModuleInstalledError),
+    #[error("failed to read module README at `{0}`: {1}")]
+    Read(PathBuf, #[source] io::Error),
+}
 
 #[derive(Debug, Error)]
 pub enum ManifestError {

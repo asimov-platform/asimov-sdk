@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use asimov_module::InstalledModuleManifest;
-use asimov_registry::Registry;
+use asimov_registry::{Registry, error::ReadReadmeError};
 use tempfile::tempdir;
 
 // See: https://asimov-specs.github.io/module-manifest/
@@ -137,6 +137,11 @@ pub async fn test_registry(
     registry.remove_module(&sample).await.unwrap();
     assert!(!module_dir.exists());
     assert_eq!(registry.installed_modules().await.unwrap().len(), 0);
+
+    assert!(matches!(
+        registry.read_readme(&sample).await,
+        Err(ReadReadmeError::NotInstalled)
+    ));
 }
 
 #[tokio::test]

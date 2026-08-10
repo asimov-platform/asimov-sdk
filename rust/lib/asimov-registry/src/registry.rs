@@ -139,12 +139,16 @@ impl Registry {
         &self,
         module_name: &ModuleName,
     ) -> Result<Option<String>, ReadReadmeError> {
+        if !self.is_module_installed(module_name).await? {
+            return Err(ReadReadmeError::NotInstalled);
+        }
+
         let readme_path = self.module_dir(module_name).join(README_FILE_PATH);
 
         match tokio::fs::read_to_string(&readme_path).await {
             Ok(content) => Ok(Some(content)),
             Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(err) => Err(ReadReadmeError(readme_path, err)),
+            Err(err) => Err(ReadReadmeError::Read(readme_path, err)),
         }
     }
 
