@@ -54,7 +54,7 @@ thiserror.workspace = true
 anyhow = { workspace = true, optional = true, features = ["std"] }
 asimov-module = { workspace = true, optional = true }
 cargo-generate = { workspace = true, optional = true }
-git2 = { workspace = true, optional = true }
+git2 = { workspace = true, optional = true, features = ["vendored-libgit2"] }
 # Keep cargo-generate's liquid stack compatible with the workspace Rust version.
 kstring = { workspace = true, optional = true }
 liquid = { workspace = true, optional = true }
