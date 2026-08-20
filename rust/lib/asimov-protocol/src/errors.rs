@@ -7,6 +7,8 @@ use heapless::CapacityError;
 use known_errors::sysexits::SysexitsError;
 use thiserror::Error;
 
+pub type BoxError = Box<dyn Error + Send + Sync>;
+
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum AcceptError {
@@ -83,7 +85,7 @@ pub enum PingError {
     RecvPing(#[from] RecvError),
 
     #[error(transparent)]
-    Other(#[from] Box<dyn Error>),
+    Other(#[from] BoxError),
 }
 
 impl From<PingError> for SysexitsError {
@@ -99,7 +101,7 @@ pub enum PublishError {
     Gossip(#[from] iroh_gossip::api::ApiError),
 
     #[error(transparent)]
-    Other(#[from] Box<dyn Error>),
+    Other(#[from] BoxError),
 }
 
 impl From<PublishError> for SysexitsError {
@@ -112,7 +114,7 @@ impl From<PublishError> for SysexitsError {
 #[non_exhaustive]
 pub enum StartError {
     #[error(transparent)]
-    Other(#[from] Box<dyn Error>),
+    Other(#[from] BoxError),
 }
 
 impl From<StartError> for SysexitsError {
@@ -128,7 +130,7 @@ pub enum SubscribeError {
     Gossip(#[from] iroh_gossip::api::ApiError),
 
     #[error(transparent)]
-    Other(#[from] Box<dyn Error>),
+    Other(#[from] BoxError),
 }
 
 impl From<SubscribeError> for SysexitsError {
