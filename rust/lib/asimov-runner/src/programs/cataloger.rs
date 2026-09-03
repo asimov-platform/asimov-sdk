@@ -38,13 +38,23 @@ impl Cataloger {
         let mut executor = Executor::new(program);
         executor
             .command()
-            .args(if let Some(ref output) = options.output {
-                vec![format!("--output={}", output)]
+            .args(if let Some(ref sort) = options.sort {
+                vec![format!("--sort={}", sort.to_string())]
+            } else {
+                vec![]
+            })
+            .args(if let Some(offset) = options.offset {
+                vec![format!("--offset={}", offset)]
             } else {
                 vec![]
             })
             .args(if let Some(limit) = options.limit {
                 vec![format!("--limit={}", limit)]
+            } else {
+                vec![]
+            })
+            .args(if let Some(ref output) = options.output {
+                vec![format!("--output={}", output)]
             } else {
                 vec![]
             })
