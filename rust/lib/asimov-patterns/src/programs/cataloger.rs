@@ -3,6 +3,7 @@
 use crate::Execute;
 use alloc::{string::String, vec::Vec};
 use bon::Builder;
+use clientele::options::sort::SortKeys;
 
 /// Graph iterator. Takes a URL input, produces RDF output.
 ///
@@ -21,14 +22,20 @@ pub trait Cataloger<T, E>: Execute<T, E> {}
 ///     .output("jsonld")
 ///     .build();
 /// ```
-#[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
+#[derive(Clone, Debug, Default, Eq, Hash, /*Ord,*/ PartialEq, /*PartialOrd,*/ Builder)]
 #[builder(derive(Debug), on(String, into))]
 pub struct CatalogerOptions {
     /// Extended nonstandard cataloger options.
     #[builder(field)]
     pub other: Vec<String>,
 
-    /// The maximum number of outputs.
+    /// Sort resources by the specified keys. (Prefix a key with `-` for descending order.)
+    pub sort: Option<SortKeys>,
+
+    /// The index offset of the first output.
+    pub offset: Option<usize>,
+
+    /// The maximum count of outputs.
     pub limit: Option<usize>,
 
     /// The output format.

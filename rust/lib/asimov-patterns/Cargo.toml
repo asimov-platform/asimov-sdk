@@ -22,7 +22,7 @@ title = "ASIMOV.rs: Program Patterns"
 [features]
 default = ["all", "std"]
 all = []
-std = ["asimov-core/std"]
+std = ["asimov-core/std", "clientele/std"]
 unstable = []
 
 # Features:
@@ -32,6 +32,7 @@ tracing = []
 asimov-core.workspace = true
 async-trait.workspace = true
 bon.workspace = true
+clientele = { workspace = true, features = ["clap"] }
 rdf-model.workspace = true
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features

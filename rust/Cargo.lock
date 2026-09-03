@@ -1351,6 +1351,7 @@ dependencies = [
  "asimov-core",
  "async-trait",
  "bon",
+ "clientele",
  "rdf-model",
 ]
 
@@ -2730,9 +2731,9 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "clientele"
-version = "0.3.8"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07ab70eb434a01fc8bc1787981828ccf36f1e80a1242b915e085e913b4290e66"
+checksum = "6073f2f438171bb6d1c1a7e4aa00ebae60febcf11e54d582576e5e295f9add8f"
 dependencies = [
  "argfile",
  "clap",
