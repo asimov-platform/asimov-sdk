@@ -5,36 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 25.3.4 - 2026-08-10
+## 25.3.5 - 2026-09-05
+### Changed
+- Tighten up `BoxError` constraints (@artob)
+- Add more options to `CatalogerOptions` (@artob)
 
+## 25.3.4 - 2026-08-10
 ### Changed
 - Distinguish an uninstalled module in `Registry::read_readme` (@SamuelSarle)
 
 ## 25.3.3 - 2026-08-07
-
 ### Changed
 - Add `secret` and `optional` to module configuration variables (@SamuelSarle)
 
 ## 25.3.2 - 2026-08-06
-
 ### Changed
 - Install modules as directories (@SamuelSarle)
 - Bump the MSRV to Rust 1.97 (@SamuelSarle)
 
 ## 25.3.1 - 2026-08-04
-
 ### Added
 - `asimov_module::Index` (@SamuelSarle)
 
 ## 25.3.0 - 2026-07-28
-
 ### Added
 - `asimov_module_kit` (@oleksandrvoyager)
 - `asimov_protocol::CsvHandleResolver` (@artob)
 - `asimov_protocol::HandleResolver` (@artob)
 - `asimov_protocol::PeerProtocol` (@artob)
 - `asimov_protocol::GossipProtocol` (@artob)
-
 ### Changed
 - Redefine `asimov_id::Id` (@artob)
 - Rename `asimov_id::Key` to `PublicKey` (@artob)
@@ -42,7 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump many dependencies to their latest releases (@artob)
 
 ## 25.2.0 - 2026-07-03
-
 ### Added
 - `asimov_config::ConfigProfile` (@artob)
 - `asimov_core::ModuleName` (@artob)
@@ -57,7 +55,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `asimov_directory::fs::StateDirectory` (@artob)
 - `asimov_kb::OrganizationId` (@artob)
 - `asimov_protocol::PingProtocol` (@artob)
-
 ### Changed
 - Bump the RDF.rb dependency to 0.4.4 (@artob)
 - Bump the Iroh dependency to 1.0.1 (@artob)
@@ -65,42 +62,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improve interoperability with async_graphql (@artob)
 
 ## 25.1.0 - 2026-01-30
-
 ### Added
 - Export all packages from the top-level crate (@artob)
 - Define types for public keys and blob IDs (@artob)
-
 ### Fixed
 - Fix builds with `--no-default-features` (@artob)
 - Fix builds on WebAssembly targets (@artob)
-
 ### Removed
 - Houseclean obsolete code overcome by events (@artob)
 
 ## 25.0.3 - 2026-01-04
-
 ### Added
 - New crates: asimov-cloud, asimov-credit, asimov-id, asimov-kb, asimov-nexus (by @artob)
-
 ### Fixed
 - Update module manifest metadata to match the spec (by @artob)
 
 ## 25.0.2 - 2025-11-12
-
 ### Changed
-
 - Switch `asimov-installer` away from using `api.github.com` endpoints (#43 by @SamuelSarle)
 
 ## 25.0.1 - 2025-11-12
-
 ### Fixed
-
 - Fix `asimov-installer` having wrong path on Windows (@imunproductive)
 
 ## 25.0.0 - 2025-11-05
-
 ### Added
-
 - General availability
 
 ## 25.0.0-dev.25 - 2025-11-05
