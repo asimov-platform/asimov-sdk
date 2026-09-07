@@ -95,7 +95,7 @@ pub fn normalize_url(url: &str) -> Result<String, NormalizeError> {
     let path = if scheme == "file" && !path.starts_with("/") {
         "/".to_string() + &path.replace('\\', "/")
     } else {
-        path
+        path.to_string()
     };
 
     builder.path(&path);
