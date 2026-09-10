@@ -19,6 +19,9 @@ pub use indexer::*;
 mod lister;
 pub use lister::*;
 
+mod matcher;
+pub use matcher::*;
+
 mod prompter;
 pub use prompter::*;
 
