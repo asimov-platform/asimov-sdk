@@ -7,25 +7,25 @@ use clientele::options::sort::SortKeys;
 
 /// Graph iterator. Takes a URL input, produces RDF output.
 ///
-/// See: https://asimov-specs.github.io/program-patterns/#cataloger
-pub trait Cataloger<T, E>: Execute<T, E> {}
+/// See: https://asimov-specs.github.io/program-patterns/#lister
+pub trait Lister<T, E>: Execute<T, E> {}
 
-/// Configuration options for [`Cataloger`].
+/// Configuration options for [`Lister`].
 ///
 /// # Examples
 ///
 /// ```rust
-/// use asimov_patterns::CatalogerOptions;
+/// use asimov_patterns::ListerOptions;
 ///
-/// let options = CatalogerOptions::builder()
+/// let options = ListerOptions::builder()
 ///     .limit(100)
 ///     .output("jsonld")
 ///     .build();
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, /*Ord,*/ PartialEq, /*PartialOrd,*/ Builder)]
 #[builder(derive(Debug), on(String, into))]
-pub struct CatalogerOptions {
-    /// Extended nonstandard cataloger options.
+pub struct ListerOptions {
+    /// Extended nonstandard lister options.
     #[builder(field)]
     pub other: Vec<String>,
 
@@ -42,7 +42,7 @@ pub struct CatalogerOptions {
     pub output: Option<String>,
 }
 
-impl<S: cataloger_options_builder::State> CatalogerOptionsBuilder<S> {
+impl<S: lister_options_builder::State> ListerOptionsBuilder<S> {
     pub fn other(mut self, flag: impl Into<String>) -> Self {
         self.other.push(flag.into());
         self

@@ -7,9 +7,6 @@
 mod adapter;
 pub use adapter::*;
 
-mod cataloger;
-pub use cataloger::*;
-
 mod emitter;
 pub use emitter::*;
 
@@ -18,6 +15,9 @@ pub use fetcher::*;
 
 mod indexer;
 pub use indexer::*;
+
+mod lister;
+pub use lister::*;
 
 mod prompter;
 pub use prompter::*;
