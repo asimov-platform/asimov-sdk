@@ -12,27 +12,27 @@ use async_trait::async_trait;
 use derive_more::Debug;
 use std::{ffi::OsStr, io::Cursor, process::Stdio};
 
-pub use asimov_patterns::CatalogerOptions;
+pub use asimov_patterns::ListerOptions;
 
-/// See: https://asimov-specs.github.io/program-patterns/#cataloger
-pub type CatalogerResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>; // TODO
+/// See: https://asimov-specs.github.io/program-patterns/#lister
+pub type ListerResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>; // TODO
 
-/// See: https://asimov-specs.github.io/program-patterns/#cataloger
+/// See: https://asimov-specs.github.io/program-patterns/#lister
 #[allow(unused)]
 #[derive(Debug)]
-pub struct Cataloger {
+pub struct Lister {
     executor: Executor,
-    options: CatalogerOptions,
+    options: ListerOptions,
     input: String,
     output: GraphOutput,
 }
 
-impl Cataloger {
+impl Lister {
     pub fn new(
         program: impl AsRef<OsStr>,
         input: impl AsRef<str>,
         output: GraphOutput,
-        options: CatalogerOptions,
+        options: ListerOptions,
     ) -> Self {
         let input = input.as_ref().to_string();
         let mut executor = Executor::new(program);
@@ -72,17 +72,17 @@ impl Cataloger {
         }
     }
 
-    pub async fn execute(&mut self) -> CatalogerResult {
+    pub async fn execute(&mut self) -> ListerResult {
         let stdout = self.executor.execute().await?;
         Ok(stdout)
     }
 }
 
-impl asimov_patterns::Cataloger<Cursor<Vec<u8>>, ExecutorError> for Cataloger {}
+impl asimov_patterns::Lister<Cursor<Vec<u8>>, ExecutorError> for Lister {}
 
 #[async_trait]
-impl asimov_patterns::Execute<Cursor<Vec<u8>>, ExecutorError> for Cataloger {
-    async fn execute(&mut self) -> CatalogerResult {
+impl asimov_patterns::Execute<Cursor<Vec<u8>>, ExecutorError> for Lister {
+    async fn execute(&mut self) -> ListerResult {
         self.execute().await
     }
 }

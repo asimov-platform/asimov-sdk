@@ -76,7 +76,7 @@ impl<S: crate::storage::Storage> Snapshotter<S> {
                         .provides
                         .programs
                         .iter()
-                        .any(|p| p.ends_with("-fetcher") || p.ends_with("-cataloger"))
+                        .any(|p| p.ends_with("-fetcher") || p.ends_with("-lister"))
                 });
             let resolver = Resolver::try_from_iter(modules).map_err(io::Error::other)?;
             self.cached_resolver = Some(resolver);
@@ -104,9 +104,9 @@ impl<S: crate::storage::Storage> Snapshotter<S> {
         let url = url.as_ref().to_string();
 
         let fetcher = programs.iter().find(|p| p.ends_with("-fetcher"));
-        let cataloger = programs.iter().find(|p| p.ends_with("-cataloger"));
+        let lister = programs.iter().find(|p| p.ends_with("-lister"));
 
-        if fetcher.is_none() && cataloger.is_none() {
+        if fetcher.is_none() && lister.is_none() {
             return Err(std::io::Error::other(
                 "No module found for creating snapshot",
             ));
@@ -143,11 +143,11 @@ impl<S: crate::storage::Storage> Snapshotter<S> {
             None
         };
 
-        // if fetcher failed or doesn't exist, try cataloger
-        let cataloger_error = if let Some(program) = cataloger {
-            tracing::debug!("attempting to capture a snapshot with cataloger");
+        // if fetcher failed or doesn't exist, try lister
+        let lister_error = if let Some(program) = lister {
+            tracing::debug!("attempting to capture a snapshot with lister");
             let start_timestamp = Timestamp::now();
-            match asimov_runner::Cataloger::new(
+            match asimov_runner::Lister::new(
                 program,
                 &url,
                 GraphOutput::Captured,
@@ -155,7 +155,7 @@ impl<S: crate::storage::Storage> Snapshotter<S> {
             )
             .execute()
             .await
-            .inspect_err(|e| tracing::debug!("failed creating a snapshot with cataloger: {e}"))
+            .inspect_err(|e| tracing::debug!("failed creating a snapshot with lister: {e}"))
             {
                 Ok(result) => {
                     let snapshot = Snapshot {
@@ -174,12 +174,12 @@ impl<S: crate::storage::Storage> Snapshotter<S> {
             None
         };
 
-        let error_msg = match (fetcher_error, cataloger_error) {
+        let error_msg = match (fetcher_error, lister_error) {
             (Some(fe), Some(ce)) => {
-                format!("both fetcher and cataloger failed - fetcher: {fe}, cataloger: {ce}")
+                format!("both fetcher and lister failed - fetcher: {fe}, lister: {ce}")
             },
             (Some(fe), None) => format!("fetcher failed: {fe}"),
-            (None, Some(ce)) => format!("cataloger failed: {ce}"),
+            (None, Some(ce)) => format!("lister failed: {ce}"),
             (None, None) => unreachable!("At least one program should exist at this point"),
         };
 

@@ -2,9 +2,9 @@ use asimov_module::Index;
 
 const SAMPLE_INDEX: &str = r#"
 {"@type":"AsimovModule","name":"anthropic","label":"Anthropic","title":"ASIMOV Anthropic Module","summary":"LLM inference powered by Anthropic.","links":["https://github.com/asimov-modules/asimov-anthropic-module","https://crates.io/crates/asimov-anthropic-module"],"provides":{"programs":["asimov-anthropic-prompter"]},"config":{"variables":[{"name":"api-key","environment":"ANTHROPIC_API_KEY"},{"name":"model","environment":"ANTHROPIC_MODEL","default":"claude-opus-4-1-20250805"}]}}
-{"@type":"AsimovModule","name":"imap","label":"IMAP","title":"ASIMOV IMAP Module","summary":"IMAP email import.","links":["https://github.com/asimov-modules/asimov-imap-module","https://crates.io/crates/asimov-imap-module"],"provides":{"programs":["asimov-imap-cataloger","asimov-imap-fetcher"]},"handles":{"url_protocols":["imap","imaps"]},"uses":{"env_variables":["ASIMOV_IMAP_USER","ASIMOV_IMAP_PASSWORD"]}}
+{"@type":"AsimovModule","name":"imap","label":"IMAP","title":"ASIMOV IMAP Module","summary":"IMAP email import.","links":["https://github.com/asimov-modules/asimov-imap-module","https://crates.io/crates/asimov-imap-module"],"provides":{"programs":["asimov-imap-lister","asimov-imap-fetcher"]},"handles":{"url_protocols":["imap","imaps"]},"uses":{"env_variables":["ASIMOV_IMAP_USER","ASIMOV_IMAP_PASSWORD"]}}
 {"@type":"AsimovModule","name":"ipfs","label":"IPFS","title":"ASIMOV IPFS Module","summary":"IPFS protocol support.","links":["https://github.com/asimov-modules/asimov-ipfs-module","https://crates.io/crates/asimov-ipfs-module"],"provides":{"programs":["asimov-ipfs-fetcher"]},"handles":{"url_protocols":["ipfs"],"url_prefixes":null,"url_patterns":null,"file_extensions":null,"content_types":null}}
-{"@type":"AsimovModule","name":"maildir","label":"Maildir","title":"ASIMOV Maildir Module","summary":"Maildir email import.","links":["https://github.com/asimov-modules/asimov-maildir-module","https://crates.io/crates/asimov-maildir-module"],"provides":{"programs":["asimov-maildir-cataloger","asimov-maildir-fetcher"]},"handles":{"url_protocols":["file"],"file_extensions":[".maildir"],"content_types":null}}
+{"@type":"AsimovModule","name":"maildir","label":"Maildir","title":"ASIMOV Maildir Module","summary":"Maildir email import.","links":["https://github.com/asimov-modules/asimov-maildir-module","https://crates.io/crates/asimov-maildir-module"],"provides":{"programs":["asimov-maildir-lister","asimov-maildir-fetcher"]},"handles":{"url_protocols":["file"],"file_extensions":[".maildir"],"content_types":null}}
 "#;
 
 #[test]
@@ -73,7 +73,7 @@ fn test_search_terms() {
         names("github.com/asimov-modules"),
         ["anthropic", "imap", "ipfs", "maildir"],
     );
-    assert_eq!(names("imap-cataloger"), ["imap"]);
+    assert_eq!(names("imap-lister"), ["imap"]);
     assert_eq!(names(".maildir"), ["maildir"]);
 
     // A term is never matched across a field boundary (name + label here):
