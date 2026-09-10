@@ -97,7 +97,7 @@ async-stream = { version = "0.3", default-features = false }
 async-trait = { version = "0.1", default-features = false }
 axum = { version = "0.8", default-features = false, features = ["macros"] }
 axum-embed = { version = "0.1", default-features = false }
-axum-prometheus = { version = "0.8", default-features = false, features = [
+axum-prometheus = { version = "0.10", default-features = false, features = [
     "prometheus",
 ] }
 axum-test = { version = "17.3", default-features = false }
