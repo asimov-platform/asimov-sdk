@@ -39,6 +39,20 @@ whatsapp = ["dep:known-types-whatsapp"]
 x = ["dep:known-types-x"]
 
 # Interoperability:
+async-graphql = [
+    "dep:async-graphql",
+    "known-types-facebook?/async-graphql",
+    "known-types-github?/async-graphql",
+    "known-types-gravatar?/async-graphql",
+    "known-types-instagram?/async-graphql",
+    "known-types-introco?/async-graphql",
+    "known-types-linkedin?/async-graphql",
+    "known-types-localai?/async-graphql",
+    "known-types-luma?/async-graphql",
+    "known-types-telegram?/async-graphql",
+    "known-types-whatsapp?/async-graphql",
+    "known-types-x?/async-graphql",
+]
 clap = ["dep:clap"]
 serde = [
     "dep:serde",
@@ -54,7 +68,22 @@ serde = [
     "known-types-whatsapp?/serde",
     "known-types-x?/serde",
 ]
-tracing = []
+sqlx = [
+    "dep:sqlx",
+    "std",
+    "known-types-facebook?/sqlx",
+    "known-types-github?/sqlx",
+    "known-types-gravatar?/sqlx",
+    "known-types-instagram?/sqlx",
+    "known-types-introco?/sqlx",
+    "known-types-linkedin?/sqlx",
+    "known-types-localai?/sqlx",
+    "known-types-luma?/sqlx",
+    "known-types-telegram?/sqlx",
+    "known-types-whatsapp?/sqlx",
+    "known-types-x?/sqlx",
+]
+tracing = ["dep:tracing"]
 
 [dependencies]
 asimov-core.workspace = true
@@ -74,8 +103,11 @@ known-types-whatsapp = { workspace = true, optional = true }
 known-types-x = { workspace = true, optional = true }
 
 # Interoperability:
+async-graphql = { workspace = true, optional = true }
 clap = { workspace = true, features = ["derive", "std"], optional = true }
 serde = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]

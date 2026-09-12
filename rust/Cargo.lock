@@ -1547,6 +1547,7 @@ name = "asimov-social"
 version = "25.4.0"
 dependencies = [
  "asimov-core",
+ "async-graphql",
  "clap",
  "derive_more",
  "known-types-facebook",
@@ -1561,6 +1562,8 @@ dependencies = [
  "known-types-whatsapp",
  "known-types-x",
  "serde",
+ "sqlx",
+ "tracing",
 ]
 
 [[package]]
@@ -1764,7 +1767,7 @@ checksum = "ae36dc4177970ef04fde5178d3e2429882def40e57a451f919c098f72baa6cec"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -2741,7 +2744,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -3043,6 +3046,15 @@ name = "crossbeam-epoch"
 version = "0.9.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d6914041f254d6e9176c01941b21115dcfb7089e55135a35411081bd106ef3f"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-queue"
+version = "0.3.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03e8bd762f7479489c70ed6c768ddca99d7296857de437a68dcb2a94365b3fae"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -3908,6 +3920,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "event-listener"
+version = "5.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a23add41df1562121a9393cb065eab5146a1242410f23a644851e90cfd669d2"
+dependencies = [
+ "parking",
+ "pin-project-lite",
+]
+
+[[package]]
 name = "evmap"
 version = "11.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4210,6 +4232,17 @@ dependencies = [
  "futures-core",
  "futures-task",
  "futures-util",
+]
+
+[[package]]
+name = "futures-intrusive"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d930c203dd0b6ff06e0201a4a2fe9149b43c684fd4420555b26d21b1a02956f"
+dependencies = [
+ "futures-core",
+ "lock_api",
+ "parking_lot",
 ]
 
 [[package]]
@@ -4847,6 +4880,15 @@ dependencies = [
  "foldhash",
  "serde",
  "serde_core",
+]
+
+[[package]]
+name = "hashlink"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "824e001ac4f3012dd16a264bec811403a67ca9deb6c102fc5049b32c4574b35f"
+dependencies = [
+ "hashbrown 0.16.1",
 ]
 
 [[package]]
@@ -6200,99 +6242,131 @@ dependencies = [
 
 [[package]]
 name = "known-types-facebook"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "277f2aaabefdcd61d8650996b67a9864c12c44220edce212a1d6ab3c23e7068d"
+checksum = "25c7ef525bb72afc102cdf3240b382f4a567e4cbb85bd5e105ba1352d6e8241a"
 dependencies = [
+ "async-graphql",
  "bincode",
+ "borsh",
  "derive_more",
- "musli",
+ "musli 0.1.7",
+ "rasn 0.28.14",
  "serde",
+ "sqlx",
 ]
 
 [[package]]
 name = "known-types-github"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ae899e8daa93b9199eeb5b37cfde1034ec8bc1eb39a81474bc0f28d21b2f595"
+checksum = "b1cf194b554f6e44d04e6eef316d2680504c581b23cb615980233b3ebe6a64b5"
 dependencies = [
+ "async-graphql",
  "bincode",
+ "borsh",
  "derive_more",
- "musli",
+ "musli 0.1.7",
+ "rasn 0.28.14",
  "serde",
+ "sqlx",
 ]
 
 [[package]]
 name = "known-types-gravatar"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d02b78ef4aa261e9c1045c1966bd2d1cf0d2de73b6705a45dd82f2fe3354e0c"
+checksum = "e7ce59b9a1b4b6c7622e59fafabe6d7eba0a2b6f0698d5626c790b826a459840"
 dependencies = [
+ "async-graphql",
  "bincode",
+ "borsh",
  "derive_more",
- "musli",
+ "musli 0.1.7",
+ "rasn 0.28.14",
  "serde",
+ "sqlx",
 ]
 
 [[package]]
 name = "known-types-instagram"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e919d3adff609dae9085c2140f0d558c4d5e2cfd04b4a68f3ba3ea9dd50a0f28"
+checksum = "7a7d8eb576cb56b7e07448b218e0f5f3002d746331e86493e305d06f72bf0396"
 dependencies = [
+ "async-graphql",
  "bincode",
+ "borsh",
  "derive_more",
- "musli",
+ "musli 0.1.7",
+ "rasn 0.28.14",
  "serde",
+ "sqlx",
 ]
 
 [[package]]
 name = "known-types-introco"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "474a9b5f60f40ac7f3b872a44eda0aec1964bec23027d6dfa52e1bff504ff3ae"
+checksum = "42de5094908fb9b757a8d591a0a0c0de25c78d339dcb8c344f150332605388ab"
 dependencies = [
+ "async-graphql",
  "bincode",
+ "borsh",
  "derive_more",
- "musli",
+ "musli 0.1.7",
+ "rasn 0.28.14",
  "serde",
+ "sqlx",
 ]
 
 [[package]]
 name = "known-types-linkedin"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7db618aa1caf8a3ee70ad09fd1e9ce67050482c210aecc6c0842cf80e073bdc5"
+checksum = "a89991ae9fcd8f8da9c600627db8aa269c4fb2c478ff3cf563a1df85a04ca483"
 dependencies = [
+ "async-graphql",
  "bincode",
+ "borsh",
  "derive_more",
- "musli",
+ "musli 0.1.7",
  "percent-encoding",
+ "rasn 0.28.14",
  "serde",
+ "sqlx",
 ]
 
 [[package]]
 name = "known-types-localai"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb1dfe9eb85ca6a6c4c3a3565503e60f6b3356e9fab55cfde71444a41c19a087"
+checksum = "c1435d5ab20b9c41c4fdb26563929027a2c313cde4758d296b0f0808c6b2831b"
 dependencies = [
+ "async-graphql",
  "bincode",
+ "borsh",
  "derive_more",
- "musli",
+ "musli 0.1.7",
+ "rasn 0.28.14",
  "serde",
+ "sqlx",
 ]
 
 [[package]]
 name = "known-types-luma"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77d01553ee151a9947e0caa658577b55a1973ff394ce6ac9d207dcc18b777d96"
+checksum = "6467de28d1c95b43f02eba884b7c15ec8c94ac67ed487165dd8e8dc6c2b74f33"
 dependencies = [
+ "async-graphql",
  "bincode",
+ "borsh",
  "derive_more",
- "musli",
+ "musli 0.1.7",
+ "rasn 0.28.14",
  "serde",
+ "sqlx",
 ]
 
 [[package]]
@@ -6303,45 +6377,57 @@ checksum = "4fac2b23649fa863ff29eb1cd778060303e37827b1210c19e382f32156771799"
 dependencies = [
  "bincode",
  "borsh",
- "musli",
- "rasn",
+ "musli 0.0.131",
+ "rasn 0.26.6",
  "serde",
 ]
 
 [[package]]
 name = "known-types-telegram"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd7257652df8d9459f5a799b2f765675aa9deed3ca1d69b21febc4211ae2924b"
+checksum = "75857bac3edbec29d2425c341332988faf2d410cff25744755222716f634e7cd"
 dependencies = [
+ "async-graphql",
  "bincode",
+ "borsh",
  "derive_more",
- "musli",
+ "musli 0.1.7",
+ "rasn 0.28.14",
  "serde",
+ "sqlx",
 ]
 
 [[package]]
 name = "known-types-whatsapp"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55ff78ec9eeb4839d5eb5a8094150e1c97d2973b1ed85e224b3d0f5c0d1a3c35"
+checksum = "8a1a6df02413af7fb1123c6bfc596001eaf3213a6a3028bba0dfd1f91130502f"
 dependencies = [
+ "async-graphql",
  "bincode",
+ "borsh",
  "derive_more",
- "musli",
+ "musli 0.1.7",
+ "rasn 0.28.14",
  "serde",
+ "sqlx",
 ]
 
 [[package]]
 name = "known-types-x"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02b4e8e50aabe0c4c2608feca74627a85bd0ed937bae7da78e5fea9959431486"
+checksum = "834cbc8b900119ca434624113226ee0c79d68735fb1c896bd792875d5c909b13"
 dependencies = [
+ "async-graphql",
  "bincode",
+ "borsh",
  "derive_more",
- "musli",
+ "musli 0.1.7",
+ "rasn 0.28.14",
  "serde",
+ "sqlx",
 ]
 
 [[package]]
@@ -6874,7 +6960,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73db912f61beab22204a8d3a908b4bc6903ae86e05f614bb418b2f45ef4549df"
 dependencies = [
  "loom 0.7.2",
- "musli-core",
+ "musli-core 0.0.131",
+ "serde",
+ "simdutf8",
+]
+
+[[package]]
+name = "musli"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df6f84e88cde164fc83cf97f1f8180a9268508dca94fafac7b48bca5ebe8112f"
+dependencies = [
+ "loom 0.7.2",
+ "musli-core 0.1.7",
  "serde",
  "simdutf8",
 ]
@@ -6885,7 +6983,16 @@ version = "0.0.131"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e57ddb0fac1b85c4aa0f46526eb2d1c07295ef9f5f25ced9e93fda4a1b8adb0"
 dependencies = [
- "musli-macros",
+ "musli-macros 0.0.131",
+]
+
+[[package]]
+name = "musli-core"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e1cfc4a7a715d50ea600040608a185588a3448740496cdbac397ab61405ec53"
+dependencies = [
+ "musli-macros 0.1.7",
 ]
 
 [[package]]
@@ -6897,6 +7004,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "musli-macros"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a997b2365215ab07528dc4944ef84bc41b6758a9ac1efa0c58466102d0e1b0e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -8437,7 +8555,29 @@ dependencies = [
  "num-integer",
  "num-traits",
  "once_cell",
- "rasn-derive",
+ "rasn-derive 0.26.6",
+ "serde_json",
+ "snafu",
+ "xml-no-std",
+]
+
+[[package]]
+name = "rasn"
+version = "0.28.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d1b71dd951343df0fe30b11bca09518f3aba8e5bd0ece4564adbc2dabd875fa"
+dependencies = [
+ "bitvec",
+ "bitvec-nom2",
+ "cfg-if",
+ "chrono",
+ "either",
+ "nom",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "once_cell",
+ "rasn-derive 0.28.14",
  "serde_json",
  "snafu",
  "xml-no-std",
@@ -8450,7 +8590,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a16f695759320ec969864fe5e7aa8e2a9c5665469565b100b8c8c1a36cd5484"
 dependencies = [
  "proc-macro2",
- "rasn-derive-impl",
+ "rasn-derive-impl 0.26.6",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "rasn-derive"
+version = "0.28.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "979eafa601d351f7f6490f1d2f4decc168e8e51cb6517c6c6ff80111951129d5"
+dependencies = [
+ "proc-macro2",
+ "rasn-derive-impl 0.28.14",
  "syn 2.0.119",
 ]
 
@@ -8459,6 +8610,20 @@ name = "rasn-derive-impl"
 version = "0.26.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f14454245fd76215b830d083b6b6c6842047e50cb7ee73ce1e769d4b099c89fd"
+dependencies = [
+ "either",
+ "itertools 0.13.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+ "uuid",
+]
+
+[[package]]
+name = "rasn-derive-impl"
+version = "0.28.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eee3136c97d6f2553c0d9f84d2c2555bb87ae9b365c5c9274e8bc5c366174431"
 dependencies = [
  "either",
  "itertools 0.13.0",
@@ -8569,7 +8734,7 @@ checksum = "2c9283685feec7d69af75fb0e858d5e7378f33fe4fc699383b2916ab9273e03c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -9498,7 +9663,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -9964,6 +10129,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlx"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "378620ccc25c62c89d8be1c819e76a88d59bdcc3304733330788948e619bfd71"
+dependencies = [
+ "sqlx-core",
+]
+
+[[package]]
+name = "sqlx-core"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05b44e85bf579a8eeb4ceaa77a3a523baf2bf0e9bac7e40f405d537b5d2d5ccb"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "cfg-if",
+ "crc",
+ "crossbeam-queue",
+ "either",
+ "event-listener",
+ "futures-core",
+ "futures-intrusive",
+ "futures-io",
+ "futures-util",
+ "hashbrown 0.16.1",
+ "hashlink",
+ "indexmap 2.14.0",
+ "log",
+ "memchr",
+ "percent-encoding",
+ "sha2 0.10.9",
+ "smallvec",
+ "thiserror 2.0.19",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "stable-pattern"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10118,9 +10322,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.3"
+version = "3.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"
+checksum = "12df2e0110f65b775f769bb17ef989067a1d931b2eb822bd4346631eeada89f9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10289,7 +10493,7 @@ checksum = "43cbfe0cf76104d42a574802844187e84a305e531ed54455f11fbde0f10541cd"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.5",
 ]
 
 [[package]]

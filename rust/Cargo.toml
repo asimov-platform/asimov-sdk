@@ -91,17 +91,17 @@ tokio-stream = { version = "0.1", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
 
 # Social media:
-known-types-facebook = { version = "0.1.1", default-features = false, features = ["alloc"] }
-known-types-github = { version = "0.1.1", default-features = false, features = ["alloc"] }
-known-types-gravatar = { version = "0.1.1", default-features = false, features = ["alloc"] }
-known-types-instagram = { version = "0.1.1", default-features = false, features = ["alloc"] }
-known-types-introco = { version = "0.1.1", default-features = false, features = ["alloc"] }
-known-types-linkedin = { version = "0.1.1", default-features = false, features = ["alloc"] }
-known-types-localai = { version = "0.1.1", default-features = false, features = ["alloc"] }
-known-types-luma = { version = "0.1.1", default-features = false, features = ["alloc"] }
-known-types-telegram = { version = "0.1.1", default-features = false, features = ["alloc"] }
-known-types-whatsapp = { version = "0.1.1", default-features = false, features = ["alloc"] }
-known-types-x = { version = "0.1.1", default-features = false, features = ["alloc"] }
+known-types-facebook = { version = "0.1.2", default-features = false, features = ["alloc"] }
+known-types-github = { version = "0.1.2", default-features = false, features = ["alloc"] }
+known-types-gravatar = { version = "0.1.2", default-features = false, features = ["alloc"] }
+known-types-instagram = { version = "0.1.2", default-features = false, features = ["alloc"] }
+known-types-introco = { version = "0.1.2", default-features = false, features = ["alloc"] }
+known-types-linkedin = { version = "0.1.2", default-features = false, features = ["alloc"] }
+known-types-localai = { version = "0.1.2", default-features = false, features = ["alloc"] }
+known-types-luma = { version = "0.1.2", default-features = false, features = ["alloc"] }
+known-types-telegram = { version = "0.1.2", default-features = false, features = ["alloc"] }
+known-types-whatsapp = { version = "0.1.2", default-features = false, features = ["alloc"] }
+known-types-x = { version = "0.1.2", default-features = false, features = ["alloc"] }
 
 alloy = { version = "2.2", default-features = false }
 anyhow = { version = "1", default-features = false }
@@ -202,6 +202,8 @@ serde_with = { version = "3.18", default-features = false }
 sha2 = { version = "0.10", default-features = false }
 slab = { version = "0.4.10", default-features = false }
 stability = { version = "0.2", default-features = false }
+sqlx = { version = "0.9", default-features = false, features = [] }
+#sqlx = { version = "0.8", features = ["macros", "postgres", "runtime-tokio-rustls", "time"] }
 tar = { version = "0.4", default-features = false }
 tempfile = { version = "3.20", default-features = false }
 thiserror = { version = "2", default-features = false }
@@ -261,3 +263,15 @@ asimov-social = { path = "lib/asimov-social" }
 asimov-token = { path = "lib/asimov-token" }
 asimov-universe = { path = "lib/asimov-universe" }
 asimov-vault = { path = "lib/asimov-vault" }
+
+#known-types-facebook = { git = "https://github.com/it-is-known/known-types.git" }
+#known-types-github = { git = "https://github.com/it-is-known/known-types.git" }
+#known-types-gravatar = { git = "https://github.com/it-is-known/known-types.git" }
+#known-types-instagram = { git = "https://github.com/it-is-known/known-types.git" }
+#known-types-introco = { git = "https://github.com/it-is-known/known-types.git" }
+#known-types-linkedin = { git = "https://github.com/it-is-known/known-types.git" }
+#known-types-localai = { git = "https://github.com/it-is-known/known-types.git" }
+#known-types-luma = { git = "https://github.com/it-is-known/known-types.git" }
+#known-types-telegram = { git = "https://github.com/it-is-known/known-types.git" }
+#known-types-whatsapp = { git = "https://github.com/it-is-known/known-types.git" }
+#known-types-x = { git = "https://github.com/it-is-known/known-types.git" }

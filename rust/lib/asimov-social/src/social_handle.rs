@@ -1,6 +1,6 @@
 // This is free and unencumbered software released into the public domain.
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use core::str::FromStr;
 use derive_more::{Debug, Display, From, FromStrError};
 
@@ -61,6 +61,19 @@ pub enum SocialHandle {
     #[debug("SocialHandle::X({:?})", _0.as_ref())]
     #[display("https://x.com/{_0}")]
     X(crate::x::XHandle),
+}
+
+#[cfg(feature = "async-graphql")]
+impl async_graphql::connection::CursorType for SocialHandle {
+    type Error = core::convert::Infallible;
+
+    fn decode_cursor(input: &str) -> Result<Self, Self::Error> {
+        Ok(Self::x(input)) // FIXME
+    }
+
+    fn encode_cursor(&self) -> String {
+        self.as_str().to_string()
+    }
 }
 
 #[allow(unused)]

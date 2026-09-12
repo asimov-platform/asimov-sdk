@@ -13,6 +13,7 @@ use derive_more::Display;
 /// relationship.
 #[derive(Clone, Copy, Debug, Display, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[display(rename_all = "lowercase")]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::Enum))]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 #[cfg_attr(
     feature = "serde",
