@@ -428,6 +428,17 @@
   },
   {
     "package": {
+      "name": "asimov-social",
+      "readme": true,
+      "metadata": {
+        "readme": {
+          "title": "ASIMOV.rs: Social Media"
+        }
+      }
+    }
+  },
+  {
+    "package": {
       "name": "asimov-token",
       "readme": true,
       "metadata": {

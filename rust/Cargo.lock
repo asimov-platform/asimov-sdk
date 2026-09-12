@@ -1543,6 +1543,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "asimov-social"
+version = "25.4.0"
+dependencies = [
+ "asimov-core",
+]
+
+[[package]]
 name = "asimov-token"
 version = "25.4.0"
 dependencies = [

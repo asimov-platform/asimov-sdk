@@ -55,6 +55,7 @@ asimov-runtime = { version = "25.4.0", default-features = false }
 asimov-sdk = { version = "25.4.0", default-features = false }
 asimov-server = { version = "25.4.0", default-features = false }
 asimov-snapshot = { version = "25.4.0", default-features = false }
+asimov-social = { version = "25.4.0", default-features = false }
 asimov-token = { version = "25.4.0", default-features = false }
 asimov-universe = { version = "25.4.0", default-features = false }
 asimov-vault = { version = "25.4.0", default-features = false }
@@ -243,6 +244,7 @@ asimov-runtime = { path = "lib/asimov-runtime" }
 asimov-sdk = { path = "lib/asimov-sdk" }
 asimov-server = { path = "lib/asimov-server" }
 asimov-snapshot = { path = "lib/asimov-snapshot" }
+asimov-social = { path = "lib/asimov-social" }
 asimov-token = { path = "lib/asimov-token" }
 asimov-universe = { path = "lib/asimov-universe" }
 asimov-vault = { path = "lib/asimov-vault" }
