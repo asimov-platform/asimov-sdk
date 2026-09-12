@@ -21,7 +21,7 @@ PACKAGES.each do |package_toml|
   package_title = (package_meta[:package][:metadata][:readme][:title] rescue nil)
   package_description = package_meta[:package][:description]
 
-  file package_path.join('README.md') => %[.readme/README.md.j2] do |t|
+  file package_path.join('README.md') => %[../.config/readmer/rust/README.md.j2] do |t|
     template_path = Pathname(t.prerequisites.first).realpath
     File.open(t.name, 'w') do |out|
       Dir.chdir(package_path) do
@@ -98,7 +98,12 @@ end
 def load_projects(input_paths)
   input_paths.map do |input_path|
     manifest = Tomlrb.load_file(input_path, symbolize_keys: true)
-    remove_workspace_only(manifest)
+    manifest = remove_workspace_only(manifest)
+    manifest[:package][:metadata].delete(:docs)
+    %i[dependencies dev-dependencies example features target].each do
+      manifest.delete(it)
+    end
+    manifest
   end
 end
 

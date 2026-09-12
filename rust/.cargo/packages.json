@@ -6,33 +6,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Account Management"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -43,33 +17,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Agent Support"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -80,33 +28,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Cache Management"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -117,129 +39,6 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Cloud Client"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
-        }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "tracing"
-      ],
-      "std": [
-        "asimov-core/std",
-        "asimov-credit/std",
-        "asimov-id/std",
-        "asimov-kb/std",
-        "asimov-nexus/std"
-      ],
-      "tracing": [],
-      "unstable": [],
-      "clap": [
-        "asimov-credit/clap",
-        "asimov-id/clap",
-        "asimov-kb/clap"
-      ],
-      "eloquent": [
-        "asimov-credit/eloquent",
-        "asimov-id/eloquent",
-        "asimov-kb/eloquent"
-      ],
-      "libsql": [
-        "asimov-credit/libsql",
-        "asimov-id/libsql",
-        "asimov-kb/libsql"
-      ],
-      "rocket": [
-        "asimov-id/rocket",
-        "asimov-kb/rocket"
-      ],
-      "serde": [
-        "asimov-credit/serde",
-        "asimov-id/serde",
-        "asimov-kb/serde"
-      ],
-      "turso": [
-        "asimov-credit/turso",
-        "asimov-id/turso",
-        "asimov-kb/turso"
-      ],
-      "validator": [
-        "asimov-nexus/validator"
-      ]
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "asimov-credit": {
-        "workspace": true
-      },
-      "asimov-id": {
-        "workspace": true
-      },
-      "asimov-kb": {
-        "workspace": true
-      },
-      "asimov-nexus": {
-        "workspace": true
-      },
-      "derive_more": {
-        "version": "2",
-        "features": [
-          "display"
-        ]
-      },
-      "thiserror": {
-        "workspace": true
-      }
-    },
-    "target": {
-      "cfg(not(target_family = \"wasm\"))": {
-        "dependencies": {
-          "reqwest": {
-            "workspace": true
-          },
-          "tokio": {
-            "workspace": true,
-            "features": [
-              "io-util",
-              "rt"
-            ]
-          }
-        }
-      },
-      "cfg(target_family = \"wasm\")": {
-        "dependencies": {
-          "reqwest": {
-            "workspace": true,
-            "features": [
-              "json"
-            ]
-          },
-          "tokio": {
-            "workspace": true,
-            "features": [
-              "rt"
-            ]
-          },
-          "tokio_with_wasm": {
-            "version": "0.8",
-            "features": [
-              "rt"
-            ]
-          }
         }
       }
     }
@@ -251,33 +50,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Configuration Management"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -288,33 +61,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Construct Support"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -331,67 +78,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Core Library"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "serde",
-        "tracing"
-      ],
-      "std": [
-        "dogma/std",
-        "know/std",
-        "tracing?/std",
-        "dep:cap-directories",
-        "dep:cap-std"
-      ],
-      "unstable": [],
-      "serde": [
-        "dep:serde"
-      ],
-      "tracing": [
-        "dep:tracing"
-      ]
-    },
-    "dependencies": {
-      "dogma": {
-        "workspace": true
-      },
-      "know": {
-        "workspace": true
-      },
-      "cap-directories": {
-        "workspace": true,
-        "optional": true
-      },
-      "cap-std": {
-        "workspace": true,
-        "features": [
-          "fs_utf8"
-        ],
-        "optional": true
-      },
-      "serde": {
-        "workspace": true,
-        "optional": true
-      },
-      "tracing": {
-        "workspace": true,
-        "optional": true
       }
     }
   },
@@ -402,91 +89,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Credit Types"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "tracing"
-      ],
-      "std": [
-        "asimov-core/std",
-        "rust_decimal/std"
-      ],
-      "tracing": [],
-      "unstable": [],
-      "clap": [
-        "dep:clap"
-      ],
-      "eloquent": [
-        "dep:eloquent"
-      ],
-      "libsql": [
-        "dep:libsql"
-      ],
-      "serde": [
-        "dep:serde"
-      ],
-      "turso": [
-        "dep:turso"
-      ]
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "derive_more": {
-        "version": "2",
-        "features": [
-          "add_assign",
-          "display"
-        ]
-      },
-      "rust_decimal": {
-        "version": "1.40",
-        "default-features": false
-      },
-      "thiserror": {
-        "workspace": true
-      },
-      "clap": {
-        "version": "4.5",
-        "default-features": false,
-        "features": [
-          "derive",
-          "std"
-        ],
-        "optional": true
-      },
-      "eloquent": {
-        "workspace": true,
-        "optional": true
-      },
-      "libsql": {
-        "version": "0.9",
-        "default-features": false,
-        "optional": true
-      },
-      "serde": {
-        "workspace": true,
-        "optional": true
-      },
-      "turso": {
-        "workspace": true,
-        "optional": true
       }
     }
   },
@@ -497,33 +100,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Dataset Management"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -534,94 +111,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: State Management"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "fs"
-      ],
-      "std": [
-        "asimov-core/std",
-        "asimov-protocol/std"
-      ],
-      "unstable": [],
-      "fs": [
-        "std",
-        "dep:camino",
-        "dep:tokio"
-      ],
-      "tracing": [],
-      "camino": [
-        "dep:camino"
-      ],
-      "tokio": [
-        "dep:tokio"
-      ]
-    },
-    "dependencies": {
-      "asimov-config": {
-        "workspace": true
-      },
-      "asimov-core": {
-        "workspace": true
-      },
-      "asimov-module": {
-        "workspace": true,
-        "features": [
-          "serde"
-        ]
-      },
-      "asimov-protocol": {
-        "workspace": true,
-        "features": [
-          "csv"
-        ]
-      },
-      "derive_more": {
-        "workspace": true,
-        "features": [
-          "display"
-        ]
-      },
-      "serde_json": {
-        "workspace": true
-      },
-      "serde_yaml_ng": {
-        "workspace": true
-      },
-      "camino": {
-        "workspace": true,
-        "optional": true
-      },
-      "tokio": {
-        "workspace": true,
-        "features": [
-          "fs"
-        ],
-        "optional": true
-      }
-    },
-    "dev-dependencies": {
-      "tokio": {
-        "version": "1",
-        "features": [
-          "macros",
-          "rt-multi-thread"
-        ]
       }
     }
   },
@@ -636,47 +126,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Environment Support"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std",
-        "getenv/std",
-        "dep:cap-directories",
-        "dep:cap-std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "getenv": {
-        "workspace": true
-      },
-      "cap-directories": {
-        "workspace": true,
-        "optional": true
-      },
-      "cap-std": {
-        "workspace": true,
-        "optional": true
       }
     }
   },
@@ -693,49 +143,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Flow Types"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std",
-        "tokio?/full"
-      ],
-      "unstable": [],
-      "tracing": [],
-      "tokio": [
-        "dep:tokio"
-      ]
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "async-flow": {
-        "workspace": true
-      },
-      "tokio": {
-        "workspace": true,
-        "optional": true
-      }
-    },
-    "dev-dependencies": {
-      "tokio": {
-        "workspace": true
       }
     }
   },
@@ -746,33 +154,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Graph Types"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -784,42 +166,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Hugging Face Client"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "hf-hub": {
-        "workspace": true
-      },
-      "indicatif": {
-        "workspace": true
-      },
-      "thiserror": {
-        "workspace": true
       }
     }
   },
@@ -830,144 +177,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Identifier Types"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "encodings"
-      ],
-      "std": [
-        "asimov-core/std",
-        "bs58/std",
-        "data-encoding?/std",
-        "ed25519-dalek?/std"
-      ],
-      "tracing": [],
-      "unstable": [],
-      "encodings": [
-        "base64",
-        "hex",
-        "z32"
-      ],
-      "base64": [
-        "dep:data-encoding"
-      ],
-      "hex": [
-        "dep:data-encoding"
-      ],
-      "z32": [
-        "dep:data-encoding",
-        "dep:data-encoding-macro"
-      ],
-      "clap": [
-        "dep:clap"
-      ],
-      "ed25519": [
-        "ed25519-dalek"
-      ],
-      "ed25519-dalek": [
-        "dep:ed25519-dalek"
-      ],
-      "eloquent": [
-        "dep:eloquent"
-      ],
-      "iroh": [
-        "dep:iroh"
-      ],
-      "libsql": [
-        "dep:libsql"
-      ],
-      "p2panda": [
-        "dep:p2panda-core"
-      ],
-      "rocket": [
-        "dep:rocket"
-      ],
-      "serde": [
-        "dep:serde"
-      ],
-      "turso": [
-        "dep:turso"
-      ]
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "bs58": {
-        "workspace": true
-      },
-      "derive_more": {
-        "workspace": true,
-        "features": [
-          "display",
-          "from_str"
-        ]
-      },
-      "thiserror": {
-        "workspace": true
-      },
-      "data-encoding": {
-        "workspace": true,
-        "optional": true
-      },
-      "data-encoding-macro": {
-        "workspace": true,
-        "optional": true
-      },
-      "clap": {
-        "workspace": true,
-        "features": [
-          "derive",
-          "std"
-        ],
-        "optional": true
-      },
-      "ed25519-dalek": {
-        "workspace": true,
-        "optional": true
-      },
-      "eloquent": {
-        "workspace": true,
-        "optional": true
-      },
-      "iroh": {
-        "workspace": true,
-        "optional": true
-      },
-      "libsql": {
-        "workspace": true,
-        "optional": true
-      },
-      "p2panda-core": {
-        "workspace": true,
-        "optional": true
-      },
-      "rocket": {
-        "workspace": true,
-        "optional": true
-      },
-      "serde": {
-        "workspace": true,
-        "optional": true
-      },
-      "turso": {
-        "workspace": true,
-        "optional": true
       }
     }
   },
@@ -978,136 +188,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Installer Implementation"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "cli",
-        "tracing"
-      ],
-      "cli": [
-        "std",
-        "dep:clientele",
-        "clientele?/clap"
-      ],
-      "std": [
-        "asimov-core/std",
-        "dep:asimov-env",
-        "asimov-env?/std",
-        "dep:getenv",
-        "clientele?/std",
-        "getenv?/std",
-        "serde/std",
-        "serde_json/std",
-        "sha2/std",
-        "tracing?/std",
-        "tracing-subscriber?/fmt",
-        "tracing-subscriber?/std"
-      ],
-      "unstable": [],
-      "tracing": [
-        "dep:tracing",
-        "dep:tracing-subscriber",
-        "clientele?/tracing"
-      ]
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "asimov-huggingface": {
-        "workspace": true,
-        "default-features": true
-      },
-      "asimov-module": {
-        "workspace": true,
-        "default-features": true
-      },
-      "asimov-registry": {
-        "workspace": true,
-        "default-features": true
-      },
-      "bon": {
-        "workspace": true
-      },
-      "flate2": {
-        "workspace": true
-      },
-      "reqwest": {
-        "workspace": true
-      },
-      "secrecy": {
-        "workspace": true
-      },
-      "serde": {
-        "workspace": true
-      },
-      "serde_json": {
-        "workspace": true
-      },
-      "serde_yaml_ng": {
-        "workspace": true
-      },
-      "sha2": {
-        "workspace": true
-      },
-      "tar": {
-        "workspace": true
-      },
-      "tempfile": {
-        "workspace": true
-      },
-      "thiserror": {
-        "workspace": true
-      },
-      "tokio": {
-        "workspace": true,
-        "features": [
-          "fs"
-        ]
-      },
-      "zip": {
-        "workspace": true,
-        "features": [
-          "deflate"
-        ]
-      },
-      "asimov-env": {
-        "workspace": true,
-        "optional": true
-      },
-      "clientele": {
-        "workspace": true,
-        "optional": true
-      },
-      "getenv": {
-        "workspace": true,
-        "optional": true
-      },
-      "tracing": {
-        "workspace": true,
-        "optional": true,
-        "features": [
-          "attributes"
-        ]
-      },
-      "tracing-subscriber": {
-        "workspace": true,
-        "optional": true
       }
     }
   },
@@ -1118,159 +199,6 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Knowledge Base"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
-        }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "new",
-        "tracing"
-      ],
-      "new": [
-        "blake3",
-        "uuid"
-      ],
-      "std": [
-        "asimov-core/std",
-        "bs58/std",
-        "uuid/std"
-      ],
-      "tracing": [],
-      "unstable": [],
-      "async-graphql": [
-        "dep:async-graphql"
-      ],
-      "blake3": [
-        "dep:blake3"
-      ],
-      "clap": [
-        "dep:clap"
-      ],
-      "eloquent": [
-        "dep:eloquent"
-      ],
-      "iroh": [
-        "dep:iroh-blobs"
-      ],
-      "libsql": [
-        "dep:libsql"
-      ],
-      "p2panda": [
-        "dep:p2panda-core"
-      ],
-      "rocket": [
-        "dep:rocket"
-      ],
-      "serde": [
-        "dep:serde",
-        "dep:serde_with"
-      ],
-      "turso": [
-        "dep:turso"
-      ],
-      "uuid": [
-        "dep:uuid"
-      ]
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "bs58": {
-        "workspace": true
-      },
-      "derive_more": {
-        "workspace": true,
-        "features": [
-          "display"
-        ]
-      },
-      "async-graphql": {
-        "workspace": true,
-        "optional": true
-      },
-      "blake3": {
-        "workspace": true,
-        "optional": true
-      },
-      "clap": {
-        "workspace": true,
-        "features": [
-          "derive",
-          "std"
-        ],
-        "optional": true
-      },
-      "eloquent": {
-        "workspace": true,
-        "optional": true
-      },
-      "iroh-blobs": {
-        "workspace": true,
-        "optional": true
-      },
-      "libsql": {
-        "workspace": true,
-        "optional": true
-      },
-      "p2panda-core": {
-        "workspace": true,
-        "optional": true
-      },
-      "rocket": {
-        "workspace": true,
-        "optional": true
-      },
-      "serde": {
-        "workspace": true,
-        "optional": true
-      },
-      "serde_with": {
-        "workspace": true,
-        "optional": true
-      },
-      "turso": {
-        "workspace": true,
-        "optional": true
-      }
-    },
-    "target": {
-      "cfg(not(target_arch = \"wasm32\"))": {
-        "dependencies": {
-          "uuid": {
-            "workspace": true,
-            "features": [
-              "serde",
-              "v7"
-            ],
-            "optional": true
-          }
-        }
-      },
-      "cfg(target_arch = \"wasm32\")": {
-        "dependencies": {
-          "uuid": {
-            "workspace": true,
-            "features": [
-              "js",
-              "serde",
-              "v7"
-            ],
-            "optional": true
-          }
         }
       }
     }
@@ -1286,40 +214,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Ledger Types"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "alloy": {
-        "workspace": true,
-        "features": [
-          "contract",
-          "sol-types"
-        ]
-      },
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -1334,135 +229,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Module Support"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "cli",
-        "tracing",
-        "serde",
-        "asimov-env?/all"
-      ],
-      "cli": [
-        "std",
-        "dep:clientele",
-        "clientele?/clap"
-      ],
-      "std": [
-        "asimov-core/std",
-        "clientele?/std",
-        "dep:asimov-env",
-        "asimov-env?/std",
-        "dep:getenv",
-        "getenv?/std",
-        "iri-string/std",
-        "serde_json?/std",
-        "serde?/std",
-        "slab/std",
-        "thiserror/std",
-        "tracing-subscriber?/fmt",
-        "tracing-subscriber?/std",
-        "tracing?/std",
-        "url/std"
-      ],
-      "unstable": [],
-      "json": [
-        "dep:serde_json"
-      ],
-      "serde": [
-        "dep:serde",
-        "json",
-        "yaml"
-      ],
-      "tracing": [
-        "dep:tracing",
-        "dep:tracing-subscriber",
-        "clientele?/tracing"
-      ],
-      "yaml": [
-        "dep:serde_yaml_ng"
-      ]
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "dogma": {
-        "workspace": true
-      },
-      "secrecy": {
-        "workspace": true
-      },
-      "slab": {
-        "workspace": true
-      },
-      "thiserror": {
-        "workspace": true
-      },
-      "url": {
-        "workspace": true
-      },
-      "iri-string": {
-        "version": "0.7",
-        "default-features": false,
-        "features": [
-          "alloc"
-        ]
-      },
-      "mime": {
-        "version": "0.3",
-        "default-features": false
-      },
-      "asimov-env": {
-        "workspace": true,
-        "optional": true
-      },
-      "clientele": {
-        "workspace": true,
-        "optional": true
-      },
-      "getenv": {
-        "workspace": true,
-        "optional": true
-      },
-      "serde": {
-        "workspace": true,
-        "optional": true
-      },
-      "serde_json": {
-        "workspace": true,
-        "optional": true
-      },
-      "serde_yaml_ng": {
-        "workspace": true,
-        "optional": true
-      },
-      "tracing": {
-        "workspace": true,
-        "optional": true
-      },
-      "tracing-subscriber": {
-        "workspace": true,
-        "optional": true
-      }
-    },
-    "dev-dependencies": {
-      "serde_yaml_ng": {
-        "workspace": true
       }
     }
   },
@@ -1478,69 +245,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Module Kit"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "module",
-        "tracing"
-      ],
-      "module": [
-        "std",
-        "dep:anyhow",
-        "dep:cargo-generate",
-        "dep:kstring"
-      ],
-      "std": [
-        "thiserror/std",
-        "tracing?/std"
-      ],
-      "unstable": [],
-      "tracing": [
-        "dep:tracing"
-      ]
-    },
-    "dependencies": {
-      "thiserror": {
-        "workspace": true
-      },
-      "anyhow": {
-        "workspace": true,
-        "optional": true,
-        "features": [
-          "std"
-        ]
-      },
-      "cargo-generate": {
-        "workspace": true,
-        "optional": true
-      },
-      "kstring": {
-        "workspace": true,
-        "optional": true
-      },
-      "tracing": {
-        "workspace": true,
-        "optional": true
-      }
-    },
-    "dev-dependencies": {
-      "tempfile": {
-        "workspace": true
       }
     }
   },
@@ -1551,57 +256,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Nexus Client"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "tracing"
-      ],
-      "std": [
-        "asimov-core/std"
-      ],
-      "tracing": [],
-      "unstable": [],
-      "validator": [
-        "dep:validator"
-      ]
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "asimov-kb": {
-        "workspace": true
-      },
-      "derive_more": {
-        "version": "2",
-        "features": [
-          "display"
-        ]
-      },
-      "serde": {
-        "workspace": true
-      },
-      "validator": {
-        "version": "0.16.1",
-        "features": [
-          "derive"
-        ],
-        "optional": true
       }
     }
   },
@@ -1612,33 +267,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Ontology Types"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -1654,42 +283,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Program Patterns"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "async-trait": {
-        "workspace": true
-      },
-      "bon": {
-        "workspace": true
-      },
-      "rdf-model": {
-        "workspace": true
       }
     }
   },
@@ -1700,33 +294,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Platform Support"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -1744,52 +312,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Prompt Types"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "tracing"
-      ],
-      "std": [
-        "asimov-core/std",
-        "derive_more/std",
-        "openai?/std"
-      ],
-      "tracing": [],
-      "unstable": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "bon": {
-        "workspace": true
-      },
-      "derive_more": {
-        "workspace": true,
-        "features": [
-          "display",
-          "from",
-          "from_str"
-        ]
-      },
-      "openai": {
-        "workspace": true,
-        "optional": true
       }
     }
   },
@@ -1805,147 +328,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: P2P Protocol"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "csv",
-        "random"
-      ],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "csv": [
-        "dep:csv-async",
-        "tokio/fs"
-      ],
-      "random": [
-        "dep:fastrand"
-      ],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "asimov-id": {
-        "workspace": true,
-        "features": [
-          "iroh"
-        ]
-      },
-      "asimov-kb": {
-        "workspace": true,
-        "features": [
-          "serde"
-        ]
-      },
-      "async-stream": {
-        "workspace": true
-      },
-      "bytes": {
-        "workspace": true
-      },
-      "futures-lite": {
-        "workspace": true
-      },
-      "heapless": {
-        "workspace": true,
-        "features": [
-          "serde"
-        ]
-      },
-      "iroh": {
-        "workspace": true,
-        "features": [
-          "metrics",
-          "fast-apple-datapath",
-          "portmapper",
-          "tls-ring"
-        ]
-      },
-      "iroh-gossip": {
-        "workspace": true,
-        "features": [
-          "metrics",
-          "net"
-        ]
-      },
-      "iroh-metrics": {
-        "workspace": true
-      },
-      "iroh-tickets": {
-        "workspace": true
-      },
-      "known-errors": {
-        "workspace": true
-      },
-      "n0-error": {
-        "workspace": true
-      },
-      "postcard": {
-        "workspace": true
-      },
-      "rdf-hash": {
-        "workspace": true,
-        "features": [
-          "blake3"
-        ]
-      },
-      "rdf-model": {
-        "workspace": true
-      },
-      "serde": {
-        "workspace": true
-      },
-      "thiserror": {
-        "workspace": true
-      },
-      "tokio": {
-        "workspace": true,
-        "features": [
-          "time"
-        ]
-      },
-      "csv-async": {
-        "workspace": true,
-        "features": [
-          "tokio"
-        ],
-        "optional": true
-      },
-      "fastrand": {
-        "workspace": true,
-        "optional": true
-      }
-    },
-    "dev-dependencies": {
-      "iroh-services": {
-        "workspace": true
-      },
-      "tokio": {
-        "workspace": true,
-        "features": [
-          "full"
-        ]
-      },
-      "tracing-subscriber": {
-        "workspace": true
       }
     }
   },
@@ -1956,43 +339,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Proxy Support"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std",
-        "gofer/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "gofer": {
-        "workspace": true
-      },
-      "miette": {
-        "workspace": true
-      },
-      "thiserror": {
-        "workspace": true
       }
     }
   },
@@ -2003,124 +350,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Registry Client"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "cli",
-        "tracing",
-        "asimov-env?/all"
-      ],
-      "cli": [
-        "std",
-        "dep:clientele",
-        "clientele?/clap"
-      ],
-      "std": [
-        "asimov-core/std",
-        "asimov-module/std",
-        "dep:asimov-env",
-        "asimov-env?/std",
-        "dep:getenv",
-        "clientele?/std",
-        "getenv?/std",
-        "serde/std",
-        "serde_json/std",
-        "tracing?/std",
-        "tracing-subscriber?/fmt",
-        "tracing-subscriber?/std"
-      ],
-      "unstable": [],
-      "tracing": [
-        "dep:tracing",
-        "dep:tracing-subscriber",
-        "clientele?/tracing"
-      ]
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "asimov-module": {
-        "workspace": true,
-        "features": [
-          "all"
-        ]
-      },
-      "bon": {
-        "workspace": true
-      },
-      "reqwest": {
-        "workspace": true
-      },
-      "secrecy": {
-        "workspace": true
-      },
-      "serde": {
-        "workspace": true
-      },
-      "serde_json": {
-        "workspace": true
-      },
-      "serde_yaml_ng": {
-        "workspace": true
-      },
-      "tar": {
-        "workspace": true
-      },
-      "tempfile": {
-        "workspace": true
-      },
-      "thiserror": {
-        "workspace": true
-      },
-      "tokio": {
-        "workspace": true,
-        "features": [
-          "fs"
-        ]
-      },
-      "asimov-env": {
-        "workspace": true,
-        "optional": true
-      },
-      "clientele": {
-        "workspace": true,
-        "optional": true
-      },
-      "getenv": {
-        "workspace": true,
-        "optional": true
-      },
-      "tracing": {
-        "workspace": true,
-        "optional": true
-      },
-      "tracing-subscriber": {
-        "workspace": true,
-        "optional": true
-      }
-    },
-    "dev-dependencies": {
-      "tokio": {
-        "workspace": true,
-        "features": [
-          "full"
-        ]
       }
     }
   },
@@ -2131,33 +361,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Repository Access"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -2168,87 +372,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Runner Implementation"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "tracing"
-      ],
-      "std": [
-        "asimov-core/std",
-        "clientele/std",
-        "tracing?/std"
-      ],
-      "tracing": [
-        "dep:tracing"
-      ],
-      "unstable": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "asimov-env": {
-        "workspace": true,
-        "default-features": true
-      },
-      "asimov-module": {
-        "workspace": true,
-        "default-features": true
-      },
-      "asimov-patterns": {
-        "workspace": true,
-        "default-features": true
-      },
-      "asimov-prompt": {
-        "workspace": true,
-        "default-features": true
-      },
-      "async-trait": {
-        "workspace": true
-      },
-      "clientele": {
-        "workspace": true
-      },
-      "derive_more": {
-        "workspace": true,
-        "features": [
-          "debug"
-        ]
-      },
-      "tokio": {
-        "workspace": true,
-        "features": [
-          "io-util",
-          "process",
-          "rt"
-        ]
-      },
-      "tracing": {
-        "workspace": true,
-        "optional": true
-      }
-    },
-    "dev-dependencies": {
-      "tokio": {
-        "workspace": true,
-        "features": [
-          "full"
-        ]
       }
     }
   },
@@ -2259,33 +383,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Runtime Support"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -2302,183 +400,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "config",
-        "core",
-        "credit",
-        "directory",
-        "env",
-        "flow",
-        "id",
-        "installer",
-        "kb",
-        "module",
-        "patterns",
-        "prompt",
-        "registry",
-        "runner",
-        "snapshot",
-        "tracing"
-      ],
-      "std": [
-        "asimov-config?/std",
-        "asimov-core?/std",
-        "asimov-credit?/std",
-        "asimov-directory?/std",
-        "asimov-env?/std",
-        "asimov-flow?/std",
-        "asimov-id?/std",
-        "asimov-installer?/std",
-        "asimov-kb?/std",
-        "asimov-module?/std",
-        "asimov-patterns?/std",
-        "asimov-prompt?/std",
-        "asimov-registry?/std",
-        "asimov-runner?/std",
-        "asimov-snapshot?/std"
-      ],
-      "unstable": [
-        "asimov-core?/unstable"
-      ],
-      "config": [
-        "dep:asimov-config"
-      ],
-      "core": [
-        "dep:asimov-core"
-      ],
-      "credit": [
-        "dep:asimov-credit"
-      ],
-      "directory": [
-        "dep:asimov-directory"
-      ],
-      "env": [
-        "dep:asimov-env"
-      ],
-      "flow": [
-        "dep:asimov-flow"
-      ],
-      "id": [
-        "dep:asimov-id"
-      ],
-      "installer": [
-        "dep:asimov-installer"
-      ],
-      "kb": [
-        "dep:asimov-kb"
-      ],
-      "module": [
-        "dep:asimov-module"
-      ],
-      "patterns": [
-        "dep:asimov-patterns"
-      ],
-      "prompt": [
-        "dep:asimov-prompt"
-      ],
-      "registry": [
-        "dep:asimov-registry"
-      ],
-      "runner": [
-        "dep:asimov-runner"
-      ],
-      "snapshot": [
-        "dep:asimov-snapshot"
-      ],
-      "derive": [],
-      "serde": [
-        "asimov-core?/serde"
-      ],
-      "tokio": [
-        "asimov-flow?/tokio"
-      ],
-      "tracing": [
-        "asimov-core?/tracing",
-        "asimov-installer?/tracing"
-      ]
-    },
-    "dependencies": {
-      "asimov-config": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-core": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-credit": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-directory": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-env": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-flow": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-id": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-installer": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-kb": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-module": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-patterns": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-prompt": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-registry": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-runner": {
-        "workspace": true,
-        "optional": true
-      },
-      "asimov-snapshot": {
-        "workspace": true,
-        "optional": true
-      }
-    },
-    "dev-dependencies": {
-      "tokio": {
-        "workspace": true
       }
     }
   },
@@ -2489,247 +411,9 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Server Implementation"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
       }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "app",
-        "http",
-        "tracing"
-      ],
-      "std": [
-        "asimov-core/std",
-        "bs58/std",
-        "jiff/std",
-        "openai/std",
-        "tracing?/std"
-      ],
-      "tracing": [
-        "dep:tracing",
-        "tower-http/trace"
-      ],
-      "unstable": [
-        "https",
-        "mdns",
-        "ssdp"
-      ],
-      "http": [
-        "persistence",
-        "dep:axum",
-        "dep:axum-prometheus",
-        "dep:http",
-        "dep:tower-http"
-      ],
-      "https": [
-        "http"
-      ],
-      "mdns": [
-        "dep:mdns-sd",
-        "dep:lazy_static",
-        "dep:local-ip-address"
-      ],
-      "ssdp": [],
-      "app": [
-        "http",
-        "dep:axum-embed",
-        "dep:rust-embed"
-      ],
-      "graphql": [
-        "http"
-      ],
-      "gsp": [
-        "http"
-      ],
-      "sparql": [
-        "http"
-      ],
-      "mcp": [
-        "http"
-      ],
-      "persistence": [
-        "dep:serde",
-        "dep:serde_json"
-      ]
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "asimov-runner": {
-        "workspace": true,
-        "default-features": true
-      },
-      "asimov-prompt": {
-        "workspace": true,
-        "features": [
-          "openai"
-        ]
-      },
-      "async-trait": {
-        "workspace": true
-      },
-      "async-stream": {
-        "workspace": true
-      },
-      "bs58": {
-        "workspace": true
-      },
-      "futures": {
-        "workspace": true
-      },
-      "jiff": {
-        "workspace": true
-      },
-      "openai": {
-        "workspace": true,
-        "features": [
-          "serde"
-        ]
-      },
-      "rmcp": {
-        "workspace": true,
-        "features": [
-          "base64",
-          "macros",
-          "server",
-          "transport-sse-server"
-        ]
-      },
-      "thiserror": {
-        "workspace": true
-      },
-      "tldr": {
-        "workspace": true
-      },
-      "tokio": {
-        "workspace": true,
-        "features": [
-          "io-util",
-          "rt"
-        ]
-      },
-      "tokio-util": {
-        "workspace": true
-      },
-      "uuid": {
-        "workspace": true,
-        "features": [
-          "std"
-        ]
-      },
-      "axum": {
-        "workspace": true,
-        "features": [
-          "tokio"
-        ],
-        "optional": true
-      },
-      "axum-embed": {
-        "workspace": true,
-        "optional": true
-      },
-      "axum-prometheus": {
-        "workspace": true,
-        "optional": true
-      },
-      "http": {
-        "workspace": true,
-        "optional": true
-      },
-      "lazy_static": {
-        "workspace": true,
-        "optional": true
-      },
-      "local-ip-address": {
-        "workspace": true,
-        "optional": true
-      },
-      "mdns-sd": {
-        "workspace": true,
-        "optional": true
-      },
-      "rust-embed": {
-        "workspace": true,
-        "optional": true
-      },
-      "serde": {
-        "workspace": true,
-        "features": [
-          "derive"
-        ],
-        "optional": true
-      },
-      "serde_json": {
-        "workspace": true,
-        "optional": true
-      },
-      "tower-http": {
-        "workspace": true,
-        "features": [
-          "cors"
-        ],
-        "optional": true
-      },
-      "tracing": {
-        "workspace": true,
-        "features": [
-          "attributes"
-        ],
-        "optional": true
-      }
-    },
-    "dev-dependencies": {
-      "axum-test": {
-        "workspace": true
-      },
-      "tokio": {
-        "workspace": true,
-        "features": [
-          "full"
-        ]
-      },
-      "tracing-subscriber": {
-        "workspace": true
-      }
-    },
-    "example": [
-      {
-        "name": "mdns-client",
-        "path": "examples/mdns-client.rs",
-        "required-features": [
-          "mdns"
-        ]
-      },
-      {
-        "name": "mdns-server",
-        "path": "examples/mdns-server.rs",
-        "required-features": [
-          "mdns"
-        ]
-      },
-      {
-        "name": "persistence",
-        "path": "examples/persistence.rs",
-        "required-features": [
-          "http",
-          "persistence"
-        ]
-      }
-    ]
+    }
   },
   {
     "package": {
@@ -2738,108 +422,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Snapshot Management"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [
-        "tracing",
-        "storage-fs"
-      ],
-      "std": [
-        "asimov-core/std",
-        "hex/std",
-        "jiff/std",
-        "tracing/std"
-      ],
-      "storage-fs": [
-        "dep:cap-std",
-        "dep:cap-tempfile",
-        "dep:hex",
-        "dep:sha2",
-        "std"
-      ],
-      "tracing": [],
-      "unstable": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
-      },
-      "asimov-env": {
-        "workspace": true,
-        "default-features": true
-      },
-      "asimov-module": {
-        "workspace": true,
-        "default-features": true
-      },
-      "asimov-patterns": {
-        "workspace": true,
-        "default-features": true
-      },
-      "asimov-registry": {
-        "workspace": true,
-        "default-features": true
-      },
-      "asimov-runner": {
-        "workspace": true,
-        "default-features": true
-      },
-      "async-trait": {
-        "workspace": true
-      },
-      "bon": {
-        "workspace": true
-      },
-      "jiff": {
-        "workspace": true
-      },
-      "tracing": {
-        "workspace": true,
-        "features": [
-          "attributes"
-        ]
-      },
-      "cap-std": {
-        "workspace": true,
-        "optional": true
-      },
-      "cap-tempfile": {
-        "version": "3.4",
-        "optional": true
-      },
-      "hex": {
-        "workspace": true,
-        "optional": true
-      },
-      "sha2": {
-        "workspace": true,
-        "optional": true
-      }
-    },
-    "dev-dependencies": {
-      "tempfile": {
-        "workspace": true
-      },
-      "tracing-subscriber": {
-        "workspace": true,
-        "features": [
-          "fmt"
-        ]
       }
     }
   },
@@ -2850,33 +433,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Token Types"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -2887,33 +444,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Universe Registry"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   },
@@ -2928,33 +459,7 @@
       "metadata": {
         "readme": {
           "title": "ASIMOV.rs: Vault Access"
-        },
-        "docs": {
-          "rs": {
-            "all-features": true,
-            "rustdoc-args": [
-              "--cfg",
-              "docsrs"
-            ]
-          }
         }
-      }
-    },
-    "features": {
-      "default": [
-        "all",
-        "std"
-      ],
-      "all": [],
-      "std": [
-        "asimov-core/std"
-      ],
-      "unstable": [],
-      "tracing": []
-    },
-    "dependencies": {
-      "asimov-core": {
-        "workspace": true
       }
     }
   }

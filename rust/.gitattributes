@@ -1,3 +1,2 @@
-.cargo/packages.json linguist-generated -diff
 Cargo.lock linguist-generated -diff
 Rakefile linguist-vendored
