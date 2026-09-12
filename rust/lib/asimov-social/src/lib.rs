@@ -18,6 +18,9 @@ extern crate std;
 mod follow_relationship;
 pub use follow_relationship::*;
 
+mod social_handle;
+pub use social_handle::*;
+
 #[cfg(feature = "facebook")]
 pub mod facebook;
 

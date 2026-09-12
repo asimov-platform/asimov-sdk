@@ -45,7 +45,7 @@ tracing = []
 
 [dependencies]
 asimov-core.workspace = true
-derive_more = { workspace = true, features = ["display"] }
+derive_more = { workspace = true, features = ["debug", "display", "from"] }
 
 # Features:
 known-types-facebook = { workspace = true, optional = true }

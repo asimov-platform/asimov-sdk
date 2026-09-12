@@ -6200,65 +6200,99 @@ dependencies = [
 
 [[package]]
 name = "known-types-facebook"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d4a8ada729c77e0c5771bc99cf01e8785da92789e8dc39a8a3706033ee0e0bd"
+checksum = "277f2aaabefdcd61d8650996b67a9864c12c44220edce212a1d6ab3c23e7068d"
+dependencies = [
+ "bincode",
+ "derive_more",
+ "musli",
+ "serde",
+]
 
 [[package]]
 name = "known-types-github"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88d1cdaa9c067eec2e29c5c316e7ccf9d205a73f7736870a402f8a402be7a892"
+checksum = "5ae899e8daa93b9199eeb5b37cfde1034ec8bc1eb39a81474bc0f28d21b2f595"
 dependencies = [
+ "bincode",
  "derive_more",
+ "musli",
+ "serde",
 ]
 
 [[package]]
 name = "known-types-gravatar"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "676cb345632b3b65949ebfde9004446703049b064d6dd15e7d4ff307a5e797da"
+checksum = "7d02b78ef4aa261e9c1045c1966bd2d1cf0d2de73b6705a45dd82f2fe3354e0c"
 dependencies = [
+ "bincode",
  "derive_more",
+ "musli",
+ "serde",
 ]
 
 [[package]]
 name = "known-types-instagram"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4b11bdda5853db12edc686d9558b84e7ae1dce05443a2f5e3be33652fd5ae24"
+checksum = "e919d3adff609dae9085c2140f0d558c4d5e2cfd04b4a68f3ba3ea9dd50a0f28"
 dependencies = [
+ "bincode",
  "derive_more",
+ "musli",
+ "serde",
 ]
 
 [[package]]
 name = "known-types-introco"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9546d8e49dc56f91d378db0212a9717acf1cce8a9dd25ac36b7dd6d45667ace"
+checksum = "474a9b5f60f40ac7f3b872a44eda0aec1964bec23027d6dfa52e1bff504ff3ae"
+dependencies = [
+ "bincode",
+ "derive_more",
+ "musli",
+ "serde",
+]
 
 [[package]]
 name = "known-types-linkedin"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b742ffbf68381ad12dcc6f18db1926efbb913197328e361158a6893c76be1ffe"
+checksum = "7db618aa1caf8a3ee70ad09fd1e9ce67050482c210aecc6c0842cf80e073bdc5"
 dependencies = [
+ "bincode",
  "derive_more",
+ "musli",
+ "percent-encoding",
+ "serde",
 ]
 
 [[package]]
 name = "known-types-localai"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a01c7823a04af95f14367c54d1581a24ace135a99d4ea5fdff0963ebd6a5ec57"
+checksum = "eb1dfe9eb85ca6a6c4c3a3565503e60f6b3356e9fab55cfde71444a41c19a087"
+dependencies = [
+ "bincode",
+ "derive_more",
+ "musli",
+ "serde",
+]
 
 [[package]]
 name = "known-types-luma"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65395fca0e0059768302e991cc4a909302dff8b3abd519a8c74f2ff04df3937c"
+checksum = "77d01553ee151a9947e0caa658577b55a1973ff394ce6ac9d207dcc18b777d96"
 dependencies = [
+ "bincode",
  "derive_more",
+ "musli",
+ "serde",
 ]
 
 [[package]]
@@ -6276,21 +6310,39 @@ dependencies = [
 
 [[package]]
 name = "known-types-telegram"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5da4fa6f4109cc1906731bdbde3f0bc75562adc835aa6d632c7ac0cdbb4959f"
+checksum = "dd7257652df8d9459f5a799b2f765675aa9deed3ca1d69b21febc4211ae2924b"
+dependencies = [
+ "bincode",
+ "derive_more",
+ "musli",
+ "serde",
+]
 
 [[package]]
 name = "known-types-whatsapp"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deca89bda261087e6f6409c17e4341361bf08ac5148b3a21c336eda4bab50dfe"
+checksum = "55ff78ec9eeb4839d5eb5a8094150e1c97d2973b1ed85e224b3d0f5c0d1a3c35"
+dependencies = [
+ "bincode",
+ "derive_more",
+ "musli",
+ "serde",
+]
 
 [[package]]
 name = "known-types-x"
-version = "0.0.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08a051740de0af9da5c1374a4224a657105d4d866068f2ecc8326b2aa4058830"
+checksum = "02b4e8e50aabe0c4c2608feca74627a85bd0ed937bae7da78e5fea9959431486"
+dependencies = [
+ "bincode",
+ "derive_more",
+ "musli",
+ "serde",
+]
 
 [[package]]
 name = "konst"

@@ -91,17 +91,17 @@ tokio-stream = { version = "0.1", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
 
 # Social media:
-known-types-facebook = { version = "0", default-features = false }
-known-types-github = { version = "0", default-features = false }
-known-types-gravatar = { version = "0", default-features = false }
-known-types-instagram = { version = "0", default-features = false }
-known-types-introco = { version = "0", default-features = false }
-known-types-linkedin = { version = "0", default-features = false }
-known-types-localai = { version = "0", default-features = false }
-known-types-luma = { version = "0", default-features = false }
-known-types-telegram = { version = "0", default-features = false }
-known-types-whatsapp = { version = "0", default-features = false }
-known-types-x = { version = "0", default-features = false }
+known-types-facebook = { version = "0.1.1", default-features = false, features = ["alloc"] }
+known-types-github = { version = "0.1.1", default-features = false, features = ["alloc"] }
+known-types-gravatar = { version = "0.1.1", default-features = false, features = ["alloc"] }
+known-types-instagram = { version = "0.1.1", default-features = false, features = ["alloc"] }
+known-types-introco = { version = "0.1.1", default-features = false, features = ["alloc"] }
+known-types-linkedin = { version = "0.1.1", default-features = false, features = ["alloc"] }
+known-types-localai = { version = "0.1.1", default-features = false, features = ["alloc"] }
+known-types-luma = { version = "0.1.1", default-features = false, features = ["alloc"] }
+known-types-telegram = { version = "0.1.1", default-features = false, features = ["alloc"] }
+known-types-whatsapp = { version = "0.1.1", default-features = false, features = ["alloc"] }
+known-types-x = { version = "0.1.1", default-features = false, features = ["alloc"] }
 
 alloy = { version = "2.2", default-features = false }
 anyhow = { version = "1", default-features = false }
