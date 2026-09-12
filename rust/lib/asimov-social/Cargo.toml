@@ -40,7 +40,20 @@ x = ["dep:known-types-x"]
 
 # Interoperability:
 clap = ["dep:clap"]
-serde = ["dep:serde"]
+serde = [
+    "dep:serde",
+    "known-types-facebook?/serde",
+    "known-types-github?/serde",
+    "known-types-gravatar?/serde",
+    "known-types-instagram?/serde",
+    "known-types-introco?/serde",
+    "known-types-linkedin?/serde",
+    "known-types-localai?/serde",
+    "known-types-luma?/serde",
+    "known-types-telegram?/serde",
+    "known-types-whatsapp?/serde",
+    "known-types-x?/serde",
+]
 tracing = []
 
 [dependencies]
