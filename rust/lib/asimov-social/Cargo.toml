@@ -21,20 +21,44 @@ title = "ASIMOV.rs: Social Media"
 
 [features]
 default = ["all", "std"]
-all = []
 std = ["asimov-core/std"]
 unstable = []
 
 # Features:
-tracing = []
+all = ["facebook", "github", "gravatar", "instagram", "introco", "linkedin", "localai", "luma", "telegram", "whatsapp", "x"]
+facebook = ["dep:known-types-facebook"]
+github = ["dep:known-types-github"]
+gravatar = ["dep:known-types-gravatar"]
+instagram = ["dep:known-types-instagram"]
+introco = ["dep:known-types-introco"]
+linkedin = ["dep:known-types-linkedin"]
+localai = ["dep:known-types-localai"]
+luma = ["dep:known-types-luma"]
+telegram = ["dep:known-types-telegram"]
+whatsapp = ["dep:known-types-whatsapp"]
+x = ["dep:known-types-x"]
 
 # Interoperability:
 clap = ["dep:clap"]
 serde = ["dep:serde"]
+tracing = []
 
 [dependencies]
 asimov-core.workspace = true
 derive_more = { workspace = true, features = ["display"] }
+
+# Features:
+known-types-facebook = { workspace = true, optional = true }
+known-types-github = { workspace = true, optional = true }
+known-types-gravatar = { workspace = true, optional = true }
+known-types-instagram = { workspace = true, optional = true }
+known-types-introco = { workspace = true, optional = true }
+known-types-linkedin = { workspace = true, optional = true }
+known-types-localai = { workspace = true, optional = true }
+known-types-luma = { workspace = true, optional = true }
+known-types-telegram = { workspace = true, optional = true }
+known-types-whatsapp = { workspace = true, optional = true }
+known-types-x = { workspace = true, optional = true }
 
 # Interoperability:
 clap = { workspace = true, features = ["derive", "std"], optional = true }

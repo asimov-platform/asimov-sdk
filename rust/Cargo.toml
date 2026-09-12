@@ -90,6 +90,19 @@ tokio = { version = "1", default-features = false }
 tokio-stream = { version = "0.1", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
 
+# Social media:
+known-types-facebook = { version = "0", default-features = false }
+known-types-github = { version = "0", default-features = false }
+known-types-gravatar = { version = "0", default-features = false }
+known-types-instagram = { version = "0", default-features = false }
+known-types-introco = { version = "0", default-features = false }
+known-types-linkedin = { version = "0", default-features = false }
+known-types-localai = { version = "0", default-features = false }
+known-types-luma = { version = "0", default-features = false }
+known-types-telegram = { version = "0", default-features = false }
+known-types-whatsapp = { version = "0", default-features = false }
+known-types-x = { version = "0", default-features = false }
+
 alloy = { version = "2.2", default-features = false }
 anyhow = { version = "1", default-features = false }
 async-flow = { version = "0.1.5", default-features = false }
