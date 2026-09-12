@@ -1547,6 +1547,9 @@ name = "asimov-social"
 version = "25.4.0"
 dependencies = [
  "asimov-core",
+ "clap",
+ "derive_more",
+ "serde",
 ]
 
 [[package]]

@@ -28,8 +28,17 @@ unstable = []
 # Features:
 tracing = []
 
+# Interoperability:
+clap = ["dep:clap"]
+serde = ["dep:serde"]
+
 [dependencies]
 asimov-core.workspace = true
+derive_more = { workspace = true, features = ["display"] }
+
+# Interoperability:
+clap = { workspace = true, features = ["derive", "std"], optional = true }
+serde = { workspace = true, optional = true }
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]
