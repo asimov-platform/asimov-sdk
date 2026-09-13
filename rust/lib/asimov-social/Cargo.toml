@@ -41,6 +41,7 @@ x = ["dep:known-types-x"]
 # Interoperability:
 async-graphql = [
     "dep:async-graphql",
+    "known-types/async-graphql",
     "known-types-facebook?/async-graphql",
     "known-types-github?/async-graphql",
     "known-types-gravatar?/async-graphql",
@@ -56,6 +57,7 @@ async-graphql = [
 clap = ["dep:clap"]
 serde = [
     "dep:serde",
+    "known-types/serde",
     "known-types-facebook?/serde",
     "known-types-github?/serde",
     "known-types-gravatar?/serde",
@@ -71,6 +73,7 @@ serde = [
 sqlx = [
     "dep:sqlx",
     "std",
+    "known-types/sqlx",
     "known-types-facebook?/sqlx",
     "known-types-github?/sqlx",
     "known-types-gravatar?/sqlx",
@@ -87,7 +90,8 @@ tracing = ["dep:tracing"]
 
 [dependencies]
 asimov-core.workspace = true
-derive_more = { workspace = true, features = ["debug", "display", "from"] }
+derive_more = { workspace = true, features = ["debug", "display", "from", "from_str"] }
+known-types.workspace = true
 
 # Features:
 known-types-facebook = { workspace = true, optional = true }

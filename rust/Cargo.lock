@@ -1550,6 +1550,7 @@ dependencies = [
  "async-graphql",
  "clap",
  "derive_more",
+ "known-types",
  "known-types-facebook",
  "known-types-github",
  "known-types-gravatar",
@@ -6241,130 +6242,138 @@ dependencies = [
 ]
 
 [[package]]
-name = "known-types-facebook"
-version = "0.1.2"
+name = "known-types"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25c7ef525bb72afc102cdf3240b382f4a567e4cbb85bd5e105ba1352d6e8241a"
+checksum = "48b11a9787dc84c2290dff6487b372e548afa33d89114c497ec2ed27d7a27ab8"
 dependencies = [
  "async-graphql",
- "bincode",
  "borsh",
- "derive_more",
  "musli 0.1.7",
- "rasn 0.28.14",
  "serde",
  "sqlx",
+]
+
+[[package]]
+name = "known-types-facebook"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f2aa192dd50f26e5a1b5f8168812f4a8466c75967ed04604a486ce541ef4e6d"
+dependencies = [
+ "async-graphql",
+ "borsh",
+ "derive_more",
+ "known-types",
+ "musli 0.1.7",
+ "serde",
+ "sqlx",
+ "unicase",
 ]
 
 [[package]]
 name = "known-types-github"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1cf194b554f6e44d04e6eef316d2680504c581b23cb615980233b3ebe6a64b5"
+checksum = "1b373076ac0975f68a2a32449eacec1b12fc23f10139699398899c6354830e90"
 dependencies = [
  "async-graphql",
- "bincode",
  "borsh",
  "derive_more",
+ "known-types",
  "musli 0.1.7",
- "rasn 0.28.14",
  "serde",
  "sqlx",
+ "unicase",
 ]
 
 [[package]]
 name = "known-types-gravatar"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7ce59b9a1b4b6c7622e59fafabe6d7eba0a2b6f0698d5626c790b826a459840"
+checksum = "71a3bb00fcf4dabd3d1ae435c28d640def4f42390979d0363e76a1fd5d383a44"
 dependencies = [
  "async-graphql",
- "bincode",
  "borsh",
  "derive_more",
+ "known-types",
  "musli 0.1.7",
- "rasn 0.28.14",
  "serde",
  "sqlx",
 ]
 
 [[package]]
 name = "known-types-instagram"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a7d8eb576cb56b7e07448b218e0f5f3002d746331e86493e305d06f72bf0396"
+checksum = "9f12d45c0dced462ac65ddfc03a616d26e587c53a3043fd5384629381470de93"
 dependencies = [
  "async-graphql",
- "bincode",
  "borsh",
  "derive_more",
+ "known-types",
  "musli 0.1.7",
- "rasn 0.28.14",
  "serde",
  "sqlx",
 ]
 
 [[package]]
 name = "known-types-introco"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42de5094908fb9b757a8d591a0a0c0de25c78d339dcb8c344f150332605388ab"
+checksum = "54d05391139230ab658b4e867bc4911947b1b334ff7a657387ef0ae8df0024b2"
 dependencies = [
  "async-graphql",
- "bincode",
  "borsh",
  "derive_more",
+ "known-types",
  "musli 0.1.7",
- "rasn 0.28.14",
  "serde",
  "sqlx",
 ]
 
 [[package]]
 name = "known-types-linkedin"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a89991ae9fcd8f8da9c600627db8aa269c4fb2c478ff3cf563a1df85a04ca483"
+checksum = "745a6abaaa3a3dc5f840f8f6bb7ac38dc78b0c9765a448988a948ce24a5c7580"
 dependencies = [
  "async-graphql",
- "bincode",
  "borsh",
  "derive_more",
+ "known-types",
  "musli 0.1.7",
  "percent-encoding",
- "rasn 0.28.14",
  "serde",
  "sqlx",
+ "unicase",
 ]
 
 [[package]]
 name = "known-types-localai"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1435d5ab20b9c41c4fdb26563929027a2c313cde4758d296b0f0808c6b2831b"
+checksum = "4b52de5bd10c63e4c312d087276178c2e698d6b26f813d8fee22f2859b22aaf3"
 dependencies = [
  "async-graphql",
- "bincode",
  "borsh",
  "derive_more",
+ "known-types",
  "musli 0.1.7",
- "rasn 0.28.14",
  "serde",
  "sqlx",
 ]
 
 [[package]]
 name = "known-types-luma"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6467de28d1c95b43f02eba884b7c15ec8c94ac67ed487165dd8e8dc6c2b74f33"
+checksum = "c099ab68f775038c0bc8b02f212de53a25da997956030c99ce47cf746bf69d02"
 dependencies = [
  "async-graphql",
- "bincode",
  "borsh",
  "derive_more",
+ "known-types",
  "musli 0.1.7",
- "rasn 0.28.14",
  "serde",
  "sqlx",
 ]
@@ -6378,56 +6387,55 @@ dependencies = [
  "bincode",
  "borsh",
  "musli 0.0.131",
- "rasn 0.26.6",
+ "rasn",
  "serde",
 ]
 
 [[package]]
 name = "known-types-telegram"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75857bac3edbec29d2425c341332988faf2d410cff25744755222716f634e7cd"
+checksum = "c4c8c8e98b46c0f32881f2640d860764d355b76afea9126ee699bcd62572b8bd"
 dependencies = [
  "async-graphql",
- "bincode",
  "borsh",
  "derive_more",
+ "known-types",
  "musli 0.1.7",
- "rasn 0.28.14",
  "serde",
  "sqlx",
+ "unicase",
 ]
 
 [[package]]
 name = "known-types-whatsapp"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a1a6df02413af7fb1123c6bfc596001eaf3213a6a3028bba0dfd1f91130502f"
+checksum = "c07b5eb3cd6cdd0036a1e3a880ce7b9a617fee89554be1d06e5bb059aff5b9c7"
 dependencies = [
  "async-graphql",
- "bincode",
  "borsh",
  "derive_more",
+ "known-types",
  "musli 0.1.7",
- "rasn 0.28.14",
  "serde",
  "sqlx",
 ]
 
 [[package]]
 name = "known-types-x"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "834cbc8b900119ca434624113226ee0c79d68735fb1c896bd792875d5c909b13"
+checksum = "f8d8d7dab7d3a54ac90349f662dab608110be61de6e32976fe4ca6c80523e261"
 dependencies = [
  "async-graphql",
- "bincode",
  "borsh",
  "derive_more",
+ "known-types",
  "musli 0.1.7",
- "rasn 0.28.14",
  "serde",
  "sqlx",
+ "unicase",
 ]
 
 [[package]]
@@ -8555,29 +8563,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "once_cell",
- "rasn-derive 0.26.6",
- "serde_json",
- "snafu",
- "xml-no-std",
-]
-
-[[package]]
-name = "rasn"
-version = "0.28.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d1b71dd951343df0fe30b11bca09518f3aba8e5bd0ece4564adbc2dabd875fa"
-dependencies = [
- "bitvec",
- "bitvec-nom2",
- "cfg-if",
- "chrono",
- "either",
- "nom",
- "num-bigint",
- "num-integer",
- "num-traits",
- "once_cell",
- "rasn-derive 0.28.14",
+ "rasn-derive",
  "serde_json",
  "snafu",
  "xml-no-std",
@@ -8590,18 +8576,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a16f695759320ec969864fe5e7aa8e2a9c5665469565b100b8c8c1a36cd5484"
 dependencies = [
  "proc-macro2",
- "rasn-derive-impl 0.26.6",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "rasn-derive"
-version = "0.28.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "979eafa601d351f7f6490f1d2f4decc168e8e51cb6517c6c6ff80111951129d5"
-dependencies = [
- "proc-macro2",
- "rasn-derive-impl 0.28.14",
+ "rasn-derive-impl",
  "syn 2.0.119",
 ]
 
@@ -8610,20 +8585,6 @@ name = "rasn-derive-impl"
 version = "0.26.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f14454245fd76215b830d083b6b6c6842047e50cb7ee73ce1e769d4b099c89fd"
-dependencies = [
- "either",
- "itertools 0.13.0",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
- "uuid",
-]
-
-[[package]]
-name = "rasn-derive-impl"
-version = "0.28.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eee3136c97d6f2553c0d9f84d2c2555bb87ae9b365c5c9274e8bc5c366174431"
 dependencies = [
  "either",
  "itertools 0.13.0",
@@ -10135,6 +10096,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "378620ccc25c62c89d8be1c819e76a88d59bdcc3304733330788948e619bfd71"
 dependencies = [
  "sqlx-core",
+ "sqlx-macros",
 ]
 
 [[package]]
@@ -10160,10 +10122,45 @@ dependencies = [
  "log",
  "memchr",
  "percent-encoding",
+ "serde",
  "sha2 0.10.9",
  "smallvec",
  "thiserror 2.0.19",
  "tracing",
+ "url",
+]
+
+[[package]]
+name = "sqlx-macros"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd2b84f2bc39a5705ef27ec785a11c934a41bbd4a24941e257927cddc26b60bf"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "sqlx-core",
+ "sqlx-macros-core",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "sqlx-macros-core"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb8d96de5fdc85a5c4ec813432b523ec637e80ba98f046555f75f7908ddac7c3"
+dependencies = [
+ "cfg-if",
+ "dotenvy",
+ "either",
+ "heck",
+ "hex",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx-core",
+ "syn 2.0.119",
  "url",
 ]
 

@@ -3,62 +3,63 @@
 use alloc::string::{String, ToString};
 use core::str::FromStr;
 use derive_more::{Debug, Display, From, FromStrError};
+use known_types::handle::ParseHandleError;
 
 #[derive(Clone, Debug, Display, Eq, From, Hash, Ord, PartialEq, PartialOrd)]
 #[non_exhaustive]
 pub enum SocialHandle {
     #[cfg(feature = "facebook")]
-    #[debug("SocialHandle::Facebook({:?})", _0.as_ref())]
+    #[debug("SocialHandle::Facebook({:?})", _0.as_str())]
     #[display("https://facebook.com/{_0}")]
     Facebook(crate::facebook::FacebookHandle),
 
     #[cfg(feature = "github")]
-    #[debug("SocialHandle::Github({:?})", _0.as_ref())]
+    #[debug("SocialHandle::Github({:?})", _0.as_str())]
     #[display("https://github.com/{_0}")]
     Github(crate::github::GithubHandle),
 
     #[cfg(feature = "gravatar")]
-    #[debug("SocialHandle::Gravatar({:?})", _0.as_ref())]
+    #[debug("SocialHandle::Gravatar({:?})", _0.as_str())]
     #[display("https://gravatar.com/{_0}")]
     Gravatar(crate::gravatar::GravatarHandle),
 
     #[cfg(feature = "instagram")]
-    #[debug("SocialHandle::Instagram({:?})", _0.as_ref())]
+    #[debug("SocialHandle::Instagram({:?})", _0.as_str())]
     #[display("https://instagram.com/{_0}")]
     Instagram(crate::instagram::InstagramHandle),
 
     #[cfg(feature = "introco")]
-    #[debug("SocialHandle::Introco({:?})", _0.as_ref())]
+    #[debug("SocialHandle::Introco({:?})", _0.as_str())]
     #[display("https://intro.co/{_0}")]
     Introco(crate::introco::IntrocoHandle),
 
     #[cfg(feature = "linkedin")]
-    #[debug("SocialHandle::Linkedin({:?})", _0.as_ref())]
+    #[debug("SocialHandle::Linkedin({:?})", _0.as_str())]
     #[display("https://linkedin.com/in/{_0}")]
     Linkedin(crate::linkedin::LinkedinHandle),
 
     #[cfg(feature = "localai")]
-    #[debug("SocialHandle::Localai({:?})", _0.as_ref())]
+    #[debug("SocialHandle::Localai({:?})", _0.as_str())]
     #[display("https://local.ai/{_0}")]
     Localai(crate::localai::LocalaiHandle),
 
     #[cfg(feature = "luma")]
-    #[debug("SocialHandle::Luma({:?})", _0.as_ref())]
+    #[debug("SocialHandle::Luma({:?})", _0.as_str())]
     #[display("https://luma.com/user/{_0}")]
     Luma(crate::luma::LumaHandle),
 
     #[cfg(feature = "telegram")]
-    #[debug("SocialHandle::Telegram({:?})", _0.as_ref())]
+    #[debug("SocialHandle::Telegram({:?})", _0.as_str())]
     #[display("https://t.me/{_0}")]
     Telegram(crate::telegram::TelegramHandle),
 
     #[cfg(feature = "whatsapp")]
-    #[debug("SocialHandle::Whatsapp({:?})", _0.as_ref())]
+    #[debug("SocialHandle::Whatsapp({:?})", _0.as_str())]
     #[display("https://wa.me/{_0}")]
     Whatsapp(crate::whatsapp::WhatsappHandle),
 
     #[cfg(feature = "x")]
-    #[debug("SocialHandle::X({:?})", _0.as_ref())]
+    #[debug("SocialHandle::X({:?})", _0.as_str())]
     #[display("https://x.com/{_0}")]
     X(crate::x::XHandle),
 }
@@ -79,85 +80,96 @@ impl async_graphql::connection::CursorType for SocialHandle {
 #[allow(unused)]
 impl SocialHandle {
     #[cfg(feature = "facebook")]
-    pub fn facebook(handle: impl Into<String>) -> Self {
-        Self::Facebook(crate::facebook::FacebookHandle::from(handle.into()))
+    pub fn facebook(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+        use crate::facebook::FacebookHandle;
+        Ok(Self::Facebook(FacebookHandle::from_str(input.as_ref())?))
     }
 
     #[cfg(feature = "github")]
-    pub fn github(handle: impl Into<String>) -> Self {
-        Self::Github(crate::github::GithubHandle::from(handle.into()))
+    pub fn github(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+        use crate::github::GithubHandle;
+        Ok(Self::Github(GithubHandle::from_str(input.as_ref())?))
     }
 
     #[cfg(feature = "gravatar")]
-    pub fn gravatar(handle: impl Into<String>) -> Self {
-        Self::Gravatar(crate::gravatar::GravatarHandle::from(handle.into()))
+    pub fn gravatar(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+        use crate::gravatar::GravatarHandle;
+        Ok(Self::Gravatar(GravatarHandle::from_str(input.as_ref())?))
     }
 
     #[cfg(feature = "instagram")]
-    pub fn instagram(handle: impl Into<String>) -> Self {
-        Self::Instagram(crate::instagram::InstagramHandle::from(handle.into()))
+    pub fn instagram(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+        use crate::instagram::InstagramHandle;
+        Ok(Self::Instagram(InstagramHandle::from_str(input.as_ref())?))
     }
 
     #[cfg(feature = "introco")]
-    pub fn introco(handle: impl Into<String>) -> Self {
-        Self::Introco(crate::introco::IntrocoHandle::from(handle.into()))
+    pub fn introco(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+        use crate::introco::IntrocoHandle;
+        Ok(Self::Introco(IntrocoHandle::from_str(input.as_ref())?))
     }
 
     #[cfg(feature = "linkedin")]
-    pub fn linkedin(handle: impl Into<String>) -> Self {
-        Self::Linkedin(crate::linkedin::LinkedinHandle::from(handle.into()))
+    pub fn linkedin(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+        use crate::linkedin::LinkedinHandle;
+        Ok(Self::Linkedin(LinkedinHandle::from_str(input.as_ref())?))
     }
 
     #[cfg(feature = "localai")]
-    pub fn localai(handle: impl Into<String>) -> Self {
-        Self::Localai(crate::localai::LocalaiHandle::from(handle.into()))
+    pub fn localai(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+        use crate::localai::LocalaiHandle;
+        Ok(Self::Localai(LocalaiHandle::from_str(input.as_ref())?))
     }
 
     #[cfg(feature = "luma")]
-    pub fn luma(handle: impl Into<String>) -> Self {
-        Self::Luma(crate::luma::LumaHandle::from(handle.into()))
+    pub fn luma(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+        use crate::luma::LumaHandle;
+        Ok(Self::Luma(LumaHandle::from_str(input.as_ref())?))
     }
 
     #[cfg(feature = "telegram")]
-    pub fn telegram(handle: impl Into<String>) -> Self {
-        Self::Telegram(crate::telegram::TelegramHandle::from(handle.into()))
+    pub fn telegram(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+        use crate::telegram::TelegramHandle;
+        Ok(Self::Telegram(TelegramHandle::from_str(input.as_ref())?))
     }
 
     #[cfg(feature = "whatsapp")]
-    pub fn whatsapp(handle: impl Into<String>) -> Self {
-        Self::Whatsapp(crate::whatsapp::WhatsappHandle::from(handle.into()))
+    pub fn whatsapp(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+        use crate::whatsapp::WhatsappHandle;
+        Ok(Self::Whatsapp(WhatsappHandle::from_str(input.as_ref())?))
     }
 
     #[cfg(feature = "x")]
-    pub fn x(handle: impl Into<String>) -> Self {
-        Self::X(crate::x::XHandle::from(handle.into()))
+    pub fn x(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+        use crate::x::XHandle;
+        Ok(Self::X(XHandle::from_str(input.as_ref())?))
     }
 
     pub fn as_str(&self) -> &str {
         use SocialHandle::*;
         match self {
             #[cfg(feature = "facebook")]
-            Facebook(h) => h.as_ref(),
+            Facebook(h) => h.as_str(),
             #[cfg(feature = "github")]
-            Github(h) => h.as_ref(),
+            Github(h) => h.as_str(),
             #[cfg(feature = "gravatar")]
-            Gravatar(h) => h.as_ref(),
+            Gravatar(h) => h.as_str(),
             #[cfg(feature = "instagram")]
-            Instagram(h) => h.as_ref(),
+            Instagram(h) => h.as_str(),
             #[cfg(feature = "introco")]
-            Introco(h) => h.as_ref(),
+            Introco(h) => h.as_str(),
             #[cfg(feature = "linkedin")]
-            Linkedin(h) => h.as_ref(),
+            Linkedin(h) => h.as_str(),
             #[cfg(feature = "localai")]
-            Localai(h) => h.as_ref(),
+            Localai(h) => h.as_str(),
             #[cfg(feature = "luma")]
-            Luma(h) => h.as_ref(),
+            Luma(h) => h.as_str(),
             #[cfg(feature = "telegram")]
-            Telegram(h) => h.as_ref(),
+            Telegram(h) => h.as_str(),
             #[cfg(feature = "whatsapp")]
-            Whatsapp(h) => h.as_ref(),
+            Whatsapp(h) => h.as_str(),
             #[cfg(feature = "x")]
-            X(h) => h.as_ref(),
+            X(h) => h.as_str(),
         }
     }
 }
