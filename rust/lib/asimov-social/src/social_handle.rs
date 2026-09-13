@@ -66,10 +66,10 @@ pub enum SocialHandle {
 
 #[cfg(feature = "async-graphql")]
 impl async_graphql::connection::CursorType for SocialHandle {
-    type Error = core::convert::Infallible;
+    type Error = ParseHandleError;
 
     fn decode_cursor(input: &str) -> Result<Self, Self::Error> {
-        Ok(Self::x(input)) // FIXME
+        Self::x(input) // FIXME
     }
 
     fn encode_cursor(&self) -> String {
