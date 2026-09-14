@@ -1564,6 +1564,7 @@ dependencies = [
  "known-types-x",
  "serde",
  "sqlx",
+ "thiserror 2.0.19",
  "tracing",
 ]
 

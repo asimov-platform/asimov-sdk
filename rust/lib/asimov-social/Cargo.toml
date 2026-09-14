@@ -92,6 +92,7 @@ tracing = ["dep:tracing"]
 asimov-core.workspace = true
 derive_more = { workspace = true, features = ["debug", "display", "from", "from_str"] }
 known-types.workspace = true
+thiserror.workspace = true
 
 # Features:
 known-types-facebook = { workspace = true, optional = true }

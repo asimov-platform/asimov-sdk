@@ -21,6 +21,9 @@ pub use follow_relationship::*;
 mod social_handle;
 pub use social_handle::*;
 
+mod social_property;
+pub use social_property::*;
+
 #[cfg(feature = "facebook")]
 pub mod facebook;
 
