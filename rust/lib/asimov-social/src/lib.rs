@@ -5,6 +5,8 @@
 //! Use [`SocialHandle`] to associate an account handle with its platform,
 //! [`SocialProperty`] to select account information, and [`FollowRelationship`]
 //! to describe the direction of a follow relationship between accounts.
+//! [`SocialLink`] recognizes URLs for profiles, relationships, and other social
+//! resources, with fallible conversions to and from supported account handles.
 //!
 //! Platform modules re-export their platform-specific handle types. Each module
 //! and its corresponding `SocialHandle` variant require the matching platform

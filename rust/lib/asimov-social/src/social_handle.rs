@@ -17,6 +17,10 @@ use known_types::handle::ParseHandleError;
 /// `/` and `#` characters are removed before parsing. Bare handles, alternative
 /// domains, and URLs for disabled platforms are not accepted by this parser.
 ///
+/// Fallible conversions to and from [`crate::SocialLink`] support plain profiles
+/// on platforms shared by the two types. See its conversion documentation for
+/// supported platforms and validation rules.
+///
 /// # Examples
 ///
 /// ```
