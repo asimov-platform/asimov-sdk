@@ -1,5 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
+//! Exact or approximate RDF matching through an external matcher program.
+
 use crate::{Executor, ExecutorError, GraphInput, GraphOutput};
 use alloc::{boxed::Box, format, vec, vec::Vec};
 use async_trait::async_trait;
@@ -8,10 +10,20 @@ use std::{ffi::OsStr, io::Cursor, process::Stdio};
 
 pub use asimov_patterns::MatcherOptions;
 
-/// See: https://asimov-specs.github.io/program-patterns/#matcher
+/// Raw graph bytes captured from a successful [`Matcher`], or an execution error.
+///
+/// The cursor is positioned at zero and is empty when stdout is not captured.
+/// Matches are not parsed or validated.
 pub type MatcherResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>; // TODO
 
-/// See: https://asimov-specs.github.io/program-patterns/#matcher
+/// An external [matcher] that performs exact or approximate matching on RDF.
+///
+/// Output is RDF describing the matches, rather than necessarily a subset of
+/// the input dataset. Matching rules belong to the external program;
+/// this wrapper passes input bytes and command-line options through. Execution
+/// uses the buffering and stream-handling behavior described in [`crate::programs`].
+///
+/// [matcher]: https://asimov-specs.github.io/program-patterns/#matcher
 #[allow(unused)]
 #[derive(Debug)]
 pub struct Matcher {
@@ -22,6 +34,11 @@ pub struct Matcher {
 }
 
 impl Matcher {
+    /// Configures a matcher without starting it.
+    ///
+    /// Adds any configured `--input=<format>` and `--output=<format>` arguments,
+    /// followed by `options.other`. The input and output values select stdin
+    /// and stdout; stderr is captured for failure diagnostics.
     pub fn new(
         program: impl AsRef<OsStr>,
         input: GraphInput,
@@ -54,6 +71,12 @@ impl Matcher {
         }
     }
 
+    /// Sends the remaining graph input to a new child and returns captured matches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`ExecutorError`] if spawning, copying input, or waiting fails,
+    /// or if the matcher exits unsuccessfully.
     pub async fn execute(&mut self) -> MatcherResult {
         let stdout = self.executor.execute_with_input(&mut self.input).await?;
         Ok(stdout)

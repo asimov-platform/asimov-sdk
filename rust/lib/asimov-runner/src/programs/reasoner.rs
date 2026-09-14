@@ -1,5 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
+//! RDF dataset entailment through an external reasoner program.
+
 use crate::{Executor, ExecutorError, GraphInput, GraphOutput};
 use alloc::{boxed::Box, format, vec, vec::Vec};
 use async_trait::async_trait;
@@ -8,10 +10,19 @@ use std::{ffi::OsStr, io::Cursor, process::Stdio};
 
 pub use asimov_patterns::ReasonerOptions;
 
-/// See: https://asimov-specs.github.io/program-patterns/#reasoner
+/// Raw graph bytes captured from a successful [`Reasoner`], or an execution error.
+///
+/// The cursor is positioned at zero and is empty when stdout is not captured.
+/// Inferred data is not parsed or validated.
 pub type ReasonerResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>; // TODO
 
-/// See: https://asimov-specs.github.io/program-patterns/#reasoner
+/// An external [reasoner] that consumes an RDF dataset and emits entailed RDF.
+///
+/// Inference rules and the relationship between input and output graphs are
+/// determined by the external program. This wrapper transports bytes using the
+/// buffering and stream-handling behavior described in [`crate::programs`].
+///
+/// [reasoner]: https://asimov-specs.github.io/program-patterns/#reasoner
 #[allow(unused)]
 #[derive(Debug)]
 pub struct Reasoner {
@@ -22,6 +33,11 @@ pub struct Reasoner {
 }
 
 impl Reasoner {
+    /// Configures a reasoner without starting it.
+    ///
+    /// Adds any configured `--input=<format>` and `--output=<format>` arguments,
+    /// followed by `options.other`. The input and output values select stdin
+    /// and stdout; stderr is captured for failure diagnostics.
     pub fn new(
         program: impl AsRef<OsStr>,
         input: GraphInput,
@@ -54,6 +70,12 @@ impl Reasoner {
         }
     }
 
+    /// Sends the remaining graph input to a new child and returns captured inference bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`ExecutorError`] if spawning, copying input, or waiting fails,
+    /// or if the reasoner exits unsuccessfully.
     pub async fn execute(&mut self) -> ReasonerResult {
         let stdout = self.executor.execute_with_input(&mut self.input).await?;
         Ok(stdout)

@@ -1,5 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
+//! URL-based directory iteration through an external lister program.
+
 use crate::{Executor, ExecutorError, GraphOutput};
 use alloc::{
     boxed::Box,
@@ -14,10 +16,20 @@ use std::{ffi::OsStr, io::Cursor, process::Stdio};
 
 pub use asimov_patterns::ListerOptions;
 
-/// See: https://asimov-specs.github.io/program-patterns/#lister
+/// Raw graph bytes captured from a successful [`Lister`], or an execution error.
+///
+/// The cursor is positioned at zero and is empty when stdout is not captured.
+/// Entries are not parsed into individual values.
 pub type ListerResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>; // TODO
 
-/// See: https://asimov-specs.github.io/program-patterns/#lister
+/// An external [lister] that iterates a directory URL and emits RDF for its entries.
+///
+/// The input URL is passed as one command-line argument, and stdin is connected
+/// to the null device. Sorting and pagination are delegated to the external
+/// program via options. Execution uses the buffering and stream-handling
+/// behavior described in [`crate::programs`].
+///
+/// [lister]: https://asimov-specs.github.io/program-patterns/#lister
 #[allow(unused)]
 #[derive(Debug)]
 pub struct Lister {
@@ -28,6 +40,15 @@ pub struct Lister {
 }
 
 impl Lister {
+    /// Configures a lister for the directory URL `input` without starting it.
+    ///
+    /// Adds any configured `--sort`, `--offset`, `--limit`, and `--output`
+    /// options as `--name=value` arguments, in that order, followed by
+    /// `options.other` and the unvalidated URL. `output` selects stdout handling;
+    /// stderr is captured for failure diagnostics.
+    ///
+    /// The specification defines `--limit` and `--output`; support for the
+    /// additional `--sort` and `--offset` arguments depends on the program.
     pub fn new(
         program: impl AsRef<OsStr>,
         input: impl AsRef<str>,
@@ -72,6 +93,12 @@ impl Lister {
         }
     }
 
+    /// Runs a new lister process and returns its captured listing bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`ExecutorError`] if spawning or waiting fails, or if the
+    /// lister exits unsuccessfully.
     pub async fn execute(&mut self) -> ListerResult {
         let stdout = self.executor.execute().await?;
         Ok(stdout)

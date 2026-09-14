@@ -1,5 +1,10 @@
 // This is free and unencumbered software released into the public domain.
 
+//! URI-to-URL resolution through an external resolver program.
+//!
+//! Process execution is implemented, but extracting resolved URLs from
+//! stdout is not: [`Resolver::execute`] currently returns an empty list on success.
+
 use crate::{Executor, ExecutorError, Output};
 use alloc::{
     boxed::Box,
@@ -14,10 +19,20 @@ use std::{ffi::OsStr, process::Stdio};
 
 pub use asimov_patterns::ResolverOptions;
 
-/// See: https://asimov-specs.github.io/program-patterns/#resolver
+/// A list of resolved URLs, or an execution error.
+///
+/// The current [`Resolver`] implementation always returns an empty vector on
+/// success because stdout parsing is not yet implemented.
 pub type ResolverResult = std::result::Result<Vec<String>, ExecutorError>;
 
-/// See: https://asimov-specs.github.io/program-patterns/#resolver
+/// An external [resolver] that maps a URI (a URN or URL) to resolved URLs.
+///
+/// The input URI is passed as one command-line argument, and stdin is connected
+/// to the null device. The external program performs resolution, but this wrapper
+/// discards captured stdout and returns an empty list after a successful exit.
+/// Stream handling follows the behavior described in [`crate::programs`].
+///
+/// [resolver]: https://asimov-specs.github.io/program-patterns/#resolver
 #[allow(unused)]
 #[derive(Debug)]
 pub struct Resolver {
@@ -28,6 +43,11 @@ pub struct Resolver {
 }
 
 impl Resolver {
+    /// Configures a resolver for the URI `input` without starting it.
+    ///
+    /// Adds `--limit=<limit>` when `options.limit` is set, followed by
+    /// `options.other` and the unvalidated URI as a single argument. `output`
+    /// selects stdout handling; stderr is captured for failure diagnostics.
     pub fn new(
         program: impl AsRef<OsStr>,
         input: impl AsRef<str>,
@@ -57,6 +77,14 @@ impl Resolver {
         }
     }
 
+    /// Runs a new resolver process and currently returns an empty list on success.
+    ///
+    /// Captured stdout is discarded rather than parsed into URLs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`ExecutorError`] if spawning or waiting fails, or if the
+    /// resolver exits unsuccessfully.
     pub async fn execute(&mut self) -> ResolverResult {
         let _stdout = self.executor.execute().await?;
         //let lines = stdout.lines().into_iter().collect::<Vec<_>>().await?; // FIXME
