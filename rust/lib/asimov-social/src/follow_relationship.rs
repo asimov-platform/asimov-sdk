@@ -11,6 +11,10 @@ use derive_more::Display;
 /// This enum intentionally has no `None` variant. Represent an optional
 /// relationship as `Option<FollowRelationship>`, where `None` means no
 /// relationship.
+///
+/// Display formatting uses `follower`, `followee`, or `mutual`, matching
+/// [`singular`](Self::singular). With the `serde` feature, serialization uses
+/// these same lowercase names.
 #[derive(Clone, Copy, Debug, Display, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[display(rename_all = "lowercase")]
 #[cfg_attr(feature = "async-graphql", derive(async_graphql::Enum))]
