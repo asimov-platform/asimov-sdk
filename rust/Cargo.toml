@@ -38,6 +38,7 @@ asimov-huggingface = { version = "25.4.0", default-features = false }
 asimov-id = { version = "25.4.0", default-features = false }
 asimov-installer = { version = "25.4.0", default-features = false }
 asimov-kb = { version = "25.4.0", default-features = false }
+asimov-keyring = { version = "25.4.0", default-features = false }
 asimov-ledger = { version = "25.4.0", default-features = false }
 asimov-module = { version =  "25.4.0", default-features = false }
 asimov-module-kit = { version = "25.4.0", default-features = false }
@@ -243,6 +244,7 @@ asimov-huggingface = { path = "lib/asimov-huggingface" }
 asimov-id = { path = "lib/asimov-id" }
 asimov-installer = { path = "lib/asimov-installer" }
 asimov-kb = { path = "lib/asimov-kb" }
+asimov-keyring = { path = "lib/asimov-keyring" }
 asimov-ledger = { path = "lib/asimov-ledger" }
 asimov-module = { path = "lib/asimov-module" }
 asimov-module-kit = { path = "lib/asimov-module-kit" }

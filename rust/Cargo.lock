@@ -1277,6 +1277,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "asimov-keyring"
+version = "25.4.0"
+dependencies = [
+ "asimov-core",
+ "clap",
+ "derive_more",
+ "serde",
+ "thiserror 2.0.19",
+ "tracing",
+]
+
+[[package]]
 name = "asimov-ledger"
 version = "25.4.0"
 dependencies = [

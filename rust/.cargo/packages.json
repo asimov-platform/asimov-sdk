@@ -205,6 +205,17 @@
   },
   {
     "package": {
+      "name": "asimov-keyring",
+      "readme": true,
+      "metadata": {
+        "readme": {
+          "title": "ASIMOV.rs: Keyring"
+        }
+      }
+    }
+  },
+  {
+    "package": {
       "name": "asimov-ledger",
       "readme": true,
       "categories": [
