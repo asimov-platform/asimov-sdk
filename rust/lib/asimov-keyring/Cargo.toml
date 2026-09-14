@@ -21,7 +21,7 @@ title = "ASIMOV.rs: Keyring"
 
 [features]
 default = ["all", "std"]
-std = ["asimov-core/std"]
+std = ["asimov-core/std", "dep:whoami"]
 unstable = []
 
 # Features:
@@ -34,7 +34,12 @@ tracing = ["dep:tracing"]
 
 [dependencies]
 asimov-core.workspace = true
+asimov-directory = { workspace = true, features = ["fs"] }
+asimov-id = { workspace = true, features = ["iroh"] }
 derive_more = { workspace = true, features = ["debug", "display", "from", "from_str"] }
+iroh-base = { workspace = true, features = ["key"] }
+keyring-core.workspace = true
+secrecy.workspace = true
 thiserror.workspace = true
 
 # Features:
@@ -43,6 +48,16 @@ thiserror.workspace = true
 clap = { workspace = true, features = ["derive", "std"], optional = true }
 serde = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
+whoami = { workspace = true, features = ["std"], optional = true }
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+apple-native-keyring-store = { version = "1.0", features = ["keychain"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = "1.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+linux-keyutils-keyring-store = "1.0"
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]
