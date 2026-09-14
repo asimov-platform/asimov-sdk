@@ -112,7 +112,7 @@ pub enum SocialLinkConversionError {
 /// Relationship links support fallible conversion to [`FollowRelationship`],
 /// also exposed as [`follow_relationship`](Self::follow_relationship).
 /// All link variants are available regardless of platform features, except the
-/// experimental mutuals and named X list variants, which require `unstable`.
+/// experimental named X list variant, which requires `unstable`.
 ///
 /// # Examples
 ///
@@ -158,9 +158,6 @@ pub enum SocialLink {
     GithubProfileFollowing(String),
 
     /// Mutual follows of the stored GitHub handle: `https://github.com/:handle?tab=mutuals`.
-    ///
-    /// An experimental selector available with `unstable`.
-    #[cfg(feature = "unstable")]
     #[display("https://github.com/{_0}?tab=mutuals")]
     GithubProfileMutuals(String),
 
@@ -191,9 +188,6 @@ pub enum SocialLink {
     InstagramProfileFollowing(String),
 
     /// Mutual follows of the stored Instagram handle: `https://instagram.com/:handle#mutuals`.
-    ///
-    /// An experimental selector available with `unstable`.
-    #[cfg(feature = "unstable")]
     #[display("https://instagram.com/{_0}#mutuals")]
     InstagramProfileMutuals(String),
 
@@ -263,9 +257,6 @@ pub enum SocialLink {
     XProfileFollowing(String),
 
     /// Mutual follows of the stored X handle: `https://x.com/:handle/mutuals`.
-    ///
-    /// An experimental selector available with `unstable`.
-    #[cfg(feature = "unstable")]
     #[display("https://x.com/{_0}/mutuals")]
     XProfileMutuals(String),
 
@@ -312,7 +303,6 @@ impl SocialLink {
                 Some(Followee)
             },
 
-            #[cfg(feature = "unstable")]
             GithubProfileMutuals(_) | InstagramProfileMutuals(_) | XProfileMutuals(_) => {
                 Some(Mutual)
             },
@@ -460,7 +450,6 @@ impl core::str::FromStr for SocialLink {
                     ));
                 }
                 match query {
-                    #[cfg(feature = "unstable")]
                     Some("tab=mutuals") => handle(path)
                         .map(Self::GithubProfileMutuals)
                         .ok_or_else(|| SocialLinkError::UnknownPath(path.to_string())),
@@ -519,7 +508,6 @@ impl core::str::FromStr for SocialLink {
                     return Err(SocialLinkError::SpuriousQuery(query.unwrap().to_string()));
                 }
                 match fragment {
-                    #[cfg(feature = "unstable")]
                     Some("mutuals") => handle(path)
                         .map(Self::InstagramProfileMutuals)
                         .ok_or_else(|| SocialLinkError::UnknownPath(path.to_string())),
@@ -646,7 +634,7 @@ impl core::str::FromStr for SocialLink {
                 if let Some(handle) = path.strip_suffix("/following").and_then(handle) {
                     return Ok(Self::XProfileFollowing(handle));
                 }
-                #[cfg(feature = "unstable")]
+
                 if let Some(handle) = path.strip_suffix("/mutuals").and_then(handle) {
                     return Ok(Self::XProfileMutuals(handle));
                 }
@@ -932,9 +920,8 @@ mod tests {
         ));
     }
 
-    #[cfg(feature = "unstable")]
     #[test]
-    fn experimental_links_round_trip() {
+    fn mutual_links_round_trip() {
         for (input, expected) in [
             (
                 "https://github.com/alice?tab=mutuals",
@@ -958,6 +945,11 @@ mod tests {
                 Err(SocialLinkConversionError::UnsupportedLink)
             ));
         }
+    }
+
+    #[cfg(feature = "unstable")]
+    #[test]
+    fn named_x_lists_round_trip() {
         let input = "https://x.com/alice/lists/friends";
         let link: SocialLink = input.parse().unwrap();
         assert_eq!(
@@ -976,14 +968,11 @@ mod tests {
     #[cfg(not(feature = "unstable"))]
     #[test]
     fn experimental_links_require_feature() {
-        for input in [
-            "https://github.com/alice?tab=mutuals",
-            "https://instagram.com/alice#mutuals",
-            "https://x.com/alice/mutuals",
-            "https://x.com/alice/lists/friends",
-        ] {
-            assert!(input.parse::<SocialLink>().is_err());
-        }
+        assert!(
+            "https://x.com/alice/lists/friends"
+                .parse::<SocialLink>()
+                .is_err()
+        );
     }
 
     #[test]
