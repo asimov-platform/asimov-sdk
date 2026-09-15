@@ -43,6 +43,12 @@ impl Indexer {
     /// constructor has no dedicated index-path parameter; include that argument
     /// in `options.other`. With no explicit input-file argument, the program is
     /// expected to read its RDF input from stdin.
+    ///
+    /// For example, `IndexerOptions::builder().other("./catalog.index").build()`
+    /// selects an index destination while retaining stdin input. With two file
+    /// operands, input precedes the index path. The index path cannot be `-`;
+    /// use `./-` if that is the literal filename. This constructor does not
+    /// validate operand count or index-path semantics.
     pub fn new(program: impl AsRef<OsStr>, input: GraphInput, options: IndexerOptions) -> Self {
         let mut executor = Executor::new(program);
         executor

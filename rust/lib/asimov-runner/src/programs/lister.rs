@@ -47,8 +47,11 @@ impl Lister {
     /// `options.other` and the unvalidated URL. `output` selects stdout handling;
     /// stderr is captured for failure diagnostics.
     ///
-    /// The specification defines `--limit` and `--output`; support for the
-    /// additional `--sort` and `--offset` arguments depends on the program.
+    /// The specification requires `--limit` and `--output` support and defines
+    /// `--sort` and `--offset` as optional capabilities. When supported, sorting
+    /// precedes offset, and limit applies last. Counts refer to complete entries,
+    /// not RDF statements. The SDK formats sort keys using `SortKeys`; the
+    /// resulting expression must be supported by the selected program's profile.
     pub fn new(
         program: impl AsRef<OsStr>,
         input: impl AsRef<str>,

@@ -6,6 +6,8 @@
 //! command-line contracts of ASIMOV programs, such as importing RDF datasets,
 //! querying them with SPARQL, or executing code in a language runtime. This crate
 //! supplies process-backed wrappers for those roles.
+//! The role traits and option values are defined by [`asimov-patterns`][traits];
+//! this crate provides their process transport and concrete result types.
 //!
 //! With the `std` feature enabled, `Executor` provides low-level command
 //! configuration, process management, and exit-status handling. The wrappers in
@@ -24,6 +26,9 @@
 //! after the process exits successfully. Choose [`Output::Captured`] to retrieve
 //! those bytes. Pattern-specific exceptions and current limitations are
 //! described in the `programs` module.
+//! An empty capture can mean that stdout was discarded, inherited, or replaced
+//! by a program-selected output file; it does not establish an empty logical
+//! result. Captured output has no configured size limit in this API.
 //!
 //! # Example
 //!
@@ -57,6 +62,7 @@
 //! require the standard library when that feature is disabled.
 //!
 //! [patterns]: https://asimov-specs.github.io/program-patterns/
+//! [traits]: https://docs.rs/asimov-patterns
 
 #![no_std]
 #![forbid(unsafe_code)]

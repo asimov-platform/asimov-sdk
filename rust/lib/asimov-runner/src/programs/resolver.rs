@@ -31,6 +31,14 @@ pub type ResolverResult = std::result::Result<Vec<String>, ExecutorError>;
 /// to the null device. The external program performs resolution, but this wrapper
 /// discards captured stdout and returns an empty list after a successful exit.
 /// Stream handling follows the behavior described in [`crate::programs`].
+/// An empty returned vector therefore does not establish that the URI has no
+/// resolved locations, even with [`Output::Captured`].
+///
+/// The specification requires the external program to emit UTF-8 absolute URLs,
+/// one per LF-terminated line, with no blank records. A host parsing that output
+/// must also accept CRLF and an unterminated final nonempty line while preserving
+/// order and all content except line terminators. This wrapper's unfinished
+/// parsing does not yet implement that result contract.
 ///
 /// [resolver]: https://asimov-specs.github.io/program-patterns/#resolver
 #[allow(unused)]

@@ -42,8 +42,12 @@ impl Runner {
     /// Configures a runner without starting it.
     ///
     /// Adds one `--define=<key>=<value>` argument per entry in `options.define`,
-    /// in its iteration order, followed by `options.other`. The input and output
-    /// values select stdin and stdout; stderr is captured for failure diagnostics.
+    /// in `BTreeMap` key order, followed by `options.other`. Duplicate keys have
+    /// already been collapsed by the map; ordered or repeated definitions can
+    /// instead be supplied through `options.other`. Names must be nonempty and
+    /// contain no `=`; values may be empty or contain `=`. This constructor does
+    /// not validate them. The input and output values select stdin and stdout;
+    /// stderr is captured for failure diagnostics.
     pub fn new(
         program: impl AsRef<OsStr>,
         input: Input,

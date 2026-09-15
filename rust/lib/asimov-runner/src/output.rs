@@ -16,7 +16,7 @@ pub type AnyOutput = Output;
 pub type GraphOutput = Output;
 /// The absence of an output value for a program pattern.
 pub type NoOutput = ();
-/// An output stream intended to contain a query.
+/// An output stream intended to contain a SPARQL query, such as a compiler's result.
 pub type QueryOutput = Output;
 /// An output stream intended to contain text, without enforcing an encoding.
 pub type TextOutput = Output;

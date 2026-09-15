@@ -35,6 +35,8 @@ pub type PrompterResult = std::result::Result<String, ExecutorError>;
 /// The response is buffered in full and decoded as UTF-8 without trimming or
 /// further parsing. Format and model options are forwarded to the child; they
 /// do not change how this wrapper serializes the prompt or decodes the response.
+/// The specification's default `text` format does not define chat role prefixes;
+/// the selected program must understand the stored prompt's display convention.
 ///
 /// [prompter]: https://asimov-specs.github.io/program-patterns/#prompter
 #[allow(unused)]
