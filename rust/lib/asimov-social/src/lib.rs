@@ -22,6 +22,9 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod collection_stub;
+pub use collection_stub::*;
+
 mod follow_relationship;
 pub use follow_relationship::*;
 
