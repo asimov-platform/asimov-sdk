@@ -98,7 +98,7 @@ pub enum SocialHandle {
     #[display("https://wa.me/{_0}")]
     Whatsapp(crate::whatsapp::WhatsappHandle),
 
-    /// An X handle, with URL prefix `https://x.com/`.
+    /// An X (fka Twitter) handle, with URL prefix `https://x.com/`.
     #[cfg(feature = "x")]
     #[debug("SocialHandle::X({:?})", _0.as_str())]
     #[display("https://x.com/{_0}")]

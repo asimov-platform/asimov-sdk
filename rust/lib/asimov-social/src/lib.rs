@@ -34,6 +34,9 @@ pub use social_handle::*;
 mod social_link;
 pub use social_link::*;
 
+mod social_platform;
+pub use social_platform::*;
+
 mod social_property;
 pub use social_property::*;
 
