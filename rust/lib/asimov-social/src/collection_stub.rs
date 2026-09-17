@@ -2,12 +2,15 @@
 
 use alloc::string::String;
 
-/// A stub for a collection, containing only the count of items.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// A collection's optional identifier and item count, without its contents.
+///
+/// With `serde`, serializes with `"@type": "Collection"` and an optional `@id`.
+/// Missing fields deserialize to `None`; an unknown count serializes as `null`.
+#[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "serde",
-    serde(tag = "@type", content = "Collection", default)
+    serde(tag = "@type", rename = "Collection", default)
 )]
 pub struct CollectionStub {
     /// The optional ID of the collection.

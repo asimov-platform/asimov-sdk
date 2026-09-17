@@ -24,17 +24,17 @@ use url::{ParseError, Url};
 /// these errors come from the parsed URL and may have been normalized by [`Url`].
 #[derive(Clone, Error, Debug, Eq, PartialEq)]
 pub enum SocialLinkError {
-    /// The URL uses a scheme other than HTTPS. Contains the scheme without `:`.
-    #[error("unsupported URL scheme: {0}")]
-    UnsupportedScheme(String),
-
-    /// The hostname is unsupported, after removing one leading `www.`.
-    #[error("unknown URL hostname: {0}")]
-    UnknownHost(String),
+    /// The underlying URL parser rejected the input.
+    #[error("failed to parse URL: {0}")]
+    FailedParse(#[from] url::ParseError),
 
     /// The URL contains a nonempty username or a password.
     #[error("spurious URL credentials")]
     SpuriousCredentials,
+
+    /// An unsupported fragment, excluding the leading `#` (possibly empty).
+    #[error("spurious URL fragment: {0}")]
+    SpuriousFragment(String),
 
     /// The URL specifies a non-default port. Explicit HTTPS port 443 is accepted.
     #[error("spurious URL port: {0}")]
@@ -44,30 +44,22 @@ pub enum SocialLinkError {
     #[error("spurious URL query: {0}")]
     SpuriousQuery(String),
 
-    /// An unsupported fragment, excluding the leading `#` (possibly empty).
-    #[error("spurious URL fragment: {0}")]
-    SpuriousFragment(String),
+    /// The hostname is unsupported, after removing one leading `www.`.
+    #[error("unknown URL hostname: {0}")]
+    UnknownHost(String),
 
     /// An unsupported path, excluding its first `/`.
     #[error("unknown URL path: /{0}")]
     UnknownPath(String),
 
-    /// The underlying URL parser rejected the input.
-    #[error("failed to parse URL: {0}")]
-    FailedParse(#[from] url::ParseError),
+    /// The URL uses a scheme other than HTTPS. Contains the scheme without `:`.
+    #[error("unsupported URL scheme: {0}")]
+    UnsupportedScheme(String),
 }
 
 /// A social link or handle cannot be represented by the requested type.
 #[derive(Clone, Debug, Error)]
 pub enum SocialLinkConversionError {
-    /// The link is not a plain profile on an enabled, shared platform.
-    #[error("link has no supported account-handle representation")]
-    UnsupportedLink,
-
-    /// The handle's platform has no corresponding profile-link variant.
-    #[error("handle has no supported social-link representation")]
-    UnsupportedHandle,
-
     /// A profile's stored string failed the platform-specific handle parser.
     #[error("invalid account handle: {0}")]
     InvalidHandle(#[from] ParseHandleError),
@@ -75,6 +67,14 @@ pub enum SocialLinkConversionError {
     /// The link does not select followers, following, or mutuals.
     #[error("link does not represent a follow relationship")]
     NotRelationship,
+
+    /// The handle's platform has no corresponding profile-link variant.
+    #[error("handle has no supported social-link representation")]
+    UnsupportedHandle,
+
+    /// The link is not a plain profile on an enabled, shared platform.
+    #[error("link has no supported account-handle representation")]
+    UnsupportedLink,
 }
 
 /// A recognized social-platform URL, classified by the resource it selects.
@@ -103,8 +103,8 @@ pub enum SocialLinkConversionError {
 /// # Conversions
 ///
 /// Owned and borrowed `TryFrom` conversions between this type and [`SocialHandle`]
-/// support only plain GitHub, Gravatar, Instagram, Intro.co, LinkedIn, Luma, and
-/// X profiles, with the respective platform feature enabled. Converting a link
+/// support plain profiles/contact links for every [`crate::SocialPlatform`],
+/// with the respective platform feature enabled. Converting a link
 /// validates its string with the platform's handle parser. Other resource types
 /// and disabled platforms return [`SocialLinkConversionError::UnsupportedLink`];
 /// handles on other platforms return [`SocialLinkConversionError::UnsupportedHandle`].
@@ -145,7 +145,24 @@ pub enum SocialLinkConversionError {
 /// ```
 #[derive(Clone, Debug, Display, Eq, Hash, PartialEq)]
 pub enum SocialLink {
-    /// A GitHub profile, storing its handle: `https://github.com/:handle`.
+    /// A Bluesky profile: `https://bsky.app/profile/:handle`.
+    /// Stores a domain handle (including custom domains) or DID. Only domain
+    /// handles convert to [`SocialHandle`].
+    #[display("https://bsky.app/profile/{_0}")]
+    BlueskyProfile(String),
+
+    /// A Discord user: `https://discord.com/users/:id`.
+    /// Stores a numeric snowflake, not a username; conversion to a handle
+    /// validates it as a nonzero decimal `u64` without leading zeroes.
+    #[display("https://discord.com/users/{_0}")]
+    DiscordProfile(String),
+
+    /// A Facebook username-based profile: `https://facebook.com/:handle`.
+    /// Numeric-ID `profile.php?id=…` URLs use a different form and are not parsed.
+    #[display("https://facebook.com/{_0}")]
+    FacebookProfile(String),
+
+    /// A GitHub user or organization, storing its handle: `https://github.com/:handle`.
     #[display("https://github.com/{_0}")]
     GithubProfile(String),
 
@@ -161,7 +178,13 @@ pub enum SocialLink {
     #[display("https://github.com/{_0}?tab=mutuals")]
     GithubProfileMutuals(String),
 
+    /// A GitLab.com profile: `https://gitlab.com/:handle`.
+    /// Self-managed GitLab hosts are not recognized.
+    #[display("https://gitlab.com/{_0}")]
+    GitlabProfile(String),
+
     /// A Gravatar profile, storing its handle: `https://gravatar.com/:handle`.
+    /// This is not an email-hash avatar image URL.
     #[display("https://gravatar.com/{_0}")]
     GravatarProfile(String),
 
@@ -192,18 +215,23 @@ pub enum SocialLink {
     InstagramProfileMutuals(String),
 
     /// An Intro.co profile, storing its handle: `https://intro.co/:handle`.
+    /// Identifies an expert available for consultations.
     #[display("https://intro.co/{_0}")]
     IntrocoProfile(String),
+
+    /// A LinkedIn company page: `https://linkedin.com/company/:handle/`.
+    /// Stores the company handle; this is not a personal account handle.
+    #[display("https://linkedin.com/company/{_0}/")]
+    LinkedinCompanyPage(String),
 
     /// A LinkedIn personal profile: `https://linkedin.com/in/:handle/`.
     /// Stores the handle; the trailing slash is required.
     #[display("https://linkedin.com/in/{_0}/")]
     LinkedinProfile(String),
 
-    /// A LinkedIn company page: `https://linkedin.com/company/:handle/`.
-    /// Stores the company handle; this is not a personal account handle.
-    #[display("https://linkedin.com/company/{_0}/")]
-    LinkedinCompanyPage(String),
+    /// A local.ai profile: `https://local.ai/:handle`.
+    #[display("https://local.ai/{_0}")]
+    LocalaiProfile(String),
 
     /// A Luma calendar, storing its slug: `https://luma.com/:slug`.
     /// Parsing a bare slug selects this variant only for a `cal-` prefix.
@@ -236,8 +264,64 @@ pub enum SocialLink {
 
     /// A Luma profile, storing its handle: `https://luma.com/user/:handle`.
     /// Also accepts `https://luma.com/usr-...`, retaining the entire `usr-` ID.
+    /// Identifies a person rather than an event or calendar; see Luma's
+    /// [profile documentation](https://help.luma.com/p/managing-your-profile).
     #[display("https://luma.com/user/{_0}")]
     LumaProfile(String),
+
+    /// A Medium profile: `https://medium.com/@:handle`.
+    /// Publications and custom-domain sites are not represented by this variant.
+    #[display("https://medium.com/@{_0}")]
+    MediumProfile(String),
+
+    /// A Pinterest profile: `https://pinterest.com/:handle`.
+    #[display("https://pinterest.com/{_0}")]
+    PinterestProfile(String),
+
+    /// A Reddit profile: `https://reddit.com/user/:handle`.
+    /// Also accepts `/u/:handle`, canonicalized to `/user/:handle`.
+    #[display("https://reddit.com/user/{_0}")]
+    RedditProfile(String),
+
+    /// A Snapchat profile/add-friend link: `https://snapchat.com/add/:handle`.
+    #[display("https://snapchat.com/add/{_0}")]
+    SnapchatProfile(String),
+
+    /// A Substack reader/writer profile: `https://substack.com/@:handle`.
+    /// Publication subdomains and custom domains are not profile handles.
+    #[display("https://substack.com/@{_0}")]
+    SubstackProfile(String),
+
+    /// A Telegram public account: `https://t.me/:handle`.
+    /// Users, public channels, and bots share this URL form.
+    #[display("https://t.me/{_0}")]
+    TelegramProfile(String),
+
+    /// A Threads profile: `https://threads.net/@:handle`.
+    /// Also accepts `threads.com`; retains `threads.net` as the canonical base
+    /// for compatibility with [`crate::SocialPlatform`].
+    #[display("https://threads.net/@{_0}")]
+    ThreadsProfile(String),
+
+    /// A TikTok profile: `https://tiktok.com/@:handle`.
+    #[display("https://tiktok.com/@{_0}")]
+    TiktokProfile(String),
+
+    /// A Twitch profile/channel: `https://twitch.tv/:handle`.
+    #[display("https://twitch.tv/{_0}")]
+    TwitchProfile(String),
+
+    /// WhatsApp click-to-chat: `https://wa.me/:phone`.
+    /// Stores an international phone number (digits only, no `+` or punctuation).
+    /// Opens a conversation and does not convert to a username-based [`SocialHandle`].
+    #[display("https://wa.me/{_0}")]
+    WhatsappContact(String),
+
+    /// A WhatsApp username link: `https://wa.me/:handle`.
+    /// Uses the username representation of [`SocialHandle`]; phone-number links
+    /// are represented separately by [`WhatsappContact`](Self::WhatsappContact).
+    #[display("https://wa.me/{_0}")]
+    WhatsappProfile(String),
 
     /// An X list, storing a positive numeric ID: `https://x.com/i/lists/:id`.
     /// Parsing rejects zero, signs, non-digits, and values exceeding `i64::MAX`.
@@ -256,18 +340,9 @@ pub enum SocialLink {
     #[display("https://x.com/{_0}/following")]
     XProfileFollowing(String),
 
-    /// Mutual follows of the stored X handle: `https://x.com/:handle/mutuals`.
-    #[display("https://x.com/{_0}/mutuals")]
-    XProfileMutuals(String),
-
     /// Highlights of the stored X handle: `https://x.com/:handle/highlights`.
     #[display("https://x.com/{_0}/highlights")]
     XProfileHighlights(String),
-
-    /// Posts by the stored X handle, formatted as `https://x.com/:handle/all`.
-    /// Also accepts `https://x.com/:handle/posts` and `https://x.com/:handle#posts`.
-    #[display("https://x.com/{_0}/all")]
-    XProfilePosts(String),
 
     /// An X list addressed by owner handle and list slug, in that order:
     /// `https://x.com/:handle/lists/:list`.
@@ -276,6 +351,21 @@ pub enum SocialLink {
     #[cfg(feature = "unstable")]
     #[display("https://x.com/{_0}/lists/{_1}")]
     XProfileList(String, String),
+
+    /// Mutual follows of the stored X handle: `https://x.com/:handle/mutuals`.
+    #[display("https://x.com/{_0}/mutuals")]
+    XProfileMutuals(String),
+
+    /// Posts by the stored X handle, formatted as `https://x.com/:handle/all`.
+    /// Also accepts `https://x.com/:handle/posts` and `https://x.com/:handle#posts`.
+    #[display("https://x.com/{_0}/all")]
+    XProfilePosts(String),
+
+    /// A YouTube handle-based channel: `https://youtube.com/@:handle`.
+    /// `channel/:id`, legacy `user/:name`, and custom `c/:name` URLs are distinct
+    /// selectors and are not parsed as handles.
+    #[display("https://youtube.com/@{_0}")]
+    YoutubeProfile(String),
 }
 
 /// Formats the link as its canonical URL without validating its payload.
@@ -338,8 +428,16 @@ impl TryFrom<&SocialHandle> for SocialLink {
 
     fn try_from(input: &SocialHandle) -> Result<Self, Self::Error> {
         match input {
+            #[cfg(feature = "bluesky")]
+            SocialHandle::Bluesky(h) => Ok(Self::BlueskyProfile(h.as_str().to_string())),
+            #[cfg(feature = "discord")]
+            SocialHandle::Discord(h) => Ok(Self::DiscordProfile(h.as_str().to_string())),
+            #[cfg(feature = "facebook")]
+            SocialHandle::Facebook(h) => Ok(Self::FacebookProfile(h.as_str().to_string())),
             #[cfg(feature = "github")]
             SocialHandle::Github(h) => Ok(Self::GithubProfile(h.as_str().to_string())),
+            #[cfg(feature = "gitlab")]
+            SocialHandle::Gitlab(h) => Ok(Self::GitlabProfile(h.as_str().to_string())),
             #[cfg(feature = "gravatar")]
             SocialHandle::Gravatar(h) => Ok(Self::GravatarProfile(h.as_str().to_string())),
             #[cfg(feature = "instagram")]
@@ -348,10 +446,36 @@ impl TryFrom<&SocialHandle> for SocialLink {
             SocialHandle::Introco(h) => Ok(Self::IntrocoProfile(h.as_str().to_string())),
             #[cfg(feature = "linkedin")]
             SocialHandle::Linkedin(h) => Ok(Self::LinkedinProfile(h.as_str().to_string())),
+            #[cfg(feature = "localai")]
+            SocialHandle::Localai(h) => Ok(Self::LocalaiProfile(h.as_str().to_string())),
             #[cfg(feature = "luma")]
             SocialHandle::Luma(h) => Ok(Self::LumaProfile(h.as_str().to_string())),
+            #[cfg(feature = "medium")]
+            SocialHandle::Medium(h) => Ok(Self::MediumProfile(h.as_str().to_string())),
+            #[cfg(feature = "pinterest")]
+            SocialHandle::Pinterest(h) => Ok(Self::PinterestProfile(h.as_str().to_string())),
+            #[cfg(feature = "reddit")]
+            SocialHandle::Reddit(h) => Ok(Self::RedditProfile(h.as_str().to_string())),
+            #[cfg(feature = "snapchat")]
+            SocialHandle::Snapchat(h) => Ok(Self::SnapchatProfile(h.as_str().to_string())),
+            #[cfg(feature = "substack")]
+            SocialHandle::Substack(h) => Ok(Self::SubstackProfile(h.as_str().to_string())),
+            #[cfg(feature = "telegram")]
+            SocialHandle::Telegram(h) => Ok(Self::TelegramProfile(h.as_str().to_string())),
+            #[cfg(feature = "threads")]
+            SocialHandle::Threads(h) => Ok(Self::ThreadsProfile(h.as_str().to_string())),
+            #[cfg(feature = "tiktok")]
+            SocialHandle::Tiktok(h) => Ok(Self::TiktokProfile(h.as_str().to_string())),
+            #[cfg(feature = "twitch")]
+            SocialHandle::Twitch(h) => Ok(Self::TwitchProfile(h.as_str().to_string())),
+            #[cfg(feature = "whatsapp")]
+            SocialHandle::Whatsapp(h) => Ok(Self::WhatsappProfile(h.as_str().to_string())),
             #[cfg(feature = "x")]
             SocialHandle::X(h) => Ok(Self::XProfile(h.as_str().to_string())),
+            #[cfg(feature = "youtube")]
+            SocialHandle::Youtube(h) => Ok(Self::YoutubeProfile(
+                crate::platform_handles::encoded_handle(h.as_str()).to_string(),
+            )),
             #[allow(unreachable_patterns)]
             _ => Err(SocialLinkConversionError::UnsupportedHandle),
         }
@@ -377,8 +501,16 @@ impl TryFrom<&SocialLink> for SocialHandle {
 
     fn try_from(input: &SocialLink) -> Result<Self, Self::Error> {
         match input {
+            #[cfg(feature = "bluesky")]
+            SocialLink::BlueskyProfile(h) => Self::bluesky(h).map_err(Into::into),
+            #[cfg(feature = "discord")]
+            SocialLink::DiscordProfile(h) => Self::discord(h).map_err(Into::into),
+            #[cfg(feature = "facebook")]
+            SocialLink::FacebookProfile(h) => Self::facebook(h).map_err(Into::into),
             #[cfg(feature = "github")]
             SocialLink::GithubProfile(h) => Self::github(h).map_err(Into::into),
+            #[cfg(feature = "gitlab")]
+            SocialLink::GitlabProfile(h) => Self::gitlab(h).map_err(Into::into),
             #[cfg(feature = "gravatar")]
             SocialLink::GravatarProfile(h) => Self::gravatar(h).map_err(Into::into),
             #[cfg(feature = "instagram")]
@@ -387,10 +519,34 @@ impl TryFrom<&SocialLink> for SocialHandle {
             SocialLink::IntrocoProfile(h) => Self::introco(h).map_err(Into::into),
             #[cfg(feature = "linkedin")]
             SocialLink::LinkedinProfile(h) => Self::linkedin(h).map_err(Into::into),
+            #[cfg(feature = "localai")]
+            SocialLink::LocalaiProfile(h) => Self::localai(h).map_err(Into::into),
             #[cfg(feature = "luma")]
             SocialLink::LumaProfile(h) => Self::luma(h).map_err(Into::into),
+            #[cfg(feature = "medium")]
+            SocialLink::MediumProfile(h) => Self::medium(h).map_err(Into::into),
+            #[cfg(feature = "pinterest")]
+            SocialLink::PinterestProfile(h) => Self::pinterest(h).map_err(Into::into),
+            #[cfg(feature = "reddit")]
+            SocialLink::RedditProfile(h) => Self::reddit(h).map_err(Into::into),
+            #[cfg(feature = "snapchat")]
+            SocialLink::SnapchatProfile(h) => Self::snapchat(h).map_err(Into::into),
+            #[cfg(feature = "substack")]
+            SocialLink::SubstackProfile(h) => Self::substack(h).map_err(Into::into),
+            #[cfg(feature = "telegram")]
+            SocialLink::TelegramProfile(h) => Self::telegram(h).map_err(Into::into),
+            #[cfg(feature = "threads")]
+            SocialLink::ThreadsProfile(h) => Self::threads(h).map_err(Into::into),
+            #[cfg(feature = "tiktok")]
+            SocialLink::TiktokProfile(h) => Self::tiktok(h).map_err(Into::into),
+            #[cfg(feature = "twitch")]
+            SocialLink::TwitchProfile(h) => Self::twitch(h).map_err(Into::into),
+            #[cfg(feature = "whatsapp")]
+            SocialLink::WhatsappProfile(h) => Self::whatsapp(h).map_err(Into::into),
             #[cfg(feature = "x")]
             SocialLink::XProfile(h) => Self::x(h).map_err(Into::into),
+            #[cfg(feature = "youtube")]
+            SocialLink::YoutubeProfile(h) => Self::youtube(h).map_err(Into::into),
             _ => Err(SocialLinkConversionError::UnsupportedLink),
         }
     }
@@ -426,23 +582,51 @@ impl core::str::FromStr for SocialLink {
             }
         }
 
-        let url = Url::parse(input)?;
-        if url.scheme() != "https" {
-            return Err(SocialLinkError::UnsupportedScheme(url.scheme().to_string()));
-        }
-        if !url.username().is_empty() || url.password().is_some() {
-            return Err(SocialLinkError::SpuriousCredentials);
-        }
-        if let Some(port) = url.port() {
-            return Err(SocialLinkError::SpuriousPort(port));
-        }
+        let url = crate::social_url::parse(input)?;
         let host = url.host_str().ok_or(ParseError::EmptyHost)?;
-        let host = host.strip_prefix("www.").unwrap_or(host);
         let path = url.path().strip_prefix('/').unwrap_or_default();
         let query = url.query();
         let fragment = url.fragment();
 
         match host {
+            "bsky.app" | "discord.com" | "facebook.com" | "gitlab.com" | "local.ai"
+            | "medium.com" | "pinterest.com" | "reddit.com" | "snapchat.com" | "substack.com"
+            | "t.me" | "threads.com" | "threads.net" | "tiktok.com" | "twitch.tv" | "wa.me"
+            | "youtube.com" => {
+                if let Some(query) = query {
+                    return Err(SocialLinkError::SpuriousQuery(query.to_string()));
+                }
+                if let Some(fragment) = fragment {
+                    return Err(SocialLinkError::SpuriousFragment(fragment.to_string()));
+                }
+                let (prefix, variant): (&str, fn(String) -> Self) = match host {
+                    "bsky.app" => ("profile/", Self::BlueskyProfile),
+                    "discord.com" => ("users/", Self::DiscordProfile),
+                    "facebook.com" => ("", Self::FacebookProfile),
+                    "gitlab.com" => ("", Self::GitlabProfile),
+                    "local.ai" => ("", Self::LocalaiProfile),
+                    "medium.com" => ("@", Self::MediumProfile),
+                    "pinterest.com" => ("", Self::PinterestProfile),
+                    "reddit.com" if path.starts_with("u/") => ("u/", Self::RedditProfile),
+                    "reddit.com" => ("user/", Self::RedditProfile),
+                    "snapchat.com" => ("add/", Self::SnapchatProfile),
+                    "substack.com" => ("@", Self::SubstackProfile),
+                    "t.me" => ("", Self::TelegramProfile),
+                    "threads.com" | "threads.net" => ("@", Self::ThreadsProfile),
+                    "tiktok.com" => ("@", Self::TiktokProfile),
+                    "twitch.tv" => ("", Self::TwitchProfile),
+                    "wa.me" if !path.is_empty() && path.bytes().all(|b| b.is_ascii_digit()) => {
+                        ("", Self::WhatsappContact)
+                    },
+                    "wa.me" => ("", Self::WhatsappProfile),
+                    "youtube.com" => ("@", Self::YoutubeProfile),
+                    _ => unreachable!(),
+                };
+                path.strip_prefix(prefix)
+                    .and_then(handle)
+                    .map(variant)
+                    .ok_or_else(|| SocialLinkError::UnknownPath(path.to_string()))
+            },
             "github.com" => {
                 if fragment.is_some() {
                     return Err(SocialLinkError::SpuriousFragment(
@@ -844,13 +1028,26 @@ mod tests {
         };
     }
 
+    profile_conversion_test!("facebook", facebook, FacebookProfile);
     profile_conversion_test!("github", github, GithubProfile);
+    profile_conversion_test!("gitlab", gitlab, GitlabProfile);
     profile_conversion_test!("gravatar", gravatar, GravatarProfile);
     profile_conversion_test!("instagram", instagram, InstagramProfile);
     profile_conversion_test!("introco", introco, IntrocoProfile);
     profile_conversion_test!("linkedin", linkedin, LinkedinProfile);
+    profile_conversion_test!("localai", localai, LocalaiProfile);
     profile_conversion_test!("luma", luma, LumaProfile);
+    profile_conversion_test!("medium", medium, MediumProfile);
+    profile_conversion_test!("pinterest", pinterest, PinterestProfile);
+    profile_conversion_test!("reddit", reddit, RedditProfile);
+    profile_conversion_test!("snapchat", snapchat, SnapchatProfile);
+    profile_conversion_test!("substack", substack, SubstackProfile);
+    profile_conversion_test!("telegram", telegram, TelegramProfile);
+    profile_conversion_test!("threads", threads, ThreadsProfile);
+    profile_conversion_test!("tiktok", tiktok, TiktokProfile);
+    profile_conversion_test!("twitch", twitch, TwitchProfile);
     profile_conversion_test!("x", x, XProfile);
+    profile_conversion_test!("youtube", youtube, YoutubeProfile);
 
     #[cfg(feature = "github")]
     #[test]
@@ -893,20 +1090,6 @@ mod tests {
                 Err(SocialLinkConversionError::UnsupportedLink)
             ));
         }
-    }
-
-    #[cfg(feature = "facebook")]
-    #[test]
-    fn unsupported_handle_platform() {
-        let handle = SocialHandle::facebook("alice").unwrap();
-        assert!(matches!(
-            SocialLink::try_from(&handle),
-            Err(SocialLinkConversionError::UnsupportedHandle)
-        ));
-        assert!(matches!(
-            SocialLink::try_from(handle),
-            Err(SocialLinkConversionError::UnsupportedHandle)
-        ));
     }
 
     #[cfg(not(feature = "github"))]

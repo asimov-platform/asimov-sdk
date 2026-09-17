@@ -25,18 +25,30 @@ std = ["asimov-core/std"]
 unstable = []
 
 # Features:
-all = ["facebook", "github", "gravatar", "instagram", "introco", "linkedin", "localai", "luma", "telegram", "whatsapp", "x"]
+all = ["bluesky", "discord", "facebook", "github", "gitlab", "gravatar", "instagram", "introco", "linkedin", "localai", "luma", "medium", "pinterest", "reddit", "snapchat", "substack", "telegram", "threads", "tiktok", "twitch", "whatsapp", "x", "youtube"]
+bluesky = []
+discord = []
 facebook = ["dep:known-types-facebook"]
 github = ["dep:known-types-github"]
+gitlab = []
 gravatar = ["dep:known-types-gravatar"]
 instagram = ["dep:known-types-instagram"]
 introco = ["dep:known-types-introco"]
 linkedin = ["dep:known-types-linkedin"]
 localai = ["dep:known-types-localai"]
 luma = ["dep:known-types-luma"]
+medium = []
+pinterest = []
+reddit = []
+snapchat = []
+substack = []
 telegram = ["dep:known-types-telegram"]
+threads = []
+tiktok = []
+twitch = []
 whatsapp = ["dep:known-types-whatsapp"]
 x = ["dep:known-types-x"]
+youtube = []
 
 # Interoperability:
 async-graphql = [
@@ -72,7 +84,6 @@ serde = [
 ]
 sqlx = [
     "dep:sqlx",
-    "std",
     "known-types/sqlx",
     "known-types-facebook?/sqlx",
     "known-types-github?/sqlx",
@@ -85,6 +96,7 @@ sqlx = [
     "known-types-telegram?/sqlx",
     "known-types-whatsapp?/sqlx",
     "known-types-x?/sqlx",
+    "std",
 ]
 tracing = ["dep:tracing"]
 
@@ -92,6 +104,7 @@ tracing = ["dep:tracing"]
 asimov-core.workspace = true
 derive_more = { workspace = true, features = ["debug", "display", "from", "from_str"] }
 known-types.workspace = true
+percent-encoding = { version = "2", default-features = false, features = ["alloc"] }
 thiserror.workspace = true
 url = { version = "2", default-features = false }
 

@@ -2,7 +2,6 @@
 
 use alloc::string::{String, ToString};
 use derive_more::Display;
-use known_types_x::ParseHandleError;
 use thiserror::Error;
 
 /// An error encountered when parsing a [`SocialProperty`] selector.

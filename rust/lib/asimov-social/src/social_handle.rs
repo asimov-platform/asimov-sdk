@@ -13,9 +13,12 @@ use known_types::handle::ParseHandleError;
 /// formats it as an HTTPS profile or contact URL.
 ///
 /// Parsing with [`FromStr`] (or converting from a [`String`] with `TryFrom`)
-/// requires one of the exact URL prefixes documented on the variants. Trailing
-/// `/` and `#` characters are removed before parsing. Bare handles, alternative
-/// domains, and URLs for disabled platforms are not accepted by this parser.
+/// uses [`url::Url`] to normalize scheme/host casing, default ports, and dot
+/// segments. An optional `www.` hostname prefix is discarded. Trailing `/` and
+/// `#` characters are removed before parsing. Credentials, non-default ports,
+/// queries, and nonempty fragments are rejected. Reddit's `/u/` and Threads'
+/// `threads.com` aliases are accepted. Bare handles, other domains, and URLs for
+/// disabled platforms are rejected. Formatting always omits `www.`.
 ///
 /// Fallible conversions to and from [`crate::SocialLink`] support plain profiles
 /// on platforms shared by the two types. See its conversion documentation for
@@ -38,6 +41,16 @@ use known_types::handle::ParseHandleError;
 #[derive(Clone, Debug, Display, Eq, From, Hash, Ord, PartialEq, PartialOrd)]
 #[non_exhaustive]
 pub enum SocialHandle {
+    /// A Bluesky domain handle; see [`crate::SocialLink::BlueskyProfile`].
+    #[cfg(feature = "bluesky")]
+    #[display("https://bsky.app/profile/{_0}")]
+    Bluesky(crate::BlueskyHandle),
+
+    /// A Discord numeric user ID; see [`crate::SocialLink::DiscordProfile`].
+    #[cfg(feature = "discord")]
+    #[display("https://discord.com/users/{_0}")]
+    Discord(crate::DiscordHandle),
+
     /// A Facebook handle, with URL prefix `https://facebook.com/`.
     #[cfg(feature = "facebook")]
     #[debug("SocialHandle::Facebook({:?})", _0.as_str())]
@@ -49,6 +62,11 @@ pub enum SocialHandle {
     #[debug("SocialHandle::Github({:?})", _0.as_str())]
     #[display("https://github.com/{_0}")]
     Github(crate::github::GithubHandle),
+
+    /// A GitLab.com username; see [`crate::SocialLink::GitlabProfile`].
+    #[cfg(feature = "gitlab")]
+    #[display("https://gitlab.com/{_0}")]
+    Gitlab(crate::GitlabHandle),
 
     /// A Gravatar handle, with URL prefix `https://gravatar.com/`.
     #[cfg(feature = "gravatar")]
@@ -71,7 +89,7 @@ pub enum SocialHandle {
     /// A LinkedIn handle, with URL prefix `https://linkedin.com/in/`.
     #[cfg(feature = "linkedin")]
     #[debug("SocialHandle::Linkedin({:?})", _0.as_str())]
-    #[display("https://linkedin.com/in/{_0}")]
+    #[display("https://linkedin.com/in/{_0}/")]
     Linkedin(crate::linkedin::LinkedinHandle),
 
     /// A local.ai handle, with URL prefix `https://local.ai/`.
@@ -86,11 +104,51 @@ pub enum SocialHandle {
     #[display("https://luma.com/user/{_0}")]
     Luma(crate::luma::LumaHandle),
 
+    /// A Medium handle; see [`crate::SocialLink::MediumProfile`].
+    #[cfg(feature = "medium")]
+    #[display("https://medium.com/@{_0}")]
+    Medium(crate::MediumHandle),
+
+    /// A Pinterest username; see [`crate::SocialLink::PinterestProfile`].
+    #[cfg(feature = "pinterest")]
+    #[display("https://pinterest.com/{_0}")]
+    Pinterest(crate::PinterestHandle),
+
+    /// A Reddit username; see [`crate::SocialLink::RedditProfile`].
+    #[cfg(feature = "reddit")]
+    #[display("https://reddit.com/user/{_0}")]
+    Reddit(crate::RedditHandle),
+
+    /// A Snapchat username; see [`crate::SocialLink::SnapchatProfile`].
+    #[cfg(feature = "snapchat")]
+    #[display("https://snapchat.com/add/{_0}")]
+    Snapchat(crate::SnapchatHandle),
+
+    /// A Substack profile handle; see [`crate::SocialLink::SubstackProfile`].
+    #[cfg(feature = "substack")]
+    #[display("https://substack.com/@{_0}")]
+    Substack(crate::SubstackHandle),
+
     /// A Telegram handle, with URL prefix `https://t.me/`.
     #[cfg(feature = "telegram")]
     #[debug("SocialHandle::Telegram({:?})", _0.as_str())]
     #[display("https://t.me/{_0}")]
     Telegram(crate::telegram::TelegramHandle),
+
+    /// A Threads username; see [`crate::SocialLink::ThreadsProfile`].
+    #[cfg(feature = "threads")]
+    #[display("https://threads.net/@{_0}")]
+    Threads(crate::ThreadsHandle),
+
+    /// A TikTok username; see [`crate::SocialLink::TiktokProfile`].
+    #[cfg(feature = "tiktok")]
+    #[display("https://tiktok.com/@{_0}")]
+    Tiktok(crate::TiktokHandle),
+
+    /// A Twitch username; see [`crate::SocialLink::TwitchProfile`].
+    #[cfg(feature = "twitch")]
+    #[display("https://twitch.tv/{_0}")]
+    Twitch(crate::TwitchHandle),
 
     /// A WhatsApp handle, with URL prefix `https://wa.me/`.
     #[cfg(feature = "whatsapp")]
@@ -103,18 +161,24 @@ pub enum SocialHandle {
     #[debug("SocialHandle::X({:?})", _0.as_str())]
     #[display("https://x.com/{_0}")]
     X(crate::x::XHandle),
+
+    /// A YouTube handle; see [`crate::SocialLink::YoutubeProfile`].
+    #[cfg(feature = "youtube")]
+    #[display("https://youtube.com/@{}", crate::platform_handles::encoded_handle(_0.as_str()))]
+    Youtube(crate::YoutubeHandle),
 }
 
 #[cfg(feature = "async-graphql")]
+/// Uses the canonical profile URL as a cursor, preserving the platform identity.
 impl async_graphql::connection::CursorType for SocialHandle {
-    type Error = ParseHandleError;
+    type Error = FromStrError;
 
     fn decode_cursor(input: &str) -> Result<Self, Self::Error> {
-        Self::x(input) // FIXME
+        input.parse()
     }
 
     fn encode_cursor(&self) -> String {
-        self.as_str().to_string()
+        self.to_string()
     }
 }
 
@@ -203,10 +267,16 @@ impl SocialHandle {
     pub fn as_str(&self) -> &str {
         use SocialHandle::*;
         match self {
+            #[cfg(feature = "bluesky")]
+            Bluesky(h) => h.as_str(),
+            #[cfg(feature = "discord")]
+            Discord(h) => h.as_str(),
             #[cfg(feature = "facebook")]
             Facebook(h) => h.as_str(),
             #[cfg(feature = "github")]
             Github(h) => h.as_str(),
+            #[cfg(feature = "gitlab")]
+            Gitlab(h) => h.as_str(),
             #[cfg(feature = "gravatar")]
             Gravatar(h) => h.as_str(),
             #[cfg(feature = "instagram")]
@@ -219,12 +289,34 @@ impl SocialHandle {
             Localai(h) => h.as_str(),
             #[cfg(feature = "luma")]
             Luma(h) => h.as_str(),
+            #[cfg(feature = "medium")]
+            Medium(h) => h.as_str(),
+            #[cfg(feature = "pinterest")]
+            Pinterest(h) => h.as_str(),
+            #[cfg(feature = "reddit")]
+            Reddit(h) => h.as_str(),
+            #[cfg(feature = "snapchat")]
+            Snapchat(h) => h.as_str(),
+            #[cfg(feature = "substack")]
+            Substack(h) => h.as_str(),
             #[cfg(feature = "telegram")]
             Telegram(h) => h.as_str(),
+            #[cfg(feature = "threads")]
+            Threads(h) => h.as_str(),
+            #[cfg(feature = "tiktok")]
+            Tiktok(h) => h.as_str(),
+            #[cfg(feature = "twitch")]
+            Twitch(h) => h.as_str(),
             #[cfg(feature = "whatsapp")]
             Whatsapp(h) => h.as_str(),
             #[cfg(feature = "x")]
             X(h) => h.as_str(),
+            #[cfg(feature = "youtube")]
+            Youtube(h) => h.as_str(),
+            // With every platform disabled, `&SocialHandle` is still considered
+            // inhabited by the exhaustiveness checker, but cannot be constructed.
+            #[allow(unreachable_patterns)]
+            _ => unreachable!("a handle requires an enabled platform"),
         }
     }
 }
@@ -234,87 +326,52 @@ impl FromStr for SocialHandle {
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         let input = input.trim_end_matches(&['/', '#']);
-
-        #[cfg(feature = "facebook")]
-        if let Some(handle) = input.strip_prefix("https://facebook.com/") {
-            return crate::facebook::FacebookHandle::from_str(handle)
-                .map(Self::Facebook)
-                .map_err(|_| FromStrError::new("Facebook"));
+        let url = crate::social_url::parse(input).map_err(|_| FromStrError::new("SocialHandle"))?;
+        if url.query().is_some() || url.fragment().is_some() {
+            return Err(FromStrError::new("SocialHandle"));
         }
-
-        #[cfg(feature = "github")]
-        if let Some(handle) = input.strip_prefix("https://github.com/") {
-            return crate::github::GithubHandle::from_str(handle)
-                .map(Self::Github)
-                .map_err(|_| FromStrError::new("Github"));
-        }
-
-        #[cfg(feature = "gravatar")]
-        if let Some(handle) = input.strip_prefix("https://gravatar.com/") {
-            return crate::gravatar::GravatarHandle::from_str(handle)
-                .map(Self::Gravatar)
-                .map_err(|_| FromStrError::new("Gravatar"));
-        }
-
-        #[cfg(feature = "instagram")]
-        if let Some(handle) = input.strip_prefix("https://instagram.com/") {
-            return crate::instagram::InstagramHandle::from_str(handle)
-                .map(Self::Instagram)
-                .map_err(|_| FromStrError::new("Instagram"));
-        }
-
-        #[cfg(feature = "introco")]
-        if let Some(handle) = input.strip_prefix("https://intro.co/") {
-            return crate::introco::IntrocoHandle::from_str(handle)
-                .map(Self::Introco)
-                .map_err(|_| FromStrError::new("Introco"));
-        }
-
-        #[cfg(feature = "linkedin")]
-        if let Some(handle) = input.strip_prefix("https://linkedin.com/in/") {
-            return crate::linkedin::LinkedinHandle::from_str(handle)
-                .map(Self::Linkedin)
-                .map_err(|_| FromStrError::new("Linkedin"));
-        }
-
-        #[cfg(feature = "localai")]
-        if let Some(handle) = input.strip_prefix("https://local.ai/") {
-            return crate::localai::LocalaiHandle::from_str(handle)
-                .map(Self::Localai)
-                .map_err(|_| FromStrError::new("Localai"));
-        }
-
-        #[cfg(feature = "luma")]
-        if let Some(handle) = input.strip_prefix("https://luma.com/user/") {
-            return crate::luma::LumaHandle::from_str(handle)
-                .map(Self::Luma)
-                .map_err(|_| FromStrError::new("Luma"));
-        }
-
-        #[cfg(feature = "telegram")]
-        if let Some(handle) = input.strip_prefix("https://t.me/") {
-            return crate::telegram::TelegramHandle::from_str(handle)
-                .map(Self::Telegram)
-                .map_err(|_| FromStrError::new("Telegram"));
-        }
-
-        #[cfg(feature = "whatsapp")]
-        if let Some(handle) = input.strip_prefix("https://wa.me/") {
-            return crate::whatsapp::WhatsappHandle::from_str(handle)
-                .map(Self::Whatsapp)
-                .map_err(|_| FromStrError::new("Whatsapp"));
-        }
-
-        #[cfg(feature = "x")]
-        if let Some(handle) = input.strip_prefix("https://x.com/") {
-            return crate::x::XHandle::from_str(handle)
-                .map(Self::X)
-                .map_err(|_| FromStrError::new("X"));
-        }
-
-        Err(FromStrError::new("Other"))
+        let host = url.host_str().ok_or(FromStrError::new("SocialHandle"))?;
+        let platform = crate::SocialPlatform::from_host(host)?;
+        let path = url.path().strip_prefix('/').unwrap_or_default();
+        let prefix = if platform == crate::SocialPlatform::Reddit && path.starts_with("u/") {
+            "u/"
+        } else {
+            platform.handle_prefix().unwrap_or("")
+        };
+        let identifier = path
+            .strip_prefix(prefix)
+            .filter(|id| !id.is_empty() && !id.contains(['/', '?', '#']))
+            .ok_or(FromStrError::new("SocialHandle"))?;
+        platform
+            .handle(identifier)
+            .map_err(|_| FromStrError::new("SocialHandle"))
     }
 }
+
+macro_rules! constructor {
+    ($feature:literal, $method:ident, $variant:ident, $type:ident) => {
+        #[cfg(feature = $feature)]
+        impl SocialHandle {
+            #[doc = concat!("Parses an identifier using [`crate::", stringify!($type), "`].")]
+            pub fn $method(input: impl AsRef<str>) -> Result<Self, ParseHandleError> {
+                input.as_ref().parse::<crate::$type>().map(Self::$variant)
+            }
+        }
+    };
+}
+
+constructor!("bluesky", bluesky, Bluesky, BlueskyHandle);
+constructor!("discord", discord, Discord, DiscordHandle);
+constructor!("gitlab", gitlab, Gitlab, GitlabHandle);
+constructor!("medium", medium, Medium, MediumHandle);
+constructor!("pinterest", pinterest, Pinterest, PinterestHandle);
+constructor!("reddit", reddit, Reddit, RedditHandle);
+constructor!("snapchat", snapchat, Snapchat, SnapchatHandle);
+constructor!("substack", substack, Substack, SubstackHandle);
+constructor!("threads", threads, Threads, ThreadsHandle);
+constructor!("tiktok", tiktok, Tiktok, TiktokHandle);
+constructor!("twitch", twitch, Twitch, TwitchHandle);
+constructor!("youtube", youtube, Youtube, YoutubeHandle);
 
 impl TryFrom<String> for SocialHandle {
     type Error = <Self as FromStr>::Err;

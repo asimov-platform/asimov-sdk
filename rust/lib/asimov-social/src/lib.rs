@@ -7,6 +7,8 @@
 //! to describe the direction of a follow relationship between accounts.
 //! [`SocialLink`] recognizes URLs for profiles, relationships, and other social
 //! resources, with fallible conversions to and from supported account handles.
+//! [`SocialPlatform::handle`] parses an identifier on a selected platform.
+//! URL parsers accept an optional `www.` hostname prefix; formatted URLs omit it.
 //!
 //! Platform modules re-export their platform-specific handle types. Each module
 //! and its corresponding `SocialHandle` variant require the matching platform
@@ -28,6 +30,12 @@ pub use collection_stub::*;
 mod follow_relationship;
 pub use follow_relationship::*;
 
+mod platform_handles;
+pub use platform_handles::*;
+
+#[cfg(test)]
+mod platform_tests;
+
 mod social_handle;
 pub use social_handle::*;
 
@@ -39,6 +47,8 @@ pub use social_platform::*;
 
 mod social_property;
 pub use social_property::*;
+
+mod social_url;
 
 #[cfg(feature = "facebook")]
 /// Facebook-specific types, including account handles.
