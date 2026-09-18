@@ -67,8 +67,9 @@
 //! diagnostics on unsuccessful exits. Most return an in-memory cursor over raw
 //! stdout bytes, positioned at zero. [`Output::Captured`](crate::Output::Captured)
 //! retrieves those bytes; ignored or inherited stdout yields an empty cursor.
-//! Output is buffered in full, not returned as a live stream. [`Indexer`] instead
-//! discards stdout and returns `()` on success.
+//! Those results are buffered in full. [`Lister`] instead returns a live stream
+//! of byte-vector lines, retaining line terminators and reporting exit failures
+//! at the end of the stream. [`Indexer`] discards stdout and returns `()` on success.
 //! Captures have no configured size bound. For a continuous emitter, a completed
 //! result is unavailable until the program terminates. Successful stderr is
 //! discarded, and invalid UTF-8 diagnostics are omitted from process-failure

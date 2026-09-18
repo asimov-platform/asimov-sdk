@@ -8,6 +8,7 @@ use alloc::{
 use asimov_module::{ModuleName, resolve::Resolver};
 use asimov_registry::Registry;
 use asimov_runner::GraphOutput;
+use futures_lite::StreamExt;
 use jiff::{Span, Timestamp, ToSpan};
 use std::io::{self, Result};
 
@@ -147,22 +148,30 @@ impl<S: crate::storage::Storage> Snapshotter<S> {
         let lister_error = if let Some(program) = lister {
             tracing::debug!("attempting to capture a snapshot with lister");
             let start_timestamp = Timestamp::now();
-            match asimov_runner::Lister::new(
-                program,
-                &url,
-                GraphOutput::Captured,
-                Default::default(),
-            )
-            .execute()
+            let result = async {
+                let mut stream = asimov_runner::Lister::new(
+                    program,
+                    &url,
+                    GraphOutput::Captured,
+                    Default::default(),
+                )
+                .execute()
+                .await?;
+                let mut data = Vec::new();
+                while let Some(line) = stream.next().await {
+                    data.extend(line?);
+                }
+                Ok::<_, asimov_runner::ExecutorError>(data)
+            }
             .await
-            .inspect_err(|e| tracing::debug!("failed creating a snapshot with lister: {e}"))
-            {
-                Ok(result) => {
+            .inspect_err(|e| tracing::debug!("failed creating a snapshot with lister: {e}"));
+            match result {
+                Ok(data) => {
                     let snapshot = Snapshot {
                         url,
                         start_timestamp,
                         end_timestamp: Some(Timestamp::now()),
-                        data: result.into_inner(),
+                        data,
                     };
                     self.storage.save(&snapshot)?;
 
