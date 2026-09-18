@@ -42,6 +42,8 @@
 //! [execution and results][results] section for result types, input ownership,
 //! output routing, and cancellation; [completion outcomes][completion] for error
 //! precedence; and [JSONL transport][jsonl] for graph framing and composition.
+//! The runner's [linear pipelines][pipelines] connect compatible process-backed
+//! programs and coordinate their completion independently of these marker traits.
 //!
 //! # Native capabilities
 //!
@@ -114,6 +116,7 @@
 //! [results]: https://docs.rs/asimov-runner/latest/asimov_runner/programs/#execution-and-results
 //! [completion]: https://docs.rs/asimov-runner/latest/asimov_runner/struct.ExecutionCompletion.html
 //! [jsonl]: https://docs.rs/asimov-runner/latest/asimov_runner/jsonl/
+//! [pipelines]: https://docs.rs/asimov-runner/latest/asimov_runner/pipeline/
 //! [files]: https://docs.rs/asimov-runner/latest/asimov_runner/programs/#file-operands
 //! [rdf-mapping]: https://asimov-specs.github.io/program-patterns/#rdf-mapping
 

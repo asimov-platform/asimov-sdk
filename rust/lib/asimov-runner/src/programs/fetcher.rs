@@ -80,6 +80,15 @@ impl Fetcher {
 
 impl asimov_patterns::Fetcher<JsonlStream> for Fetcher {}
 
+crate::pipeline::stage!(
+    Fetcher,
+    value,
+    crate::Input::Ignored,
+    value.output,
+    None,
+    value.options.output.as_deref()
+);
+
 #[async_trait]
 impl asimov_patterns::Execute<JsonlStream> for Fetcher {
     type Error = ExecutorError;

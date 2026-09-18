@@ -240,6 +240,16 @@ pub(crate) async fn communicate(
     input: &mut Input,
     output: &mut Output,
 ) -> Result<ExecutionCompletion, ExecutorError> {
+    communicate_child(&mut process, input, output).await
+}
+
+/// Borrows the child so a pipeline supervisor can cancel I/O, then kill and reap
+/// the same child. The owning caller retains kill-on-drop cancellation behavior.
+pub(crate) async fn communicate_child(
+    process: &mut Child,
+    input: &mut Input,
+    output: &mut Output,
+) -> Result<ExecutionCompletion, ExecutorError> {
     use crate::completion::InputFailure;
     use alloc::vec::Vec;
     use tokio::io::AsyncReadExt;

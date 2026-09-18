@@ -4,6 +4,9 @@
 //!
 //! # Connecting graph programs
 //!
+//! `GraphInput::Jsonl` below connects user-space line streams. For a supervised
+//! process chain using native OS pipes, use [`crate::Pipeline`].
+//!
 //! ```no_run
 //! use asimov_runner::{Fetcher, GraphInput, GraphOutput, Matcher};
 //! use futures_lite::StreamExt;

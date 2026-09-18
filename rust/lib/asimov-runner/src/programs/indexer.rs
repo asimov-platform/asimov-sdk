@@ -86,6 +86,15 @@ impl Indexer {
 
 impl asimov_patterns::Indexer for Indexer {}
 
+crate::pipeline::stage!(
+    Indexer,
+    value,
+    value.input,
+    crate::Output::Ignored,
+    value.options.input.as_deref(),
+    None
+);
+
 #[async_trait]
 impl asimov_patterns::Execute<()> for Indexer {
     type Error = ExecutorError;

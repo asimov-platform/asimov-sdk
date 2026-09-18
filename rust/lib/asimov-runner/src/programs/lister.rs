@@ -211,33 +211,7 @@ impl Lister {
     /// zero limit. Otherwise returns an [`ExecutorError`] if spawning fails. Subsequent I/O and exit
     /// errors are delivered through the stream, after any preceding output lines.
     pub async fn execute(&mut self) -> ListerResult {
-        self.validate_pagination()?;
-        for (option, requested, support) in [
-            (
-                "--sort",
-                self.options.sort.is_some(),
-                self.capabilities.sort,
-            ),
-            (
-                "--offset",
-                self.options.offset.is_some(),
-                self.capabilities.offset,
-            ),
-            (
-                "--before",
-                self.options.before.is_some(),
-                self.capabilities.before,
-            ),
-            (
-                "--after",
-                self.options.after.is_some(),
-                self.capabilities.after,
-            ),
-        ] {
-            if requested && support == OptionSupport::Unsupported {
-                return Err(ExecutorError::UnsupportedOption(option));
-            }
-        }
+        self.validate()?;
         let Some(limit) = self.options.limit else {
             return self
                 .executor
@@ -274,6 +248,42 @@ impl Lister {
                 GraphOutput::AsyncWrite(writer) => Some(writer),
             };
         Ok(forward_lines(stream, writer))
+    }
+
+    fn validate(&self) -> Result<(), ExecutorError> {
+        self.validate_pagination()?;
+        for (option, requested, support) in [
+            (
+                "--sort",
+                self.options.sort.is_some(),
+                self.capabilities.sort,
+            ),
+            (
+                "--offset",
+                self.options.offset.is_some(),
+                self.capabilities.offset,
+            ),
+            (
+                "--before",
+                self.options.before.is_some(),
+                self.capabilities.before,
+            ),
+            (
+                "--after",
+                self.options.after.is_some(),
+                self.capabilities.after,
+            ),
+        ] {
+            if requested && support == OptionSupport::Unsupported {
+                return Err(ExecutorError::UnsupportedOption(option));
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn into_pipeline_source(mut self) -> ListerResult {
+        self.output = GraphOutput::Captured;
+        self.execute().await
     }
 
     fn validate_pagination(&self) -> Result<(), ExecutorError> {
@@ -333,6 +343,27 @@ fn forward_lines(
 }
 
 impl asimov_patterns::Lister<ListerStream> for Lister {}
+
+impl From<Lister> for crate::pipeline::PipelineStage {
+    fn from(mut value: Lister) -> Self {
+        let error = value
+            .validate()
+            .err()
+            .or_else(|| crate::pipeline::graph_formats(None, value.options.output.as_deref()));
+        if value.options.limit.is_some() {
+            let program = value
+                .executor
+                .command()
+                .as_std()
+                .get_program()
+                .to_os_string();
+            let writer = matches!(value.output, GraphOutput::AsyncWrite(_));
+            Self::limited_lister(value, program, writer, error)
+        } else {
+            Self::native(value.executor, crate::Input::Ignored, value.output, error)
+        }
+    }
+}
 
 #[async_trait]
 impl asimov_patterns::Execute<ListerStream> for Lister {

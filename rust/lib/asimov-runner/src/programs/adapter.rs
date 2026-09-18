@@ -77,6 +77,15 @@ impl Adapter {
 
 impl asimov_patterns::Adapter<JsonlStream> for Adapter {}
 
+crate::pipeline::stage!(
+    Adapter,
+    value,
+    value.input,
+    value.output,
+    None,
+    value.options.output.as_deref()
+);
+
 #[async_trait]
 impl asimov_patterns::Execute<JsonlStream> for Adapter {
     type Error = ExecutorError;

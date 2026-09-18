@@ -78,6 +78,15 @@ impl Reader {
 
 impl asimov_patterns::Reader<JsonlStream> for Reader {}
 
+crate::pipeline::stage!(
+    Reader,
+    value,
+    value.input,
+    value.output,
+    None,
+    value.options.output.as_deref()
+);
+
 #[async_trait]
 impl asimov_patterns::Execute<JsonlStream> for Reader {
     type Error = ExecutorError;

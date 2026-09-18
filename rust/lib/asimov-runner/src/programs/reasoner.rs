@@ -78,6 +78,15 @@ impl Reasoner {
 
 impl asimov_patterns::Reasoner<JsonlStream> for Reasoner {}
 
+crate::pipeline::stage!(
+    Reasoner,
+    value,
+    value.input,
+    value.output,
+    value.options.input.as_deref(),
+    value.options.output.as_deref()
+);
+
 #[async_trait]
 impl asimov_patterns::Execute<JsonlStream> for Reasoner {
     type Error = ExecutorError;

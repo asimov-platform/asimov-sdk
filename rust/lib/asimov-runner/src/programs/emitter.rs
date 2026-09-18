@@ -68,6 +68,15 @@ impl Emitter {
 
 impl asimov_patterns::Emitter<JsonlStream> for Emitter {}
 
+crate::pipeline::stage!(
+    Emitter,
+    value,
+    crate::Input::Ignored,
+    value.output,
+    None,
+    value.options.output.as_deref()
+);
+
 #[async_trait]
 impl asimov_patterns::Execute<JsonlStream> for Emitter {
     type Error = ExecutorError;

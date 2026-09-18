@@ -149,8 +149,11 @@
 //! wrapper to also release any owned upstream streams. Termination applies to
 //! each owned child, without guaranteeing termination of descendant processes.
 //! Cancellation does not report success or roll back external side effects.
-//! [`Pipeline`](crate::Pipeline) is a placeholder and supplies no stage execution
-//! or completion tracking.
+//! [`Pipeline`](crate::Pipeline) composes graph producers and consumers with
+//! direct OS pipes, checks every stage, and coordinates failure cleanup. Its
+//! limited-lister source uses a bounded relay to preserve the local line cap.
+//! Pipeline construction consumes configured wrappers; external stdin belongs
+//! to the first stage and the final stage's output policy selects the result.
 //!
 //! All subprocess I/O is awaited within execution or the returned stream;
 //! prompt writing does not use a detached task. Buffered captures, individual

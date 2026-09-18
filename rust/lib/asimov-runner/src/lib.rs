@@ -27,6 +27,8 @@
 //! adapt an asynchronous reader into lines. Other results are buffered until completion.
 //! Choose [`Output::Captured`] to retrieve stdout. Pattern-specific behavior and
 //! current limitations are described in the `programs` module.
+//! With `std`, `Pipeline::new(source).pipe(consumer)` constructs a typed linear
+//! graph pipeline with native OS pipes and coordinated stage completion.
 //! An empty capture can mean that stdout was discarded, inherited, or replaced
 //! by a program-selected output file; it does not establish an empty logical
 //! result. Captured output has no configured size limit in this API.
@@ -59,14 +61,14 @@
 //! # Features
 //!
 //! - `std` enables the executor, completion outcomes, execution errors, JSONL transport (including
-//!   `Input::Jsonl`), and program wrappers.
+//!   `Input::Jsonl`), pipelines, and program wrappers.
 //! - `tracing` enables exit-status trace events for buffered and streaming execution.
 //! - `all` enables `tracing`; the default features enable both `all` and `std`.
 //! - `unstable` is reserved for future use and currently enables no behavior.
 //!
-//! The crate declares `no_std` and uses `alloc`; input/output types and the
-//! [`Pipeline`] placeholder are not gated on `std`. Dependencies may still
-//! require the standard library when that feature is disabled.
+//! The crate declares `no_std` and uses `alloc`; the basic input/output policy
+//! types are not gated on `std`. Pipelines and process execution require `std`.
+//! Dependencies may still require the standard library when that feature is disabled.
 //!
 //! [patterns]: https://asimov-specs.github.io/program-patterns/
 //! [traits]: https://docs.rs/asimov-patterns
@@ -117,7 +119,9 @@ pub use jsonl::*;
 pub mod output;
 pub use output::*;
 
+#[cfg(feature = "std")]
 pub mod pipeline;
+#[cfg(feature = "std")]
 pub use pipeline::*;
 
 #[cfg(feature = "std")]

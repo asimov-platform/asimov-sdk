@@ -79,6 +79,15 @@ impl Matcher {
 
 impl asimov_patterns::Matcher<JsonlStream> for Matcher {}
 
+crate::pipeline::stage!(
+    Matcher,
+    value,
+    value.input,
+    value.output,
+    value.options.input.as_deref(),
+    value.options.output.as_deref()
+);
+
 #[async_trait]
 impl asimov_patterns::Execute<JsonlStream> for Matcher {
     type Error = ExecutorError;

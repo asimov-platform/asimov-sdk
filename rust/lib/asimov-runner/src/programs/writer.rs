@@ -86,6 +86,15 @@ impl Writer {
 
 impl asimov_patterns::Writer<Cursor<Vec<u8>>> for Writer {}
 
+crate::pipeline::stage!(
+    Writer,
+    value,
+    value.input,
+    value.output,
+    value.options.input.as_deref(),
+    None
+);
+
 #[async_trait]
 impl asimov_patterns::Execute<Cursor<Vec<u8>>> for Writer {
     type Error = ExecutorError;
