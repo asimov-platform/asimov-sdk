@@ -2,12 +2,10 @@
 
 //! URL protocol access through an external fetcher that produces RDF.
 
-use crate::{Executor, ExecutorError, GraphOutput, JsonlStream};
+use crate::{CommandExt, Executor, ExecutorError, GraphOutput, JsonlStream};
 use alloc::{
     boxed::Box,
-    format,
     string::{String, ToString},
-    vec,
 };
 use async_trait::async_trait;
 use derive_more::Debug;
@@ -52,11 +50,7 @@ impl Fetcher {
         let mut executor = Executor::new(program);
         executor
             .command()
-            .args(if let Some(ref output) = options.output {
-                vec![format!("--output={}", output)]
-            } else {
-                vec![]
-            })
+            .option("output", options.output.as_ref())
             .args(&options.other)
             .arg(&input)
             .stdin(Stdio::null())

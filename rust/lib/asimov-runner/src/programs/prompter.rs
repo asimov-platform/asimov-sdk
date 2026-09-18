@@ -5,12 +5,10 @@
 //! [`Prompt`], [`PromptMessage`], and [`PromptRole`] are re-exported here for
 //! constructing the input passed to [`Prompter`].
 
-use crate::{Executor, ExecutorError, Input, TextOutput};
+use crate::{CommandExt, Executor, ExecutorError, Input, TextOutput};
 use alloc::{
     boxed::Box,
-    format,
     string::{String, ToString},
-    vec,
 };
 use async_trait::async_trait;
 use derive_more::Debug;
@@ -68,21 +66,9 @@ impl Prompter {
 
         executor
             .command()
-            .args(if let Some(ref input) = options.input {
-                vec![format!("--input={}", input)]
-            } else {
-                vec![]
-            })
-            .args(if let Some(ref output) = options.output {
-                vec![format!("--output={}", output)]
-            } else {
-                vec![]
-            })
-            .args(if let Some(ref model) = options.model {
-                vec![format!("--model={}", model)]
-            } else {
-                vec![]
-            })
+            .option("input", options.input.as_ref())
+            .option("output", options.output.as_ref())
+            .option("model", options.model.as_ref())
             .args(&options.other)
             .stdin(Stdio::piped())
             .stdout(output.as_stdio())
@@ -135,6 +121,7 @@ impl asimov_patterns::Execute<String> for Prompter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
     //use asimov_patterns::Execute;
 
     #[tokio::test]

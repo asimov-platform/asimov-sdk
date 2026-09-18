@@ -50,6 +50,10 @@
 //! programs must agree on a documented [RDF mapping profile][rdf-mapping].
 //! The option types' field-level contracts and defaults are documented in
 //! [`asimov-patterns`][options].
+//! Command construction uses [`CommandExt::option`](crate::CommandExt::option)
+//! for optional `--name=value` arguments, preserving literal values and order
+//! without building temporary argument vectors. Capability-based omission is
+//! expressed by filtering the optional value before passing it to the helper.
 //!
 //! # File operands
 //!
@@ -77,13 +81,19 @@
 //! completion to check process success. Ignored or inherited stdout yields no
 //! lines but still checks the exit status when polled to completion.
 //! [`Lister`] enforces its configured limit locally as a stdout line cap in every
-//! output mode in addition to passing `--limit`, which every lister program must
-//! support. This independent cap protects callers from buggy subprograms.
-//! `--sort` and `--offset` are optional native capabilities. Supply known native
-//! support using [`Lister::with_capabilities`] and [`ListerCapabilities`]. Unknown
+//! output mode. Native `--limit` support is optional: the flag is forwarded for
+//! unknown/supported capability and omitted when explicitly unsupported. The
+//! local cap always applies, including protection against buggy subprograms.
+//! `--sort`, `--offset`, `--before`, and `--after` are also optional native
+//! capabilities. Supply support using [`Lister::with_capabilities`] and
+//! [`ListerCapabilities`]. Unknown
 //! and supported requests are forwarded; explicitly unsupported typed requests
 //! fail before spawning with [`ExecutorError::UnsupportedOption`](crate::ExecutorError::UnsupportedOption).
-//! There is no automatic discovery or emulation. On reaching the line cap it stops the child
+//! There is no automatic discovery or emulation of sorting, offset, or cursor
+//! bounds. Numeric offset and URI cursors are alternative pagination modes;
+//! before/after bounds are exclusive in the chosen sort order, using entry
+//! JSON-LD `@id` URIs. Limit applies after sorting and pagination. On reaching
+//! the line cap it stops the child
 //! and ends the stream without checking eventual exit status. A zero limit does
 //! not spawn a child. This cap counts serialized lines, not logical RDF entries.
 //!

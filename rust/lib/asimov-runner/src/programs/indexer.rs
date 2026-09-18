@@ -2,8 +2,8 @@
 
 //! Persistent RDF dataset indexing through an external indexer program.
 
-use crate::{Executor, ExecutorError, GraphInput, NoOutput};
-use alloc::{boxed::Box, format, vec};
+use crate::{CommandExt, Executor, ExecutorError, GraphInput, NoOutput};
+use alloc::boxed::Box;
 use async_trait::async_trait;
 use derive_more::Debug;
 use std::{ffi::OsStr, process::Stdio};
@@ -54,11 +54,7 @@ impl Indexer {
         let mut executor = Executor::new(program);
         executor
             .command()
-            .args(if let Some(ref input) = options.input {
-                vec![format!("--input={}", input)]
-            } else {
-                vec![]
-            })
+            .option("input", options.input.as_ref())
             .args(&options.other)
             .stdin(input.as_stdio())
             .stdout(Stdio::null())

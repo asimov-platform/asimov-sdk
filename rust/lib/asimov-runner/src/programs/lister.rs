@@ -2,12 +2,11 @@
 
 //! URL-based directory iteration through an external lister program.
 
-use crate::{Executor, ExecutorError, GraphOutput, JsonlStream, OptionSupport};
+use crate::{CommandExt, Executor, ExecutorError, GraphOutput, JsonlStream, OptionSupport};
 use alloc::{
     boxed::Box,
     format,
     string::{String, ToString},
-    vec,
 };
 use async_trait::async_trait;
 use derive_more::Debug;
@@ -34,13 +33,19 @@ pub type ListerResult = Result<ListerStream, ExecutorError>;
 /// An external [lister] that iterates a directory URL and emits RDF for its entries.
 ///
 /// The input URL is passed as one command-line argument, and stdin is connected
-/// to the null device. Sorting and offset are delegated to the external program;
-/// `options.limit` is passed as `--limit` and independently enforced locally as a
-/// maximum number of stdout lines in every output mode. Lister programs must
-/// accept `--limit`; the local cap protects callers from buggy implementations
-/// that emit too many lines. Captured stdout is streamed one line at a time with
+/// to the null device. Sorting, numeric offset, and URI cursor bounds are delegated
+/// to the external program. `options.limit` is always enforced locally as a
+/// maximum number of stdout lines in every output mode; `--limit` is also passed
+/// unless native limit support is explicitly unsupported. The local cap works
+/// without native support and protects against bugs in programs that accept the
+/// flag. Captured stdout is streamed one line at a time with
 /// backpressure rather than buffered until the program exits. Stderr is drained
 /// concurrently while reading and retained for failure diagnostics.
+///
+/// Cursor bounds use entry URIs (JSON-LD `@id`) and are exclusive in the selected
+/// sort order. Both bounds may define an interval; they cannot be combined with
+/// numeric offset. The runner validates URI syntax but does not resolve IDs or
+/// inspect graphs; the child defines stable ordering and missing-ID behavior.
 ///
 /// [lister]: https://asimov-specs.github.io/program-patterns/#lister
 #[allow(unused)]
@@ -56,22 +61,20 @@ pub struct Lister {
 impl Lister {
     /// Configures a lister for the directory URL `input` without starting it.
     ///
-    /// Adds any configured `--sort`, `--offset`, `--limit`, and `--output`
-    /// options as `--name=value` arguments, in that order, followed by
+    /// Adds configured `--sort`, `--offset`, `--before`, `--after`, `--limit`, and
+    /// `--output` options as `--name=value` arguments, in that order, followed by
     /// `options.other` and the unvalidated URL. `output` selects stdout handling;
     /// stderr is captured for failure diagnostics. The runner also enforces the
     /// limit locally, even if the child accepts the flag but fails to honor it.
     ///
-    /// The specification requires `--limit` and `--output` support and defines
-    /// `--sort` and `--offset` as optional capabilities. Limiting output is simple
-    /// for programs to implement; sorting and offset can be more involved and
-    /// can instead be emulated by a host. Native support defaults to unknown;
+    /// Native sorting and pagination support defaults to unknown;
     /// use [`with_capabilities`](Self::with_capabilities) to supply known support.
-    /// This wrapper does not discover capabilities or emulate these operations.
-    /// Unknown or supported options are forwarded; explicitly unsupported
-    /// requests are rejected by [`execute`](Self::execute). When supported, sorting
-    /// precedes offset, and limit applies last. The program contract counts
-    /// complete entries, but this wrapper caps serialized lines without parsing
+    /// This wrapper enforces limits locally but does not discover capabilities
+    /// or emulate sorting, offset, or URI bounds. Unknown or supported options
+    /// are forwarded. An unsupported limit flag is omitted; other explicitly
+    /// unsupported requests are rejected by [`execute`](Self::execute). Sorting
+    /// precedes offset or cursor bounds, and limit applies last. The program
+    /// contract counts complete entries, but this wrapper caps serialized lines without parsing
     /// entry boundaries. The SDK formats sort keys using `SortKeys`; the
     /// resulting expression must be supported by the selected program's profile.
     pub fn new(
@@ -80,30 +83,37 @@ impl Lister {
         output: GraphOutput,
         options: ListerOptions,
     ) -> Self {
+        Self::configured(
+            program,
+            input,
+            output,
+            options,
+            ListerCapabilities::default(),
+        )
+    }
+
+    fn configured(
+        program: impl AsRef<OsStr>,
+        input: impl AsRef<str>,
+        output: GraphOutput,
+        options: ListerOptions,
+        capabilities: ListerCapabilities,
+    ) -> Self {
         let input = input.as_ref().to_string();
         let mut executor = Executor::new(program);
         executor
             .command()
-            .args(if let Some(ref sort) = options.sort {
-                vec![format!("--sort={}", sort.to_string())]
-            } else {
-                vec![]
-            })
-            .args(if let Some(offset) = options.offset {
-                vec![format!("--offset={}", offset)]
-            } else {
-                vec![]
-            })
-            .args(if let Some(limit) = options.limit {
-                vec![format!("--limit={}", limit)]
-            } else {
-                vec![]
-            })
-            .args(if let Some(ref output) = options.output {
-                vec![format!("--output={}", output)]
-            } else {
-                vec![]
-            })
+            .option("sort", options.sort.as_ref())
+            .option("offset", options.offset)
+            .option("before", options.before.as_ref())
+            .option("after", options.after.as_ref())
+            .option(
+                "limit",
+                options
+                    .limit
+                    .filter(|_| capabilities.limit != OptionSupport::Unsupported),
+            )
+            .option("output", options.output.as_ref())
             .args(&options.other)
             .arg(&input)
             .stdin(Stdio::null())
@@ -117,7 +127,7 @@ impl Lister {
         Self {
             executor,
             options,
-            capabilities: ListerCapabilities::default(),
+            capabilities,
             input,
             output,
         }
@@ -126,16 +136,17 @@ impl Lister {
     /// Supplies native option support for the configured program without spawning it.
     ///
     /// Unknown support preserves the default forwarding behavior. Explicitly
-    /// supported requests are also forwarded; explicitly unsupported requests
+    /// supported requests are also forwarded. An unsupported `--limit` is omitted
+    /// while retaining the local cap. Other explicitly unsupported requests
     /// fail at execution, without spawning or consuming an output writer. Unset
     /// requests are unaffected by capability metadata. Validation covers the
-    /// typed `sort` and `offset` fields, including `Some(0)` for offset; `other`
-    /// remains a verbatim argument list and is not parsed for these options.
+    /// typed `sort`, `offset`, `before`, and `after` fields, including `Some(0)`
+    /// for offset; `other` remains a verbatim argument list and is not parsed.
     ///
     /// The caller may derive this metadata from module manifests; the runner
-    /// does not load or verify it. There is no sort/offset emulation yet. Future
-    /// fallbacks must preserve sort → offset → limit order: in particular, local
-    /// sorting cannot operate on output already truncated by a native limit.
+    /// does not load or verify it. There is no sort/offset/cursor emulation yet.
+    /// Future fallbacks must preserve sort → offset or cursor bounds → limit
+    /// order: local sorting cannot operate on output truncated by a native limit.
     ///
     /// ```no_run
     /// use asimov_runner::{GraphOutput, Lister, ListerCapabilities, ListerOptions, OptionSupport};
@@ -150,6 +161,7 @@ impl Lister {
     /// ).with_capabilities(ListerCapabilities::builder()
     ///     .sort(OptionSupport::Unsupported)
     ///     .offset(OptionSupport::Supported)
+    ///     .limit(OptionSupport::Unsupported)
     ///     .build());
     /// let mut lines = lister.execute().await?;
     /// while let Some(line) = lines.next().await {
@@ -160,8 +172,13 @@ impl Lister {
     /// ```
     #[must_use]
     pub fn with_capabilities(mut self, capabilities: ListerCapabilities) -> Self {
-        self.capabilities = capabilities;
-        self
+        let program = self
+            .executor
+            .command()
+            .as_std()
+            .get_program()
+            .to_os_string();
+        Self::configured(program, self.input, self.output, self.options, capabilities)
     }
 
     /// Starts a new lister process and returns its live listing stream, or returns
@@ -177,8 +194,8 @@ impl Lister {
     /// line and a fixed-size read buffer. JSONL framing does not establish how
     /// many lines or RDF statements belong to one logical listing entry.
     ///
-    /// After capability validation, `None` leaves output unlimited. `Some(0)`
-    /// returns an empty stream without spawning or consuming an output writer.
+    /// After option and capability validation, `None` leaves output unlimited.
+    /// `Some(0)` returns an empty stream without spawning or consuming a writer.
     /// With a positive limit, the child is dropped as soon as the last permitted
     /// line is read, even if the caller
     /// retains the stream. Reaching the cap ends the listing intentionally: no
@@ -187,11 +204,14 @@ impl Lister {
     ///
     /// # Errors
     ///
-    /// Returns [`ExecutorError::UnsupportedOption`] before spawning if a requested
-    /// sort or offset is explicitly unsupported, even with a zero limit. Otherwise
-    /// returns an [`ExecutorError`] if spawning fails. Subsequent I/O and exit
+    /// Returns an I/O `InvalidInput` error wrapped in [`ExecutorError::UnexpectedOther`]
+    /// for mixed offset/cursor pagination or malformed absolute cursor URIs.
+    /// Returns [`ExecutorError::UnsupportedOption`] before spawning if requested
+    /// sorting, offset, or a cursor bound is explicitly unsupported, even with a
+    /// zero limit. Otherwise returns an [`ExecutorError`] if spawning fails. Subsequent I/O and exit
     /// errors are delivered through the stream, after any preceding output lines.
     pub async fn execute(&mut self) -> ListerResult {
+        self.validate_pagination()?;
         for (option, requested, support) in [
             (
                 "--sort",
@@ -202,6 +222,16 @@ impl Lister {
                 "--offset",
                 self.options.offset.is_some(),
                 self.capabilities.offset,
+            ),
+            (
+                "--before",
+                self.options.before.is_some(),
+                self.capabilities.before,
+            ),
+            (
+                "--after",
+                self.options.after.is_some(),
+                self.capabilities.after,
             ),
         ] {
             if requested && support == OptionSupport::Unsupported {
@@ -245,6 +275,37 @@ impl Lister {
             };
         Ok(forward_lines(stream, writer))
     }
+
+    fn validate_pagination(&self) -> Result<(), ExecutorError> {
+        use std::io::{Error, ErrorKind};
+        if self.options.offset.is_some()
+            && (self.options.before.is_some() || self.options.after.is_some())
+        {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "lister offset cannot be combined with before/after cursors",
+            )
+            .into());
+        }
+        for (option, value) in [
+            ("--before", self.options.before.as_deref()),
+            ("--after", self.options.after.as_deref()),
+        ] {
+            if let Some(value) = value {
+                if value.is_empty()
+                    || value.chars().any(|c| c.is_whitespace() || c.is_control())
+                    || url::Url::parse(value).is_err()
+                {
+                    return Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        format!("lister {option} must be an absolute entry URI (JSON-LD @id)"),
+                    )
+                    .into());
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Consumes a bounded listing without returning payload lines to the caller.
@@ -285,9 +346,309 @@ impl asimov_patterns::Execute<ListerStream> for Lister {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use alloc::vec;
     use futures_lite::StreamExt;
     use std::time::Duration;
     use tokio::time::timeout;
+
+    fn cursor_lister(options: ListerOptions) -> Lister {
+        Lister::new(
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/lister-cursors.sh"
+            ),
+            "example:collection",
+            GraphOutput::Captured,
+            options,
+        )
+        .with_capabilities(
+            ListerCapabilities::builder()
+                .sort(OptionSupport::Supported)
+                .offset(OptionSupport::Supported)
+                .before(OptionSupport::Supported)
+                .after(OptionSupport::Supported)
+                .limit(OptionSupport::Unsupported)
+                .build(),
+        )
+    }
+
+    #[test]
+    fn limit_forwarding_tracks_capability_changes_without_stale_arguments() {
+        let mut lister = Lister::new(
+            "asimov-test-lister",
+            "example:",
+            GraphOutput::Captured,
+            ListerOptions::builder().offset(2).limit(3).build(),
+        );
+        for support in [
+            OptionSupport::Unknown,
+            OptionSupport::Unsupported,
+            OptionSupport::Supported,
+            OptionSupport::Unsupported,
+            OptionSupport::Unknown,
+        ] {
+            lister = lister.with_capabilities(ListerCapabilities::builder().limit(support).build());
+            let arguments: alloc::vec::Vec<_> =
+                lister.executor.command().as_std().get_args().collect();
+            if support == OptionSupport::Unsupported {
+                assert_eq!(arguments, ["--offset=2", "example:"]);
+            } else {
+                assert_eq!(arguments, ["--offset=2", "--limit=3", "example:"]);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cursor_bounds_follow_rank_order_and_preserve_numeric_pagination() {
+        let cases = [
+            (
+                ListerOptions::builder().offset(1).limit(2).build(),
+                vec!["urn:item:zeta", "urn:item:beta"],
+            ),
+            (
+                ListerOptions::builder()
+                    .after("urn:item:zeta")
+                    .limit(1)
+                    .build(),
+                vec!["urn:item:beta"],
+            ),
+            (
+                ListerOptions::builder()
+                    .before("urn:item:beta")
+                    .limit(2)
+                    .build(),
+                vec!["urn:item:alpha", "urn:item:zeta"],
+            ),
+            (
+                ListerOptions::builder()
+                    .after("urn:item:alpha")
+                    .before("urn:item:omega")
+                    .limit(5)
+                    .build(),
+                vec!["urn:item:zeta", "urn:item:beta"],
+            ),
+            (
+                ListerOptions::builder()
+                    .sort("-rank".parse().unwrap())
+                    .after("urn:item:beta")
+                    .limit(1)
+                    .build(),
+                vec!["urn:item:zeta"],
+            ),
+            (
+                ListerOptions::builder()
+                    .before("urn:item:alpha")
+                    .limit(1)
+                    .build(),
+                vec![],
+            ),
+        ];
+        for (options, expected) in cases {
+            let mut stream = cursor_lister(options).execute().await.unwrap();
+            for id in expected {
+                assert_eq!(
+                    stream.next().await.unwrap().unwrap(),
+                    format!("{{\"@id\":\"{id}\"}}\n").as_bytes()
+                );
+            }
+            assert!(stream.next().await.is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn uri_cursor_is_stable_when_an_earlier_entry_is_inserted() {
+        for other in [vec![], vec!["--inserted".into()]] {
+            let mut stream = cursor_lister(ListerOptions {
+                after: Some("urn:item:zeta".into()),
+                limit: Some(1),
+                other,
+                ..Default::default()
+            })
+            .execute()
+            .await
+            .unwrap();
+            assert_eq!(
+                stream.next().await.unwrap().unwrap(),
+                b"{\"@id\":\"urn:item:beta\"}\n"
+            );
+            assert!(stream.next().await.is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn cursor_arguments_preserve_uri_spelling_and_boundaries() {
+        for support in [OptionSupport::Unknown, OptionSupport::Supported] {
+            let mut lister = Lister::new(
+                "/this-lister-does-not-exist",
+                "example:",
+                GraphOutput::Captured,
+                ListerOptions::builder()
+                    .sort("rank".parse().unwrap())
+                    .before("HTTPS://Example.COM/a%2fb?x=a=b&y=c#end")
+                    .after("urn:example:item:123")
+                    .limit(3)
+                    .output("jsonl")
+                    .build(),
+            )
+            .with_capabilities(
+                ListerCapabilities::builder()
+                    .before(support)
+                    .after(support)
+                    .build(),
+            );
+            let arguments: alloc::vec::Vec<_> =
+                lister.executor.command().as_std().get_args().collect();
+            assert_eq!(
+                arguments,
+                [
+                    "--sort=rank",
+                    "--before=HTTPS://Example.COM/a%2fb?x=a=b&y=c#end",
+                    "--after=urn:example:item:123",
+                    "--limit=3",
+                    "--output=jsonl",
+                    "example:"
+                ]
+            );
+            assert!(matches!(
+                lister.execute().await,
+                Err(ExecutorError::MissingProgram(_))
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_invalid_cursor_pagination_before_spawn() {
+        for value in [
+            "",
+            "relative/path",
+            "_:blank",
+            "not a URI",
+            "urn:example:a\n",
+            " urn:example:a",
+        ] {
+            for before in [true, false] {
+                let options = if before {
+                    ListerOptions::builder().before(value).limit(0).build()
+                } else {
+                    ListerOptions::builder().after(value).limit(0).build()
+                };
+                let mut lister = Lister::new(
+                    "/this-lister-does-not-exist",
+                    "example:",
+                    GraphOutput::AsyncWrite(Box::new(tokio::io::sink())),
+                    options,
+                );
+                assert!(
+                    matches!(lister.execute().await, Err(ExecutorError::UnexpectedOther(error))
+                    if error.kind() == std::io::ErrorKind::InvalidInput)
+                );
+                assert!(matches!(lister.output, GraphOutput::AsyncWrite(_)));
+            }
+        }
+        for offset in [0, 2] {
+            for before in [true, false] {
+                let options = if before {
+                    ListerOptions::builder()
+                        .before("urn:item:beta")
+                        .offset(offset)
+                        .build()
+                } else {
+                    ListerOptions::builder()
+                        .after("urn:item:beta")
+                        .offset(offset)
+                        .build()
+                };
+                let mut lister = Lister::new(
+                    "/this-lister-does-not-exist",
+                    "example:",
+                    GraphOutput::Captured,
+                    options,
+                );
+                assert!(
+                    matches!(lister.execute().await, Err(ExecutorError::UnexpectedOther(error))
+                    if error.kind() == std::io::ErrorKind::InvalidInput)
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_unsupported_cursor_bounds_but_allows_unsupported_limit() {
+        for (options, option) in [
+            (
+                ListerOptions::builder()
+                    .before("urn:item:beta")
+                    .limit(1)
+                    .build(),
+                "--before",
+            ),
+            (
+                ListerOptions::builder()
+                    .after("urn:item:beta")
+                    .limit(1)
+                    .build(),
+                "--after",
+            ),
+        ] {
+            let mut lister = Lister::new(
+                "/this-lister-does-not-exist",
+                "example:",
+                GraphOutput::Captured,
+                options,
+            )
+            .with_capabilities(
+                ListerCapabilities::builder()
+                    .before(OptionSupport::Unsupported)
+                    .after(OptionSupport::Unsupported)
+                    .limit(OptionSupport::Unsupported)
+                    .build(),
+            );
+            assert!(
+                matches!(lister.execute().await, Err(ExecutorError::UnsupportedOption(actual)) if actual == option)
+            );
+        }
+        let mut lister = Lister::new(
+            "/this-lister-does-not-exist",
+            "example:",
+            GraphOutput::Captured,
+            ListerOptions::builder().limit(0).build(),
+        )
+        .with_capabilities(
+            ListerCapabilities::builder()
+                .limit(OptionSupport::Unsupported)
+                .build(),
+        );
+        assert!(lister.execute().await.unwrap().next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn unsupported_native_limit_still_terminates_a_long_running_child() {
+        for output in [GraphOutput::Captured, GraphOutput::Ignored] {
+            let captured = matches!(output, GraphOutput::Captured);
+            let mut stream = Lister::new(
+                "/bin/sh",
+                "printf '{}\\n[]\\n'; exec sleep 30",
+                output,
+                ListerOptions::builder().limit(1).other("-c").build(),
+            )
+            .with_capabilities(
+                ListerCapabilities::builder()
+                    .limit(OptionSupport::Unsupported)
+                    .build(),
+            )
+            .execute()
+            .await
+            .unwrap();
+            timeout(Duration::from_secs(5), async {
+                if captured {
+                    assert_eq!(stream.next().await.unwrap().unwrap(), b"{}\n");
+                }
+                assert!(stream.next().await.is_none());
+            })
+            .await
+            .expect("local limit must work without native --limit");
+        }
+    }
 
     #[tokio::test]
     async fn rejects_explicitly_unsupported_requests_before_spawning() {
@@ -327,6 +688,7 @@ mod tests {
                 .with_capabilities(ListerCapabilities {
                     sort: OptionSupport::Unsupported,
                     offset: OptionSupport::Unsupported,
+                    ..Default::default()
                 });
                 assert!(matches!(lister.execute().await,
                     Err(ExecutorError::UnsupportedOption(actual)) if actual == option));
@@ -349,7 +711,11 @@ mod tests {
                         .limit(3)
                         .build(),
                 )
-                .with_capabilities(ListerCapabilities { sort, offset });
+                .with_capabilities(ListerCapabilities {
+                    sort,
+                    offset,
+                    ..Default::default()
+                });
                 let arguments: alloc::vec::Vec<_> =
                     lister.executor.command().as_std().get_args().collect();
                 assert_eq!(
@@ -376,6 +742,7 @@ mod tests {
         .with_capabilities(ListerCapabilities {
             sort: OptionSupport::Unsupported,
             offset: OptionSupport::Unsupported,
+            ..Default::default()
         });
         let mut stream = lister.execute().await.unwrap();
         assert_eq!(

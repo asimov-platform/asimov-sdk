@@ -87,6 +87,11 @@ pub use clientele::SysexitsError;
 pub use tokio::process::Command;
 
 #[cfg(feature = "std")]
+pub mod command_ext;
+#[cfg(feature = "std")]
+pub use command_ext::*;
+
+#[cfg(feature = "std")]
 pub mod completion;
 #[cfg(feature = "std")]
 pub use completion::*;

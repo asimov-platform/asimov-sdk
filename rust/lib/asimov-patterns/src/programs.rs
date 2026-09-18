@@ -45,8 +45,9 @@
 //!
 //! # Native capabilities
 //!
-//! [`ListerCapabilities`] describes optional native sorting and offset support
-//! separately from the requests in [`ListerOptions`]. Each capability uses
+//! [`ListerCapabilities`] describes optional native sorting, numeric offset,
+//! URI cursor (`before`/`after`), and limit support separately from the requests
+//! in [`ListerOptions`]. Each capability uses
 //! [`OptionSupport`](crate::OptionSupport): unknown, supported, or unsupported.
 //! Callers can translate manifest metadata into these values without this crate
 //! depending on a manifest schema. Capabilities do not imply host emulation;
@@ -60,16 +61,17 @@
 //! are stored without checking whether the selected program supports them.
 //!
 //! The companion [`asimov-runner`][runner] wrappers emit configured fields as
-//! individual `--name=value` arguments. Hosts may additionally enforce limits
-//! to protect callers from program bugs. `None` omits an option rather than
-//! supplying an empty value. A conforming program then applies these defaults:
+//! individual `--name=value` arguments according to supplied capabilities. Hosts
+//! may enforce a limit instead of forwarding an unsupported flag, and may also
+//! enforce it independently to protect against program bugs. `None` omits an
+//! option rather than supplying an empty value. Programs apply these defaults:
 //!
 //! | Patterns | Input format | Output format | Other defaults |
 //! | --- | --- | --- | --- |
 //! | Adapter, emitter, fetcher | No input-format option | `jsonl` | — |
 //! | Compiler | No input-format option | No output-format option | No pattern-specific options |
 //! | Indexer | `jsonl` | No output-format option | Index destination required |
-//! | Lister | No input-format option | `jsonl` | No limit; offset `0`; program-defined order |
+//! | Lister | No input-format option | `jsonl` | No limit or cursor bounds; offset `0`; program-defined order |
 //! | Matcher, reasoner | `jsonl` | `jsonl` | — |
 //! | Prompter | `text` | `text` | Model `auto` |
 //! | Reader | `auto` | `jsonl` | — |

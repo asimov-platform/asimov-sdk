@@ -4,12 +4,11 @@
 //!
 //! Captured stdout is parsed as UTF-8 absolute URLs, one per line.
 
-use crate::{Executor, ExecutorError, Input, Output};
+use crate::{CommandExt, Executor, ExecutorError, Input, Output};
 use alloc::{
     boxed::Box,
     format,
     string::{String, ToString},
-    vec,
     vec::Vec,
 };
 use async_trait::async_trait;
@@ -66,11 +65,7 @@ impl Resolver {
         let mut executor = Executor::new(program);
         executor
             .command()
-            .args(if let Some(limit) = options.limit {
-                vec![format!("--limit={}", limit)]
-            } else {
-                vec![]
-            })
+            .option("limit", options.limit)
             .args(&options.other)
             .arg(&input)
             .stdin(Stdio::null())

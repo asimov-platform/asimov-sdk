@@ -87,29 +87,41 @@ fn shell(script: &str, input: &Input, output: &Output) -> Executor {
 
 #[tokio::test]
 async fn lister_caps_forwarded_output_and_flushes() {
-    let (output, state) = destination();
-    let mut stream = Lister::new(
-        concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/fixtures/lister-ignores-limit.sh"
-        ),
-        "printf '{}\\r\\n[]\\n{\"extra\":true}\\n'; exec sleep 30",
-        output,
-        ListerOptions::builder().limit(2).other("-c").build(),
-    )
-    .execute()
-    .await
-    .unwrap();
-    assert!(
-        timeout(Duration::from_secs(5), stream.next())
-            .await
-            .expect("forwarding must finish at the line cap")
-            .is_none()
-    );
-    let written = state.lock().unwrap();
-    assert_eq!(written.bytes, b"{}\r\n[]\n");
-    assert!(written.flushes >= 1);
-    assert_eq!(written.shutdowns, 0);
+    for support in [
+        OptionSupport::Unknown,
+        OptionSupport::Supported,
+        OptionSupport::Unsupported,
+    ] {
+        let (output, state) = destination();
+        let program = if support == OptionSupport::Unsupported {
+            "/bin/sh"
+        } else {
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/lister-ignores-limit.sh"
+            )
+        };
+        let mut stream = Lister::new(
+            program,
+            "printf '{}\\r\\n[]\\n{\"extra\":true}\\n'; exec sleep 30",
+            output,
+            ListerOptions::builder().limit(2).other("-c").build(),
+        )
+        .with_capabilities(ListerCapabilities::builder().limit(support).build())
+        .execute()
+        .await
+        .unwrap();
+        assert!(
+            timeout(Duration::from_secs(5), stream.next())
+                .await
+                .expect("forwarding must finish at the line cap")
+                .is_none()
+        );
+        let written = state.lock().unwrap();
+        assert_eq!(written.bytes, b"{}\r\n[]\n");
+        assert!(written.flushes >= 1);
+        assert_eq!(written.shutdowns, 0);
+    }
 }
 
 #[tokio::test]

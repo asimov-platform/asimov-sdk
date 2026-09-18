@@ -20,12 +20,22 @@ use clientele::options::sort::SortKeys;
 ///
 /// One absolute collection URL is required as a single argument. There is no
 /// stdin payload; stdout contains RDF (`jsonl` by default). [`ListerOptions`]
-/// controls output serialization and result counts. Every lister program must
-/// accept and implement `--limit`: bounding its output is straightforward, and
-/// independent host enforcement is a safeguard against program bugs, not a
-/// replacement for supporting the option. Sorting and offset are optional
-/// program capabilities because they can be more complex and can be emulated by
-/// a host. Sorting precedes skipping entries, and the limit applies last.
+/// controls output serialization and pagination. Native support for `--sort`,
+/// `--offset`, `--before`, `--after`, and `--limit` is described by
+/// [`ListerCapabilities`]; none of these options is required of every program.
+/// A host can enforce a limit independently of native support.
+///
+/// Pagination can use either numeric `offset` plus `limit`, or URI cursor bounds
+/// `before`/`after` plus `limit`. Cursors identify entries by their JSON-LD `@id`,
+/// not by row number or an opaque encoded token. Bounds are exclusive and refer
+/// to positions in the selected sort order, not lexical ordering of the URIs.
+/// Both bounds may specify an interval; numeric offset is not combined with
+/// cursor bounds. Apply sorting, then offset or cursor bounds, then limit.
+/// `limit` selects the first entries of that ordered interval; reverse `sort`
+/// for reverse traversal rather than introducing `first`/`last` options.
+/// Programs must define stable ordering, tie-breaking, and how missing or deleted
+/// cursor IDs are handled. ID-based pagination avoids positional drift when
+/// entries are inserted or removed, but does not itself provide snapshot isolation.
 ///
 /// The generic result `T` need not be a Rust iterator. A serialized line is not
 /// necessarily a complete logical entry. See [`crate::programs`] for links to
@@ -37,9 +47,9 @@ pub trait Lister<T>: Execute<T> {}
 /// Declared native support for a lister program's optional operations.
 ///
 /// Supply this separately from [`ListerOptions`]: requests and native support
-/// are independent. `Default` and an empty builder leave both capabilities
-/// [`Unknown`](OptionSupport::Unknown). Mandatory `--limit` and `--output`
-/// support is not configurable here. A host may obtain these declarations from
+/// are independent. `Default` and an empty builder leave all capabilities
+/// [`Unknown`](OptionSupport::Unknown). Output-format support is not configured
+/// here. A host may obtain these declarations from
 /// module metadata or other knowledge of the program; this crate performs no
 /// discovery. Concrete forwarding and fallback policies belong to the executor.
 ///
@@ -49,9 +59,13 @@ pub trait Lister<T>: Execute<T> {}
 /// let capabilities = ListerCapabilities::builder()
 ///     .sort(OptionSupport::Unsupported)
 ///     .offset(OptionSupport::Supported)
+///     .limit(OptionSupport::Unsupported)
+///     .after(OptionSupport::Supported)
 ///     .build();
 /// assert_eq!(capabilities.sort, OptionSupport::Unsupported);
 /// assert_eq!(capabilities.offset, OptionSupport::Supported);
+/// assert_eq!(capabilities.limit, OptionSupport::Unsupported);
+/// assert_eq!(capabilities.after, OptionSupport::Supported);
 /// assert_eq!(ListerCapabilities::builder().build(), ListerCapabilities::default());
 /// assert_eq!(ListerCapabilities::default().sort, OptionSupport::Unknown);
 /// ```
@@ -66,18 +80,31 @@ pub struct ListerCapabilities {
     /// Native `--offset` support, applied after sorting and before limiting.
     #[builder(default)]
     pub offset: OptionSupport,
+
+    /// Native `--before` support for an exclusive entry-ID cursor bound.
+    #[builder(default)]
+    pub before: OptionSupport,
+
+    /// Native `--after` support for an exclusive entry-ID cursor bound.
+    #[builder(default)]
+    pub after: OptionSupport,
+
+    /// Native `--limit` support. A host can omit an unsupported native limit
+    /// while still enforcing the requested result count locally.
+    #[builder(default)]
+    pub limit: OptionSupport,
 }
 
 /// Output-format and pagination requests for a [`Lister`].
 ///
 /// `Default` leaves all optional fields unset and `other` empty: no caller
-/// limit, no skipped entries, the program's default order, and its default
-/// output format. The collection URL is supplied separately by the runner.
+/// limit, no skipped entries or cursor bounds, and the program's default order
+/// and output format. The collection URL is supplied separately by the runner.
 ///
 /// These fields express requested behavior, not program capabilities; supply
 /// known native support separately using [`ListerCapabilities`].
-/// `--limit` support is mandatory. `sort` and `offset` are optional capabilities,
-/// and the portable sort-expression grammar is still unresolved. Use only keys
+/// Sorting and all pagination options have explicit native capabilities, and
+/// the portable sort-expression grammar is still unresolved. Use only keys
 /// and syntax supported by the selected program's profile. Concrete hosts must
 /// distinguish native support from emulation; see [`crate::programs`] for links
 /// to the runner's currently implemented behavior.
@@ -88,9 +115,17 @@ pub struct ListerCapabilities {
 /// use asimov_patterns::ListerOptions;
 ///
 /// let options = ListerOptions::builder()
+///     .offset(20)
 ///     .limit(100)
 ///     .output("jsonl")
 ///     .build();
+///
+/// let cursor_page = ListerOptions::builder()
+///     .after("urn:example:entry:123")
+///     .limit(25)
+///     .build();
+/// assert_eq!(cursor_page.after.as_deref(), Some("urn:example:entry:123"));
+/// assert!(cursor_page.offset.is_none());
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, /*Ord,*/ PartialEq, /*PartialOrd,*/ Builder)]
 #[builder(derive(Debug), on(String, into))]
@@ -114,14 +149,33 @@ pub struct ListerOptions {
     ///
     /// `None` omits the option (default `0`); `Some(0)` explicitly skips none.
     /// Offset is applied after sorting and before the limit. Programs may omit
-    /// support for this option and must reject it if unsupported.
+    /// native support. Do not combine an offset, even `Some(0)`, with `before`
+    /// or `after`; these are alternative pagination modes.
     pub offset: Option<usize>,
 
-    /// Requested listing limit, passed as `--limit=COUNT` (`-n` in the CLI).
+    /// Exclusive upper cursor bound, passed as `--before=URI`.
+    ///
+    /// The URI identifies an entry by its JSON-LD `@id`; it is an absolute URI
+    /// string, not a JSON object or an opaque encoded cursor. Select entries
+    /// before that entry in the chosen sort order. May be combined with `after`
+    /// to bound an interval, but not with numeric `offset`. `None` omits the bound.
+    /// The options value stores this string without validation or normalization.
+    pub before: Option<String>,
+
+    /// Exclusive lower cursor bound, passed as `--after=URI`.
+    ///
+    /// The URI identifies an entry by its JSON-LD `@id`. Select entries after
+    /// that entry in the chosen sort order. May be combined with `before`, but
+    /// not with numeric `offset`. `None` omits the bound. As with `before`, the
+    /// options value stores the absolute URI string without validating it.
+    pub after: Option<String>,
+
+    /// Requested listing limit (`--limit=COUNT`, or `-n`, when forwarded natively).
     ///
     /// `None` imposes no caller-requested limit; `Some(0)` requests no entries.
-    /// All lister programs must accept and implement this option. Host enforcement
-    /// is additional protection against bugs in a program's implementation.
+    /// [`ListerCapabilities::limit`] describes native support. A host can enforce
+    /// the request even when the native flag is unsupported, and independently
+    /// cap output to protect against bugs in programs that do accept the flag.
     /// The program contract counts complete entries, not RDF statements, lines,
     /// or bytes; consult the [runner's listing behavior][implementation] for its
     /// additional line-based cap and zero-limit handling. This options value

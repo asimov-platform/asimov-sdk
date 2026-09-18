@@ -2,8 +2,8 @@
 
 //! SPARQL-to-RDF execution through an external dataset proxy.
 
-use crate::{Executor, ExecutorError, GraphOutput, JsonlStream, QueryInput};
-use alloc::{boxed::Box, format, vec};
+use crate::{CommandExt, Executor, ExecutorError, GraphOutput, JsonlStream, QueryInput};
+use alloc::boxed::Box;
 use async_trait::async_trait;
 use derive_more::Debug;
 use std::{ffi::OsStr, process::Stdio};
@@ -45,11 +45,7 @@ impl Adapter {
         let mut executor = Executor::new(program);
         executor
             .command()
-            .args(if let Some(ref output) = options.output {
-                vec![format!("--output={}", output)]
-            } else {
-                vec![]
-            })
+            .option("output", options.output.as_ref())
             .args(&options.other)
             .stdin(input.as_stdio())
             .stdout(output.as_stdio())

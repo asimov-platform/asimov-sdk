@@ -2,8 +2,8 @@
 
 //! Exact or approximate RDF matching through an external matcher program.
 
-use crate::{Executor, ExecutorError, GraphInput, GraphOutput, JsonlStream};
-use alloc::{boxed::Box, format, vec};
+use crate::{CommandExt, Executor, ExecutorError, GraphInput, GraphOutput, JsonlStream};
+use alloc::boxed::Box;
 use async_trait::async_trait;
 use derive_more::Debug;
 use std::{ffi::OsStr, process::Stdio};
@@ -46,16 +46,8 @@ impl Matcher {
         let mut executor = Executor::new(program);
         executor
             .command()
-            .args(if let Some(ref input) = options.input {
-                vec![format!("--input={}", input)]
-            } else {
-                vec![]
-            })
-            .args(if let Some(ref output) = options.output {
-                vec![format!("--output={}", output)]
-            } else {
-                vec![]
-            })
+            .option("input", options.input.as_ref())
+            .option("output", options.output.as_ref())
             .args(&options.other)
             .stdin(input.as_stdio())
             .stdout(output.as_stdio())

@@ -2,8 +2,8 @@
 
 //! RDF dataset export through an external writer program.
 
-use crate::{AnyOutput, Executor, ExecutorError, GraphInput};
-use alloc::{boxed::Box, format, vec, vec::Vec};
+use crate::{AnyOutput, CommandExt, Executor, ExecutorError, GraphInput};
+use alloc::{boxed::Box, vec::Vec};
 use async_trait::async_trait;
 use derive_more::Debug;
 use std::{ffi::OsStr, io::Cursor, process::Stdio};
@@ -49,16 +49,8 @@ impl Writer {
         let mut executor = Executor::new(program);
         executor
             .command()
-            .args(if let Some(ref input) = options.input {
-                vec![format!("--input={}", input)]
-            } else {
-                vec![]
-            })
-            .args(if let Some(ref output) = options.output {
-                vec![format!("--output={}", output)]
-            } else {
-                vec![]
-            })
+            .option("input", options.input.as_ref())
+            .option("output", options.output.as_ref())
             .args(&options.other)
             .stdin(input.as_stdio())
             .stdout(output.as_stdio())
