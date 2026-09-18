@@ -25,8 +25,10 @@ use clientele::options::sort::SortKeys;
 /// entries, and the limit applies last.
 ///
 /// The generic result `T` need not be a Rust iterator. The `asimov-runner`
-/// wrapper returns a cursor over the whole captured serialization without
-/// parsing entries. See [`crate::programs`] and the [lister specification][spec].
+/// wrapper returns a live, fallible stream of JSONL byte-vector lines without
+/// parsing entries. A line is not necessarily a complete logical entry. Consume
+/// the stream to completion to check process success. See [`crate::programs`]
+/// and the [lister specification][spec].
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#lister
 pub trait Lister<T, E>: Execute<T, E> {}

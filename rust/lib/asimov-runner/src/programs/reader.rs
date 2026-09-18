@@ -2,25 +2,22 @@
 
 //! RDF dataset import through an external reader program.
 
-use crate::{AnyInput, Executor, ExecutorError, GraphOutput};
-use alloc::{boxed::Box, format, vec, vec::Vec};
+use crate::{AnyInput, Executor, ExecutorError, GraphOutput, JsonlStream};
+use alloc::{boxed::Box, format, vec};
 use async_trait::async_trait;
 use derive_more::Debug;
-use std::{ffi::OsStr, io::Cursor, process::Stdio};
+use std::{ffi::OsStr, process::Stdio};
 
 pub use asimov_patterns::ReaderOptions;
 
-/// Raw graph bytes captured from a successful [`Reader`], or an execution error.
-///
-/// The cursor is positioned at zero and is empty when stdout is not captured.
-/// The graph is not parsed or validated.
-pub type ReaderResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>; // TODO
+/// A live JSONL graph stream, or an error starting the reader.
+pub type ReaderResult = Result<JsonlStream, ExecutorError>;
 
 /// An external [reader] that imports input data into an RDF dataset.
 ///
 /// This is a program-pattern wrapper, not an implementation of an I/O reader
 /// trait. Input parsing and conversion are performed by the external program.
-/// Execution uses the buffering and stream-handling behavior described in
+/// Execution uses the concurrent streaming behavior described in
 /// [`crate::programs`].
 ///
 /// [reader]: https://asimov-specs.github.io/program-patterns/#reader
@@ -71,22 +68,26 @@ impl Reader {
         }
     }
 
-    /// Sends the remaining input bytes to a new child and returns captured graph bytes.
+    /// Starts a child and returns its live JSONL graph stream.
+    ///
+    /// After successful spawning, input ownership moves into the stream, which
+    /// feeds it concurrently when polled. Subsequent executions have no source input.
     ///
     /// # Errors
     ///
-    /// Returns an [`ExecutorError`] if spawning, copying input, or waiting fails,
-    /// or if the reader exits unsuccessfully.
+    /// Spawn failures are returned directly; input, read, wait, and exit failures are
+    /// stream items. Consume the stream to completion to check process success.
     pub async fn execute(&mut self) -> ReaderResult {
-        let stdout = self.executor.execute_with_input(&mut self.input).await?;
-        Ok(stdout)
+        self.executor
+            .execute_jsonl_with_input(&mut self.input)
+            .await
     }
 }
 
-impl asimov_patterns::Reader<Cursor<Vec<u8>>, ExecutorError> for Reader {}
+impl asimov_patterns::Reader<JsonlStream, ExecutorError> for Reader {}
 
 #[async_trait]
-impl asimov_patterns::Execute<Cursor<Vec<u8>>, ExecutorError> for Reader {
+impl asimov_patterns::Execute<JsonlStream, ExecutorError> for Reader {
     async fn execute(&mut self) -> ReaderResult {
         self.execute().await
     }

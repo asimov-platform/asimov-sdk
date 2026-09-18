@@ -17,15 +17,16 @@
 //!
 //! # Input and output
 //!
-//! [`Input`] selects either an empty standard input or an asynchronous byte
-//! source. [`Output`] selects how a child's standard output is handled. Aliases
+//! [`Input`] selects empty stdin, an asynchronous byte reader, or a JSONL line
+//! stream. [`Output`] selects how a child's standard output is handled. Aliases
 //! such as [`GraphInput`] and [`TextOutput`] describe a stream's intended content;
 //! they do not parse, validate, or convert that content.
 //!
-//! Most program wrappers return captured stdout as an in-memory byte cursor
-//! after the process exits successfully. Choose [`Output::Captured`] to retrieve
-//! those bytes. Pattern-specific exceptions and current limitations are
-//! described in the `programs` module.
+//! With `std`, graph producers return a live [JSONL stream][jsonl] of byte-vector
+//! lines. Graph consumers accept `GraphInput::Jsonl` for direct composition, or
+//! adapt an asynchronous reader into lines. Other results are buffered until completion.
+//! Choose [`Output::Captured`] to retrieve stdout. Pattern-specific behavior and
+//! current limitations are described in the `programs` module.
 //! An empty capture can mean that stdout was discarded, inherited, or replaced
 //! by a program-selected output file; it does not establish an empty logical
 //! result. Captured output has no configured size limit in this API.
@@ -38,6 +39,7 @@
 //! # #[cfg(feature = "std")]
 //! # async fn example() -> Result<(), asimov_runner::ExecutorError> {
 //! use asimov_runner::{Fetcher, FetcherOptions, GraphOutput};
+//! use futures_lite::StreamExt;
 //!
 //! let mut fetcher = Fetcher::new(
 //!     "asimov-example-fetcher",
@@ -45,15 +47,21 @@
 //!     GraphOutput::Captured,
 //!     FetcherOptions::default(),
 //! );
-//! let graph_bytes = fetcher.execute().await?.into_inner();
+//! let mut graph = fetcher.execute().await?;
+//! while let Some(line) = graph.next().await {
+//!     let bytes = line?;
+//!     // Process this JSONL graph line.
+//! }
 //! # Ok(())
 //! # }
 //! ```
 //!
 //! # Features
 //!
-//! - `std` enables the executor, execution errors, and program wrappers.
-//! - `tracing` enables trace events for child-process exit statuses.
+//! - `std` enables the executor, execution errors, JSONL transport (including
+//!   `Input::Jsonl`), and program wrappers.
+//! - `tracing` enables exit-status trace events in `Executor::wait`. The
+//!   concurrent-input and JSONL execution paths currently do not emit these events.
 //! - `all` enables `tracing`; the default features enable both `all` and `std`.
 //! - `unstable` is reserved for future use and currently enables no behavior.
 //!
@@ -63,6 +71,7 @@
 //!
 //! [patterns]: https://asimov-specs.github.io/program-patterns/
 //! [traits]: https://docs.rs/asimov-patterns
+//! [jsonl]: https://docs.rs/asimov-runner/latest/asimov_runner/type.JsonlStream.html
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -89,6 +98,11 @@ pub use executor_error::*;
 
 pub mod input;
 pub use input::*;
+
+#[cfg(feature = "std")]
+pub mod jsonl;
+#[cfg(feature = "std")]
+pub use jsonl::*;
 
 pub mod output;
 pub use output::*;

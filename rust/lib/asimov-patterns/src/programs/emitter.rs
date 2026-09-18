@@ -21,8 +21,9 @@ use bon::Builder;
 /// [`EmitterOptions::output`] (`jsonl` by default).
 ///
 /// Implementations document termination conditions and how `T` exposes output.
-/// The `asimov-runner` wrapper buffers captured bytes until the child exits,
-/// so it cannot return a completed result from a continuously running emitter.
+/// The `asimov-runner` wrapper returns a live, fallible stream of JSONL byte-vector
+/// lines, allowing consumption from a continuously running emitter. A finite
+/// process's success is established only when the stream completes without error.
 /// See [`crate::programs`] for shared conventions and the
 /// [emitter specification][spec] for the external contract.
 ///

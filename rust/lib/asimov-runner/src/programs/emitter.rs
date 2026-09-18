@@ -2,25 +2,22 @@
 
 //! RDF value generation through an external emitter program with no stdin input.
 
-use crate::{Executor, ExecutorError, GraphOutput, NoInput, Output};
-use alloc::{boxed::Box, format, vec, vec::Vec};
+use crate::{Executor, ExecutorError, GraphOutput, JsonlStream, NoInput, Output};
+use alloc::{boxed::Box, format, vec};
 use async_trait::async_trait;
 use derive_more::Debug;
-use std::{ffi::OsStr, io::Cursor, process::Stdio};
+use std::{ffi::OsStr, process::Stdio};
 
 pub use asimov_patterns::EmitterOptions;
 
-/// Raw graph bytes captured from a successful [`Emitter`], or an execution error.
-///
-/// The cursor is positioned at zero and is empty when stdout is not captured.
-/// The graph is not parsed or validated.
-pub type EmitterResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>; // TODO
+/// A live JSONL graph stream, or an error starting the emitter.
+pub type EmitterResult = Result<JsonlStream, ExecutorError>;
 
 /// An external [emitter] that generates values as RDF without reading stdin.
 ///
 /// Stdin is connected to the null device. The program determines what data to
 /// emit from its arguments, environment, and other external sources. Execution
-/// uses the buffering and stream-handling behavior described in [`crate::programs`].
+/// uses the concurrent streaming behavior described in [`crate::programs`].
 ///
 /// [emitter]: https://asimov-specs.github.io/program-patterns/#emitter
 #[allow(unused)]
@@ -60,22 +57,21 @@ impl Emitter {
         }
     }
 
-    /// Runs a new emitter process and returns its captured graph bytes.
+    /// Starts a new emitter process and returns its live JSONL graph stream.
     ///
     /// # Errors
     ///
-    /// Returns an [`ExecutorError`] if spawning or waiting fails, or if the
-    /// emitter exits unsuccessfully.
+    /// Spawn failures are returned directly; read, wait, and exit failures are stream
+    /// items. Consume the stream to completion to check process success.
     pub async fn execute(&mut self) -> EmitterResult {
-        let stdout = self.executor.execute().await?;
-        Ok(stdout)
+        self.executor.execute_jsonl().await
     }
 }
 
-impl asimov_patterns::Emitter<Cursor<Vec<u8>>, ExecutorError> for Emitter {}
+impl asimov_patterns::Emitter<JsonlStream, ExecutorError> for Emitter {}
 
 #[async_trait]
-impl asimov_patterns::Execute<Cursor<Vec<u8>>, ExecutorError> for Emitter {
+impl asimov_patterns::Execute<JsonlStream, ExecutorError> for Emitter {
     async fn execute(&mut self) -> EmitterResult {
         self.execute().await
     }

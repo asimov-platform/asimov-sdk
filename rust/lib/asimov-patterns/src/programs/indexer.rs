@@ -24,7 +24,7 @@ use bon::Builder;
 /// literal path of that name. Stdout carries no payload.
 ///
 /// [`IndexerOptions::input`] selects the RDF format (`jsonl` by default). The
-/// `asimov-runner` constructor accepts stream input but no dedicated index
+/// `asimov-runner` constructor accepts JSONL line input but no dedicated index
 /// path, so supply the destination through [`IndexerOptions::other`]. See
 /// [`crate::programs`] and the [indexer specification][spec].
 ///

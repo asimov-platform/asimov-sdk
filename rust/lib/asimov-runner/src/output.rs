@@ -12,7 +12,7 @@ use tokio::io::AsyncWrite;
 
 /// An output stream with no prescribed content type.
 pub type AnyOutput = Output;
-/// An output stream intended to contain a serialized RDF graph or dataset.
+/// Stdout handling for a graph producer, whose captured output is a JSONL line stream.
 pub type GraphOutput = Output;
 /// The absence of an output value for a program pattern.
 pub type NoOutput = ();
@@ -37,7 +37,7 @@ pub enum Output {
     Ignored,
     /// Connects the stream to the corresponding standard stream of the parent.
     Inherited,
-    /// Pipes output for collection into the program's result.
+    /// Pipes output for streaming or collection into the program's result.
     Captured,
     /// Stores an asynchronous destination and requests a pipe for the child.
     ///

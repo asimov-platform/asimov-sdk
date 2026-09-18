@@ -2,20 +2,16 @@
 
 //! URL-based directory iteration through an external lister program.
 
-use crate::{Executor, ExecutorError, GraphOutput};
+use crate::{Executor, ExecutorError, GraphOutput, JsonlStream};
 use alloc::{
     boxed::Box,
     format,
     string::{String, ToString},
     vec,
-    vec::Vec,
 };
 use async_trait::async_trait;
-use core::pin::Pin;
 use derive_more::Debug;
-use futures_lite::Stream;
 use std::{ffi::OsStr, process::Stdio};
-use tokio::io::{AsyncBufReadExt, BufReader};
 
 pub use asimov_patterns::ListerOptions;
 
@@ -26,7 +22,7 @@ pub use asimov_patterns::ListerOptions;
 /// unsuccessful-exit errors are yielded as a final error item. Consume the stream
 /// to completion to check process success, even when stdout is not captured.
 /// Dropping the stream before completion requests termination of the child.
-pub type ListerStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>, ExecutorError>> + Send>>;
+pub type ListerStream = JsonlStream;
 
 /// A running listing stream, or an error starting the process.
 pub type ListerResult = Result<ListerStream, ExecutorError>;
@@ -109,53 +105,19 @@ impl Lister {
     /// Starts a new lister process and returns its live listing stream.
     ///
     /// Returns after spawning, without waiting for output or process completion.
-    /// With captured stdout, each item contains one line, including its terminator.
+    /// With captured stdout, each item contains one line, retaining its terminator
+    /// when present. A final unterminated line is also yielded.
     /// Otherwise no lines are yielded, but the stream still checks the exit status.
     /// Stderr is buffered without a size bound; stdout buffers only the current
-    /// line and a fixed-size read buffer. Use JSONL output for entry-wise streaming.
+    /// line and a fixed-size read buffer. JSONL framing does not establish how
+    /// many lines or RDF statements belong to one logical listing entry.
     ///
     /// # Errors
     ///
     /// Returns an [`ExecutorError`] if spawning fails. Subsequent I/O and exit
     /// errors are delivered through the stream, after any preceding output lines.
     pub async fn execute(&mut self) -> ListerResult {
-        let mut process = self.executor.spawn().await?;
-        let stdout = process.stdout.take();
-        Ok(Box::pin(async_stream::try_stream! {
-            // With stdout removed, this future drains stderr and waits for exit.
-            // Keeping it in the stream also preserves the child's kill-on-drop policy.
-            let completion = process.wait_with_output();
-            tokio::pin!(completion);
-            let mut output = None;
-
-            if let Some(stdout) = stdout {
-                let mut reader = BufReader::new(stdout);
-                let mut line = Vec::new();
-                loop {
-                    let count = tokio::select! {
-                        result = &mut completion, if output.is_none() => {
-                            output = Some(result);
-                            continue;
-                        },
-                        result = reader.read_until(b'\n', &mut line) => result,
-                    }?;
-                    // A cancelled read_until can leave a partial line in the
-                    // buffer when process completion wins the select above.
-                    if count == 0 && line.is_empty() {
-                        break;
-                    }
-                    yield core::mem::take(&mut line);
-                }
-            }
-
-            let output = match output {
-                Some(output) => output?,
-                None => completion.await?,
-            };
-            if !output.status.success() {
-                Err(ExecutorError::from(output))?;
-            }
-        }))
+        self.executor.execute_jsonl().await
     }
 }
 

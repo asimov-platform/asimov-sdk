@@ -117,22 +117,30 @@ impl<S: crate::storage::Storage> Snapshotter<S> {
         let fetcher_error = if let Some(program) = fetcher {
             tracing::debug!("attempting to capture a snapshot with fetcher");
             let start_timestamp = Timestamp::now();
-            match asimov_runner::Fetcher::new(
-                program,
-                &url,
-                GraphOutput::Captured,
-                Default::default(),
-            )
-            .execute()
+            let result = async {
+                let mut stream = asimov_runner::Fetcher::new(
+                    program,
+                    &url,
+                    GraphOutput::Captured,
+                    Default::default(),
+                )
+                .execute()
+                .await?;
+                let mut data = Vec::new();
+                while let Some(line) = stream.next().await {
+                    data.extend(line?);
+                }
+                Ok::<_, asimov_runner::ExecutorError>(data)
+            }
             .await
-            .inspect_err(|e| tracing::debug!("failed creating a snapshot with fetcher: {e}"))
-            {
-                Ok(result) => {
+            .inspect_err(|e| tracing::debug!("failed creating a snapshot with fetcher: {e}"));
+            match result {
+                Ok(data) => {
                     let snapshot = Snapshot {
                         url,
                         start_timestamp,
                         end_timestamp: Some(Timestamp::now()),
-                        data: result.into_inner(),
+                        data,
                     };
                     self.storage.save(&snapshot)?;
 

@@ -22,7 +22,9 @@ use bon::Builder;
 /// [`MatcherOptions`] selects serializations, both defaulting to `jsonl`.
 ///
 /// `T` represents the result in the implementation's chosen form. The
-/// `asimov-runner` wrapper returns captured bytes without interpreting matches.
+/// `asimov-runner` wrapper feeds JSONL input concurrently with returning a live,
+/// fallible stream of JSONL byte-vector lines, without interpreting matches.
+/// Consume the stream to completion to check process success.
 /// See [`crate::programs`] and the [matcher specification][spec].
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#matcher

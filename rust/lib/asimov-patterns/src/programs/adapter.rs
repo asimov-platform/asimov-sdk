@@ -22,7 +22,8 @@ use bon::Builder;
 /// result mislabeled as RDF.
 ///
 /// `T` represents the implementation's result, not necessarily a parsed graph.
-/// The `asimov-runner` adapter returns captured bytes in a cursor. See
+/// The `asimov-runner` adapter returns a live, fallible stream of JSONL byte-vector
+/// lines; consume it to completion to check process success. See
 /// [`crate::programs`] for shared option and transport conventions, and the
 /// [adapter specification][spec] for the external program's requirements.
 ///

@@ -97,6 +97,8 @@ impl Prompter {
     /// Repeated calls send the same prompt again. Prompt writing happens in a
     /// spawned task whose handle is not awaited; a write failure panics in that
     /// task rather than being returned through this method's result.
+    /// Cancelling execution drops the child handle but does not explicitly abort
+    /// the detached prompt-writing task.
     ///
     /// # Errors
     ///

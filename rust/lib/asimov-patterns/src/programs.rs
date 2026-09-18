@@ -29,6 +29,26 @@
 //! here and process wrappers in `asimov-runner`. RDF in this table denotes
 //! graphs or datasets, not individual statements, records, or buffers.
 //!
+//! # Results and streaming
+//!
+//! These traits do not prescribe buffering or a stream type. In `asimov-runner`,
+//! graph producers return `JsonlStream`, with items of type
+//! `Result<Vec<u8>, ExecutorError>`. The outer execution result reports spawning;
+//! input, read, wait, and exit failures are delivered through the stream.
+//! Receiving a line does not establish process success: consume to completion.
+//!
+//! The runner preserves output line endings and a final unterminated line.
+//! Graph consumers accept these streams directly or adapt byte readers into
+//! lines, appending an LF to input items that lack one. Input feeding and output
+//! draining run concurrently when the returned stream is polled. Graph-output
+//! runners move input ownership into that stream after spawning; repeated calls
+//! do not replay it. Dropping the stream requests child termination.
+//!
+//! `Writer` consumes JSONL but buffers its arbitrary-format output; `Indexer`
+//! consumes JSONL and returns `()`. Compiler and runtime results are buffered
+//! bytes, and prompter results are buffered UTF-8 text. See the [runner][runner]
+//! for output routing and the resolver's currently unimplemented result parsing.
+//!
 //! # Options and defaults
 //!
 //! Every options type supports `Default`, direct field access, and a
@@ -57,6 +77,8 @@
 //! format detection or selection to the program. `jsonl` needs a documented
 //! [RDF mapping profile][rdf-mapping] shared by producer and consumer. Setting
 //! a format option does not encode, decode, or convert any bytes in this crate.
+//! The runner's graph transport remains line-based regardless of format options;
+//! use `jsonl` for graph input/output. Neither crate validates JSON or RDF profiles.
 //!
 //! # Additional arguments and files
 //!

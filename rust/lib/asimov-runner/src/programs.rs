@@ -63,24 +63,45 @@
 //!
 //! # Execution and results
 //!
-//! All wrappers capture stderr for [`ExecutorError`](crate::ExecutorError)
-//! diagnostics on unsuccessful exits. Most return an in-memory cursor over raw
-//! stdout bytes, positioned at zero. [`Output::Captured`](crate::Output::Captured)
-//! retrieves those bytes; ignored or inherited stdout yields an empty cursor.
-//! Those results are buffered in full. [`Lister`] instead returns a live stream
-//! of byte-vector lines, retaining line terminators and reporting exit failures
-//! at the end of the stream. [`Indexer`] discards stdout and returns `()` on success.
-//! Captures have no configured size bound. For a continuous emitter, a completed
-//! result is unavailable until the program terminates. Successful stderr is
-//! discarded, and invalid UTF-8 diagnostics are omitted from process-failure
-//! errors; stdout from failed processes is not retained in those errors.
+//! Graph producers ([`Adapter`], [`Emitter`], [`Fetcher`], [`Lister`], [`Matcher`],
+//! [`Reader`], and [`Reasoner`]) return a live [`JsonlStream`](crate::JsonlStream).
+//! Execution returns after spawning; polling yields byte-vector lines, preserving
+//! LF/CRLF terminators and an unterminated final line. Spawn errors are returned
+//! directly; input, read, and exit errors are stream items. Consume the stream to
+//! completion to check process success. Ignored or inherited stdout yields no
+//! lines but still checks the exit status when polled to completion.
 //!
-//! Stream-input wrappers consume the reader from its current position to EOF
-//! before collecting output. Repeated execution does not rewind input. See
-//! [`Executor::execute_with_input`](crate::Executor::execute_with_input) for the
-//! implications when a child needs concurrent input and output.
+//! Graph consumers ([`Matcher`], [`Reasoner`], [`Indexer`], and [`Writer`]) accept
+//! [`GraphInput::Jsonl`](crate::GraphInput::Jsonl) for direct stream composition.
+//! Byte readers are adapted into lines. Each input item is written with an LF
+//! appended if missing, preserving existing LF/CRLF endings. Blank lines are
+//! preserved; JSON, UTF-8, and RDF are not validated. Use `jsonl` (the pattern
+//! default) for graph format options; selecting another format does not change
+//! the line-based transport.
+//!
+//! Input feeding, stdout reading, and stderr draining run concurrently with
+//! backpressure. Graph-output execution transfers input ownership into the
+//! returned stream after successful spawning; subsequent executions have no
+//! input. Other stream-input wrappers consume input from its current position;
+//! the prompter resends its stored prompt. None rewind stream input.
+//! Once early child completion is observed, any pending feed is cancelled.
+//! Process success does not establish that all input or upstream errors were
+//! consumed. See [`Executor::execute_with_input`](crate::Executor::execute_with_input).
+//!
+//! [`Writer`] retains arbitrary-format, buffered output; [`Compiler`] and
+//! [`Runner`] also return in-memory cursors. [`Indexer`] discards stdout and
+//! returns `()` on success. [`Output::Captured`](crate::Output::Captured) retrieves
+//! stdout; ignored or inherited stdout produces an empty cursor or stream.
+//! All wrappers capture stderr without a size bound for
+//! [`ExecutorError`](crate::ExecutorError) diagnostics on unsuccessful exits.
+//! Successful stderr is discarded; invalid UTF-8 diagnostics are omitted.
 //! Dropping an in-progress execution future drops its owned child handle and,
 //! under the executor's default kill-on-drop policy, requests termination.
+//! The same applies to dropping a returned graph stream, including its upstream
+//! input streams when programs are connected together.
+//! Cancelling buffered execution retains its input in the wrapper; drop that
+//! wrapper to also release any owned upstream streams. Termination applies to
+//! each owned child, without guaranteeing termination of descendant processes.
 //! Cancellation does not report success or roll back external side effects.
 //! [`Pipeline`](crate::Pipeline) is a placeholder and supplies no stage execution
 //! or completion tracking.
@@ -91,11 +112,10 @@
 //!   but wrappers do not forward bytes to the supplied writer.
 //! - [`Prompter`] always captures stdout and decodes it as UTF-8, regardless of
 //!   its output argument. Its separate prompt-writing task is not awaited, so
-//!   write failures are not propagated through the execution result.
+//!   write failures are not propagated through the execution result and cancelling
+//!   execution does not explicitly abort that task.
 //! - [`Resolver`] checks process success but currently returns an empty list
 //!   instead of parsing stdout.
-//! - Stream-input execution copies input before draining output pipes; a child
-//!   producing enough output before consuming input can deadlock.
 //!
 //! These gaps matter when assessing the specification's host requirements;
 //! implementing the role traits is not itself a conformance guarantee.

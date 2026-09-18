@@ -2,25 +2,22 @@
 
 //! RDF dataset entailment through an external reasoner program.
 
-use crate::{Executor, ExecutorError, GraphInput, GraphOutput};
-use alloc::{boxed::Box, format, vec, vec::Vec};
+use crate::{Executor, ExecutorError, GraphInput, GraphOutput, JsonlStream};
+use alloc::{boxed::Box, format, vec};
 use async_trait::async_trait;
 use derive_more::Debug;
-use std::{ffi::OsStr, io::Cursor, process::Stdio};
+use std::{ffi::OsStr, process::Stdio};
 
 pub use asimov_patterns::ReasonerOptions;
 
-/// Raw graph bytes captured from a successful [`Reasoner`], or an execution error.
-///
-/// The cursor is positioned at zero and is empty when stdout is not captured.
-/// Inferred data is not parsed or validated.
-pub type ReasonerResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>; // TODO
+/// A live JSONL graph stream, or an error starting the reasoner.
+pub type ReasonerResult = Result<JsonlStream, ExecutorError>;
 
 /// An external [reasoner] that consumes an RDF dataset and emits entailed RDF.
 ///
 /// Inference rules and the relationship between input and output graphs are
-/// determined by the external program. This wrapper transports bytes using the
-/// buffering and stream-handling behavior described in [`crate::programs`].
+/// determined by the external program. This wrapper transports JSONL lines using
+/// the concurrent streaming behavior described in [`crate::programs`].
 ///
 /// [reasoner]: https://asimov-specs.github.io/program-patterns/#reasoner
 #[allow(unused)]
@@ -38,6 +35,7 @@ impl Reasoner {
     /// Adds any configured `--input=<format>` and `--output=<format>` arguments,
     /// followed by `options.other`. The input and output values select stdin
     /// and stdout; stderr is captured for failure diagnostics.
+    /// Byte input is lazily adapted into JSONL lines using [`GraphInput::into_jsonl`].
     pub fn new(
         program: impl AsRef<OsStr>,
         input: GraphInput,
@@ -65,27 +63,31 @@ impl Reasoner {
         Self {
             executor,
             options,
-            input,
+            input: input.into_jsonl(),
             output,
         }
     }
 
-    /// Sends the remaining graph input to a new child and returns captured inference bytes.
+    /// Starts a child and returns its live JSONL inference stream.
+    ///
+    /// After successful spawning, input ownership moves into the stream, which
+    /// feeds it concurrently when polled. Subsequent executions have no graph input.
     ///
     /// # Errors
     ///
-    /// Returns an [`ExecutorError`] if spawning, copying input, or waiting fails,
-    /// or if the reasoner exits unsuccessfully.
+    /// Spawn failures are returned directly; input, read, wait, and exit failures are
+    /// stream items. Consume the stream to completion to check process success.
     pub async fn execute(&mut self) -> ReasonerResult {
-        let stdout = self.executor.execute_with_input(&mut self.input).await?;
-        Ok(stdout)
+        self.executor
+            .execute_jsonl_with_input(&mut self.input)
+            .await
     }
 }
 
-impl asimov_patterns::Reasoner<Cursor<Vec<u8>>, ExecutorError> for Reasoner {}
+impl asimov_patterns::Reasoner<JsonlStream, ExecutorError> for Reasoner {}
 
 #[async_trait]
-impl asimov_patterns::Execute<Cursor<Vec<u8>>, ExecutorError> for Reasoner {
+impl asimov_patterns::Execute<JsonlStream, ExecutorError> for Reasoner {
     async fn execute(&mut self) -> ReasonerResult {
         self.execute().await
     }

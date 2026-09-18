@@ -41,6 +41,7 @@ pub type CompilerResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>;
 ///     QueryInput, QueryOutput, TextInput,
 /// };
 /// use std::io::Cursor;
+/// use futures_lite::StreamExt;
 ///
 /// # async fn example() -> Result<(), asimov_runner::ExecutorError> {
 /// let mut compiler = Compiler::new(
@@ -57,7 +58,11 @@ pub type CompilerResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>;
 ///     GraphOutput::Captured,
 ///     AdapterOptions::default(),
 /// );
-/// let graph_bytes = adapter.execute().await?.into_inner();
+/// let mut graph = adapter.execute().await?;
+/// while let Some(line) = graph.next().await {
+///     let bytes = line?;
+///     // Process this JSONL graph line.
+/// }
 /// # Ok(())
 /// # }
 /// ```
@@ -180,6 +185,7 @@ mod tests {
     #[tokio::test]
     async fn test_compile_and_pass_query_to_adapter() {
         use crate::{Adapter, AdapterOptions, GraphOutput, QueryInput};
+        use futures_lite::StreamExt;
 
         async fn compile(
             compiler: &mut impl asimov_patterns::Compiler<Cursor<Vec<u8>>, ExecutorError>,
@@ -217,7 +223,12 @@ mod tests {
             GraphOutput::Captured,
             AdapterOptions::default(),
         );
-        assert_eq!(adapter.execute().await.unwrap().into_inner(), expected);
+        let mut stream = adapter.execute().await.unwrap();
+        let mut output = Vec::new();
+        while let Some(line) = stream.next().await {
+            output.extend(line.unwrap());
+        }
+        assert_eq!(output, expected);
     }
 
     #[cfg(unix)]

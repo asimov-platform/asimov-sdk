@@ -5,7 +5,10 @@
 //! [`Executor`] configures a command without starting it. Call
 //! [`Executor::execute`] for a complete spawn-and-wait cycle, or use
 //! [`Executor::spawn`] and [`Executor::wait`] to interact with the child between
-//! those steps. Captured output is buffered in memory until the child exits.
+//! those steps. `execute` and `wait` buffer captured output until the child exits;
+//! `spawn` returns the live child handle without collecting its output.
+//! [`Executor::execute_jsonl`] and [`Executor::execute_jsonl_with_input`] instead
+//! return live line streams with concurrent input/output handling.
 
 use crate::{Command, ExecutorError, ExecutorResult, Input};
 use alloc::borrow::ToOwned;
@@ -26,8 +29,9 @@ use tokio::process::Child;
 ///
 /// Each execution spawns a new process using the stored command configuration.
 /// Stdout is returned only when configured as a pipe; otherwise the successful
-/// result is an empty cursor. Captured stderr is included in process-failure
-/// errors when it is valid UTF-8 and is discarded on success.
+/// result is an empty cursor or stream. Captured stderr is included in process
+/// exit errors when it is valid UTF-8 and is discarded on success. An input or
+/// I/O error may be reported before an exit error, without captured diagnostics.
 ///
 /// # Example
 ///
@@ -98,12 +102,12 @@ impl Executor {
         self.0.stderr(Stdio::null());
     }
 
-    /// Pipes stdout so that [`wait`](Self::wait) can return its bytes.
+    /// Pipes stdout for buffered execution or live JSONL streaming.
     pub fn capture_stdout(&mut self) {
         self.0.stdout(Stdio::piped());
     }
 
-    /// Pipes stderr so that [`wait`](Self::wait) can attach it to failure errors.
+    /// Pipes stderr so execution can attach its UTF-8 contents to exit errors.
     pub fn capture_stderr(&mut self) {
         self.0.stderr(Stdio::piped());
     }
@@ -128,39 +132,36 @@ impl Executor {
     /// Configure stdin with `input.as_stdio()` through [`command`](Self::command)
     /// before calling this method. [`Input::Ignored`] performs no copy and does
     /// not change the command's stdin configuration. An asynchronous reader is
-    /// consumed from its current position to EOF, then the stdin pipe is closed.
-    /// Reusing the input does not rewind it.
+    /// normally consumed from its current position to EOF, then the stdin pipe
+    /// is closed. Reusing the input does not rewind it or restore partly written
+    /// bytes after early exit or cancellation.
     ///
-    /// Input is copied before stdout and stderr are drained. A child that fills
-    /// either output pipe before consuming its input can therefore deadlock.
-    /// Use separate input/output tasks with [`spawn`](Self::spawn) when the
-    /// protocol requires concurrent reads and writes.
+    /// Input is fed concurrently with draining stdout and stderr. JSONL input
+    /// is written one line at a time with backpressure and source error propagation.
+    /// Once process completion and output collection are observed, any pending
+    /// input feed is cancelled. A successful result does not prove the entire
+    /// input was consumed; unread source errors may not have been observed.
     ///
     /// # Errors
     ///
     /// Returns an error if spawning, copying input, or waiting fails, or if the
-    /// child exits unsuccessfully.
-    ///
-    /// # Panics
-    ///
-    /// Panics for [`Input::AsyncRead`] if the command's stdin is not piped.
+    /// child exits unsuccessfully. Non-ignored input requires piped stdin;
+    /// otherwise feeding it returns an I/O `InvalidInput` error.
     pub async fn execute_with_input(&mut self, input: &mut Input) -> ExecutorResult {
-        let mut process = self.spawn().await?;
-        match input {
-            Input::Ignored => {},
-            Input::AsyncRead(reader) => {
-                let mut stdin = process.stdin.take().expect("should capture stdin");
-                tokio::io::copy(&mut *reader, &mut stdin).await?;
-            },
+        let process = self.spawn().await?;
+        let output = communicate(process, input).await?;
+        if !output.status.success() {
+            return Err(output.into());
         }
-        self.wait(process).await
+        Ok(Cursor::new(output.stdout))
     }
 
     /// Starts a new child process using the current command configuration.
     ///
     /// The returned handle provides access to any piped standard streams. Unless
     /// overridden through [`command`](Self::command), dropping that handle before
-    /// completion kills the child.
+    /// completion requests termination of that child, without waiting for it to
+    /// be reaped or guaranteeing termination of its descendants.
     ///
     /// # Errors
     ///
@@ -200,6 +201,24 @@ impl Executor {
         }
 
         Ok(Cursor::new(output.stdout))
+    }
+}
+
+/// Feeds stdin while draining the remaining pipes. When exit and pipe collection
+/// complete before the input feed, cancel that feed rather than await its source.
+pub(crate) async fn communicate(
+    mut process: Child,
+    input: &mut Input,
+) -> Result<std::process::Output, ExecutorError> {
+    let feed = input.write_to(process.stdin.take());
+    let completion = process.wait_with_output();
+    tokio::pin!(feed, completion);
+    tokio::select! {
+        result = &mut completion => Ok(result?),
+        result = &mut feed => {
+            result?;
+            Ok(completion.await?)
+        },
     }
 }
 

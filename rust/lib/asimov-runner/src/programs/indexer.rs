@@ -17,7 +17,7 @@ pub type IndexerResult = std::result::Result<(), ExecutorError>;
 
 /// An external [indexer] that consumes RDF to maintain a persistent index.
 ///
-/// RDF bytes are copied to stdin without parsing or validation. Index storage
+/// JSONL lines are fed to stdin without parsing or validation. Index storage
 /// and update semantics are the external program's responsibility. Stdout is
 /// discarded, and a successful process exit produces `()`. Input handling
 /// follows the behavior described in [`crate::programs`].
@@ -38,6 +38,7 @@ impl Indexer {
     /// Adds `--input=<format>` when `options.input` is set, followed by
     /// `options.other`. `input` selects stdin handling; stdout is discarded and
     /// stderr is captured for failure diagnostics.
+    /// Byte input is lazily adapted into JSONL lines using [`GraphInput::into_jsonl`].
     ///
     /// The specification requires an `INDEX-FILE` positional argument. This
     /// constructor has no dedicated index-path parameter; include that argument
@@ -66,12 +67,15 @@ impl Indexer {
         Self {
             executor,
             options,
-            input,
+            input: input.into_jsonl(),
             output: (),
         }
     }
 
     /// Sends the remaining graph input to a new child and waits for indexing to finish.
+    ///
+    /// Input is fed concurrently with draining stderr. Early child completion can
+    /// cancel the remaining input feed; see [`Executor::execute_with_input`].
     ///
     /// # Errors
     ///

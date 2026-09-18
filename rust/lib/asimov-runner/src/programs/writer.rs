@@ -19,7 +19,7 @@ pub type WriterResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>; // 
 /// An external [writer] that exports an RDF dataset to another representation.
 ///
 /// This is a program-pattern wrapper, not an implementation of an I/O writer
-/// trait. The external program interprets graph bytes and performs serialization.
+/// trait. The external program interprets JSONL graph lines and performs serialization.
 /// Execution uses the buffering and stream-handling behavior described in
 /// [`crate::programs`].
 ///
@@ -39,6 +39,7 @@ impl Writer {
     /// Adds any configured `--input=<format>` and `--output=<format>` arguments,
     /// followed by `options.other`. The input and output values select stdin
     /// and stdout; stderr is captured for failure diagnostics.
+    /// Byte input is lazily adapted into JSONL lines using [`GraphInput::into_jsonl`].
     pub fn new(
         program: impl AsRef<OsStr>,
         input: GraphInput,
@@ -66,12 +67,16 @@ impl Writer {
         Self {
             executor,
             options,
-            input,
+            input: input.into_jsonl(),
             output,
         }
     }
 
     /// Sends the remaining graph input to a new child and returns captured serialized bytes.
+    ///
+    /// Input is fed concurrently with draining stdout and stderr. Output is
+    /// buffered until completion. Early child completion can cancel the remaining
+    /// input feed; see [`Executor::execute_with_input`].
     ///
     /// # Errors
     ///

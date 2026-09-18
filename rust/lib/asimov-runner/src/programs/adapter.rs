@@ -2,25 +2,22 @@
 
 //! SPARQL-to-RDF execution through an external dataset proxy.
 
-use crate::{Executor, ExecutorError, GraphOutput, QueryInput};
-use alloc::{boxed::Box, format, vec, vec::Vec};
+use crate::{Executor, ExecutorError, GraphOutput, JsonlStream, QueryInput};
+use alloc::{boxed::Box, format, vec};
 use async_trait::async_trait;
 use derive_more::Debug;
-use std::{ffi::OsStr, io::Cursor, process::Stdio};
+use std::{ffi::OsStr, process::Stdio};
 
 pub use asimov_patterns::AdapterOptions;
 
-/// Raw graph bytes captured from a successful [`Adapter`], or an execution error.
-///
-/// The cursor is positioned at zero and is empty when stdout is not captured.
-/// The graph is not parsed or validated.
-pub type AdapterResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>; // TODO
+/// A live JSONL graph stream, or an error starting the adapter.
+pub type AdapterResult = Result<JsonlStream, ExecutorError>;
 
 /// An external [adapter] that proxies an RDF dataset using SPARQL queries.
 ///
 /// The SPARQL query is passed to stdin as bytes, relying on the pattern's default
 /// query-file argument of `-`. The external program evaluates the query and
-/// emits RDF in the requested output format. Execution uses the buffering and
+/// emits RDF as JSONL lines. Execution uses the concurrent streaming and
 /// stream-handling behavior described in [`crate::programs`].
 ///
 /// [adapter]: https://asimov-specs.github.io/program-patterns/#adapter
@@ -66,22 +63,26 @@ impl Adapter {
         }
     }
 
-    /// Sends the remaining query input to a new child and returns captured graph bytes.
+    /// Starts a child and returns its live JSONL graph stream.
+    ///
+    /// After successful spawning, input ownership moves into the stream, which
+    /// feeds it concurrently when polled. Subsequent executions have no query input.
     ///
     /// # Errors
     ///
-    /// Returns an [`ExecutorError`] if spawning, copying input, or waiting fails,
-    /// or if the adapter exits unsuccessfully.
+    /// Spawn failures are returned directly; input, read, wait, and exit failures are
+    /// stream items. Consume the stream to completion to check process success.
     pub async fn execute(&mut self) -> AdapterResult {
-        let stdout = self.executor.execute_with_input(&mut self.input).await?;
-        Ok(stdout)
+        self.executor
+            .execute_jsonl_with_input(&mut self.input)
+            .await
     }
 }
 
-impl asimov_patterns::Adapter<Cursor<Vec<u8>>, ExecutorError> for Adapter {}
+impl asimov_patterns::Adapter<JsonlStream, ExecutorError> for Adapter {}
 
 #[async_trait]
-impl asimov_patterns::Execute<Cursor<Vec<u8>>, ExecutorError> for Adapter {
+impl asimov_patterns::Execute<JsonlStream, ExecutorError> for Adapter {
     async fn execute(&mut self) -> AdapterResult {
         self.execute().await
     }

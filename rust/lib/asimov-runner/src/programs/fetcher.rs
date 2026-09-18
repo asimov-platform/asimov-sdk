@@ -2,31 +2,27 @@
 
 //! URL protocol access through an external fetcher that produces RDF.
 
-use crate::{Executor, ExecutorError, GraphOutput};
+use crate::{Executor, ExecutorError, GraphOutput, JsonlStream};
 use alloc::{
     boxed::Box,
     format,
     string::{String, ToString},
     vec,
-    vec::Vec,
 };
 use async_trait::async_trait;
 use derive_more::Debug;
-use std::{ffi::OsStr, io::Cursor, process::Stdio};
+use std::{ffi::OsStr, process::Stdio};
 
 pub use asimov_patterns::FetcherOptions;
 
-/// Raw graph bytes captured from a successful [`Fetcher`], or an execution error.
-///
-/// The cursor is positioned at zero and is empty when stdout is not captured.
-/// The graph is not parsed or validated.
-pub type FetcherResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>; // TODO
+/// A live JSONL graph stream, or an error starting the fetcher.
+pub type FetcherResult = Result<JsonlStream, ExecutorError>;
 
 /// An external [fetcher] that acts as a URL protocol client and produces RDF.
 ///
 /// The input URL is passed as one command-line argument, and stdin is connected
 /// to the null device. The external program handles the URL's protocol and
-/// performs retrieval. Execution uses the buffering and stream-handling
+/// performs retrieval. Execution uses the concurrent streaming
 /// behavior described in [`crate::programs`].
 ///
 /// [fetcher]: https://asimov-specs.github.io/program-patterns/#fetcher
@@ -75,41 +71,40 @@ impl Fetcher {
         }
     }
 
-    /// Runs a new fetcher process for the stored URL and returns captured RDF bytes.
+    /// Starts a new fetcher process and returns its live JSONL graph stream.
     ///
     /// # Errors
     ///
-    /// Returns an [`ExecutorError`] if spawning or waiting fails, or if the
-    /// fetcher exits unsuccessfully.
+    /// Spawn failures are returned directly; read, wait, and exit failures are stream
+    /// items. Consume the stream to completion to check process success.
     pub async fn execute(&mut self) -> FetcherResult {
-        let stdout = self.executor.execute().await?;
-        Ok(stdout)
+        self.executor.execute_jsonl().await
     }
 }
 
-impl asimov_patterns::Fetcher<Cursor<Vec<u8>>, ExecutorError> for Fetcher {}
+impl asimov_patterns::Fetcher<JsonlStream, ExecutorError> for Fetcher {}
 
 #[async_trait]
-impl asimov_patterns::Execute<Cursor<Vec<u8>>, ExecutorError> for Fetcher {
+impl asimov_patterns::Execute<JsonlStream, ExecutorError> for Fetcher {
     async fn execute(&mut self) -> FetcherResult {
         self.execute().await
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    //use asimov_patterns::Execute;
+    use futures_lite::StreamExt;
 
     #[tokio::test]
     async fn test_execute() {
         let mut fetcher = Fetcher::new(
-            "curl",
-            "https://www.google.com/robots.txt",
+            "/bin/sh",
+            "printf '{}\\n'",
             GraphOutput::Ignored,
-            FetcherOptions::default(),
+            FetcherOptions::builder().other("-c").build(),
         );
-        let result = fetcher.execute().await;
-        assert!(result.is_ok());
+        let mut stream = fetcher.execute().await.unwrap();
+        assert!(stream.next().await.is_none());
     }
 }

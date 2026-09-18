@@ -24,7 +24,8 @@ use bon::Builder;
 /// has no filename from which to infer a format.
 ///
 /// `T` is the implementation's exported-result representation. The
-/// `asimov-runner` wrapper returns captured bytes without decoding them or
+/// `asimov-runner` wrapper consumes JSONL lines and returns a cursor over the
+/// complete captured output after successful execution, without decoding it or
 /// checking preservation of RDF information. See [`crate::programs`] and the
 /// [writer specification][spec].
 ///

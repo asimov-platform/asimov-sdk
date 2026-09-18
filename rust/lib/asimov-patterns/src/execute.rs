@@ -10,13 +10,15 @@ use alloc::boxed::Box;
 use async_trait::async_trait;
 use core::result::Result;
 
-/// An asynchronously executable operation returning `T` on success or `E` on failure.
+/// An asynchronously executable operation yielding a result value `T` or an error `E`.
 ///
 /// Inputs and configuration are supplied by the implementation, typically at
 /// construction time. The mutable receiver permits execution to advance input
 /// streams or update internal state; it does not promise that another call will
 /// replay the same input. Implementations should document reuse, buffering,
 /// cancellation, and the meaning of successful completion.
+/// If `T` is a live stream, `Ok(T)` can mean successful startup rather than
+/// completed execution; subsequent failures must be exposed by that result.
 ///
 /// This trait uses [`#[async_trait]`](macro@async_trait) with `Send` futures.
 /// Implementors use the same attribute on their `impl`; each call returns a
@@ -58,7 +60,7 @@ pub trait Execute<T, E> {
     /// # Errors
     ///
     /// Returns the implementation-defined error `E`. Implementations document
-    /// which failures it represents, including launch, transport, program, and
-    /// decoding failures where applicable.
+    /// which failures are returned directly and which are delivered through `T`,
+    /// including launch, transport, program, and decoding failures where applicable.
     async fn execute(&mut self) -> Result<T, E>;
 }

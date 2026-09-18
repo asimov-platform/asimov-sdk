@@ -44,9 +44,12 @@
 //!
 //! Pattern traits describe semantics without fixing a Rust representation for
 //! the result. Their type parameter `T` can represent serialized bytes, parsed
-//! data, or another documented result representation; it is not the number of
-//! RDF statements or logical results. [`Indexer`] fixes its result to `()`
+//! data, a fallible stream, or another documented result representation; it is
+//! not the number of RDF statements or logical results. [`Indexer`] fixes its result to `()`
 //! because indexing has no payload output.
+//! In `asimov-runner`, graph producers return live JSONL line streams: an `Ok`
+//! execution result means the child was spawned, and eventual failures are stream
+//! items. See [`programs`] for the distinction between streaming and buffered results.
 //!
 //! The options do not parse, validate, or transcode RDF. The spec's default
 //! `jsonl` token requires a shared [RDF mapping profile][rdf-mapping]; it does

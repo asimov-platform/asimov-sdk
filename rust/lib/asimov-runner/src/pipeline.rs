@@ -7,7 +7,9 @@
 /// A zero-sized placeholder for a future program pipeline.
 ///
 /// This type can be constructed and cloned, but it does not yet store programs
-/// or implement execution. Programs must currently be run individually.
+/// or implement execution. With `std`, graph runners can be composed directly
+/// by passing a producer's `JsonlStream` as a consumer's `GraphInput::Jsonl`;
+/// this placeholder does not coordinate those executions.
 #[derive(Clone, Debug)]
 pub struct Pipeline;
 
