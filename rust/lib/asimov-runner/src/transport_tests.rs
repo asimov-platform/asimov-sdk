@@ -86,6 +86,63 @@ fn shell(script: &str, input: &Input, output: &Output) -> Executor {
 }
 
 #[tokio::test]
+async fn lister_caps_forwarded_output_and_flushes() {
+    let (output, state) = destination();
+    let mut stream = Lister::new(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/lister-ignores-limit.sh"
+        ),
+        "printf '{}\\r\\n[]\\n{\"extra\":true}\\n'; exec sleep 30",
+        output,
+        ListerOptions::builder().limit(2).other("-c").build(),
+    )
+    .execute()
+    .await
+    .unwrap();
+    assert!(
+        timeout(Duration::from_secs(5), stream.next())
+            .await
+            .expect("forwarding must finish at the line cap")
+            .is_none()
+    );
+    let written = state.lock().unwrap();
+    assert_eq!(written.bytes, b"{}\r\n[]\n");
+    assert!(written.flushes >= 1);
+    assert_eq!(written.shutdowns, 0);
+}
+
+#[tokio::test]
+async fn capped_lister_propagates_writer_failures() {
+    for (fail_write, fail_flush) in [(true, false), (false, true)] {
+        let output = Output::AsyncWrite(Box::new(Writer {
+            state: Arc::default(),
+            fail_write,
+            fail_flush,
+        }));
+        let mut stream = Lister::new(
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/lister-ignores-limit.sh"
+            ),
+            "printf '{}\\n'; exec sleep 30",
+            output,
+            ListerOptions::builder().limit(1).other("-c").build(),
+        )
+        .execute()
+        .await
+        .unwrap();
+        let result = timeout(Duration::from_secs(5), stream.next())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(result, Err(ExecutorError::UnexpectedOther(error))
+            if error.to_string().contains(if fail_write { "write failed" } else { "flush failed" })));
+        assert!(stream.next().await.is_none());
+    }
+}
+
+#[tokio::test]
 async fn buffered_forwarding_is_incremental_and_writer_is_reusable() {
     let (mut output, state) = destination();
     let mut input = Input::Ignored;

@@ -2,7 +2,7 @@
 
 //! Collection enumeration: the lister marker trait, formats, and pagination.
 
-use crate::Execute;
+use crate::{Execute, OptionSupport};
 use alloc::{string::String, vec::Vec};
 use bon::Builder;
 use clientele::options::sort::SortKeys;
@@ -20,9 +20,12 @@ use clientele::options::sort::SortKeys;
 ///
 /// One absolute collection URL is required as a single argument. There is no
 /// stdin payload; stdout contains RDF (`jsonl` by default). [`ListerOptions`]
-/// controls output serialization and result counts. Sorting and offset are
-/// optional program capabilities: when supported, sorting precedes skipping
-/// entries, and the limit applies last.
+/// controls output serialization and result counts. Every lister program must
+/// accept and implement `--limit`: bounding its output is straightforward, and
+/// independent host enforcement is a safeguard against program bugs, not a
+/// replacement for supporting the option. Sorting and offset are optional
+/// program capabilities because they can be more complex and can be emulated by
+/// a host. Sorting precedes skipping entries, and the limit applies last.
 ///
 /// The generic result `T` need not be a Rust iterator. A serialized line is not
 /// necessarily a complete logical entry. See [`crate::programs`] for links to
@@ -31,16 +34,53 @@ use clientele::options::sort::SortKeys;
 /// [spec]: https://asimov-specs.github.io/program-patterns/#lister
 pub trait Lister<T>: Execute<T> {}
 
+/// Declared native support for a lister program's optional operations.
+///
+/// Supply this separately from [`ListerOptions`]: requests and native support
+/// are independent. `Default` and an empty builder leave both capabilities
+/// [`Unknown`](OptionSupport::Unknown). Mandatory `--limit` and `--output`
+/// support is not configurable here. A host may obtain these declarations from
+/// module metadata or other knowledge of the program; this crate performs no
+/// discovery. Concrete forwarding and fallback policies belong to the executor.
+///
+/// ```
+/// use asimov_patterns::{ListerCapabilities, OptionSupport};
+///
+/// let capabilities = ListerCapabilities::builder()
+///     .sort(OptionSupport::Unsupported)
+///     .offset(OptionSupport::Supported)
+///     .build();
+/// assert_eq!(capabilities.sort, OptionSupport::Unsupported);
+/// assert_eq!(capabilities.offset, OptionSupport::Supported);
+/// assert_eq!(ListerCapabilities::builder().build(), ListerCapabilities::default());
+/// assert_eq!(ListerCapabilities::default().sort, OptionSupport::Unknown);
+/// ```
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
+#[builder(derive(Debug))]
+pub struct ListerCapabilities {
+    /// Native `--sort` support. Supported sort keys and RDF mapping profiles
+    /// still depend on the program; this flag does not define a sorting grammar.
+    #[builder(default)]
+    pub sort: OptionSupport,
+
+    /// Native `--offset` support, applied after sorting and before limiting.
+    #[builder(default)]
+    pub offset: OptionSupport,
+}
+
 /// Output-format and pagination requests for a [`Lister`].
 ///
 /// `Default` leaves all optional fields unset and `other` empty: no caller
 /// limit, no skipped entries, the program's default order, and its default
 /// output format. The collection URL is supplied separately by the runner.
 ///
-/// The presence of a field does not establish program support. In particular,
-/// `sort` and `offset` are optional capabilities in the spec, and the portable
-/// sort-expression grammar is still unresolved. Use only keys and syntax
-/// supported by the selected program's profile.
+/// These fields express requested behavior, not program capabilities; supply
+/// known native support separately using [`ListerCapabilities`].
+/// `--limit` support is mandatory. `sort` and `offset` are optional capabilities,
+/// and the portable sort-expression grammar is still unresolved. Use only keys
+/// and syntax supported by the selected program's profile. Concrete hosts must
+/// distinguish native support from emulation; see [`crate::programs`] for links
+/// to the runner's currently implemented behavior.
 ///
 /// # Examples
 ///
@@ -77,13 +117,17 @@ pub struct ListerOptions {
     /// support for this option and must reject it if unsupported.
     pub offset: Option<usize>,
 
-    /// Maximum number of listed entries, passed as `--limit=COUNT` (`-n` in the CLI).
+    /// Requested listing limit, passed as `--limit=COUNT` (`-n` in the CLI).
     ///
     /// `None` imposes no caller-requested limit; `Some(0)` requests no entries.
-    /// This counts complete entries, not RDF statements, serialized lines, or
-    /// bytes. The program may still validate the resource for a zero limit.
-    /// Counts are forwarded as decimal integers without checking the program's
-    /// supported numeric range.
+    /// All lister programs must accept and implement this option. Host enforcement
+    /// is additional protection against bugs in a program's implementation.
+    /// The program contract counts complete entries, not RDF statements, lines,
+    /// or bytes; consult the [runner's listing behavior][implementation] for its
+    /// additional line-based cap and zero-limit handling. This options value
+    /// does not validate entry boundaries.
+    ///
+    /// [implementation]: https://docs.rs/asimov-runner/latest/asimov_runner/struct.Lister.html
     pub limit: Option<usize>,
 
     /// RDF serialization passed as `--output=FORMAT` (`-o` in the CLI).

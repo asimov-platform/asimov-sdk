@@ -37,7 +37,7 @@ async-trait.workspace = true
 clientele.workspace = true
 derive_more = { workspace = true, features = ["debug"] }
 futures-lite.workspace = true
-tokio = { workspace = true, features = ["io-util", "macros", "process", "rt"] }
+tokio = { workspace = true, features = ["io-std", "io-util", "macros", "process", "rt"] }
 url.workspace = true
 
 # Optional dependencies:

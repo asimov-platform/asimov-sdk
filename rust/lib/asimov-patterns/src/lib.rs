@@ -14,6 +14,10 @@
 //!   with an implementation-specific associated [`Error`](Execute::Error) type.
 //! - [`programs`] contains role-specific marker traits and owned option values
 //!   such as [`ReaderOptions`], with builders for configuring invocations.
+//! Optional native support is described separately by capability metadata such
+//! as [`ListerCapabilities`], using [`OptionSupport`] to distinguish unknown
+//! support from an explicit declaration. Callers supply this metadata; this
+//! crate does not discover capabilities or read module manifests.
 //!
 //! Executable lookup, process management, stream transport, and result decoding
 //! belong to implementations. The companion [`asimov-runner`][runner] crate
@@ -84,6 +88,9 @@ extern crate std;
 
 pub mod execute;
 pub use execute::*;
+
+pub mod capabilities;
+pub use capabilities::*;
 
 pub mod programs;
 pub use programs::*;

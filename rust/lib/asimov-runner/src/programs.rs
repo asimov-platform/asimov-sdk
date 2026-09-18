@@ -4,8 +4,10 @@
 //!
 //! Each wrapper owns an [`Executor`](crate::Executor), its input/output
 //! configuration, and a pattern-specific options value re-exported here from
-//! `asimov-patterns`. Constructors prepare commands; each `execute` call starts a
-//! new child process. Every wrapper also implements [`Execute`](crate::Execute)
+//! `asimov-patterns`. Constructors prepare commands; execution validates any
+//! supplied capabilities before starting a child. A zero-limit [`Lister`]
+//! returns immediately after validation without spawning.
+//! Every wrapper also implements [`Execute`](crate::Execute)
 //! and its corresponding pattern trait.
 //! All wrappers set `Execute::Error` to [`ExecutorError`](crate::ExecutorError).
 //! Generic bounds use associated-type equality, for example
@@ -74,6 +76,16 @@
 //! directly; input, read, and exit errors are stream items. Consume the stream to
 //! completion to check process success. Ignored or inherited stdout yields no
 //! lines but still checks the exit status when polled to completion.
+//! [`Lister`] enforces its configured limit locally as a stdout line cap in every
+//! output mode in addition to passing `--limit`, which every lister program must
+//! support. This independent cap protects callers from buggy subprograms.
+//! `--sort` and `--offset` are optional native capabilities. Supply known native
+//! support using [`Lister::with_capabilities`] and [`ListerCapabilities`]. Unknown
+//! and supported requests are forwarded; explicitly unsupported typed requests
+//! fail before spawning with [`ExecutorError::UnsupportedOption`](crate::ExecutorError::UnsupportedOption).
+//! There is no automatic discovery or emulation. On reaching the line cap it stops the child
+//! and ends the stream without checking eventual exit status. A zero limit does
+//! not spawn a child. This cap counts serialized lines, not logical RDF entries.
 //!
 //! Graph consumers ([`Matcher`], [`Reasoner`], [`Indexer`], and [`Writer`]) accept
 //! [`GraphInput::Jsonl`](crate::GraphInput::Jsonl) for direct stream composition.

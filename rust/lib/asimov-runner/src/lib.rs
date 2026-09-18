@@ -82,6 +82,7 @@ extern crate alloc;
 extern crate std;
 
 pub use asimov_patterns::Execute;
+pub use asimov_patterns::OptionSupport;
 pub use clientele::SysexitsError;
 pub use tokio::process::Command;
 

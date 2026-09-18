@@ -43,6 +43,15 @@
 //! output routing, and cancellation; [completion outcomes][completion] for error
 //! precedence; and [JSONL transport][jsonl] for graph framing and composition.
 //!
+//! # Native capabilities
+//!
+//! [`ListerCapabilities`] describes optional native sorting and offset support
+//! separately from the requests in [`ListerOptions`]. Each capability uses
+//! [`OptionSupport`](crate::OptionSupport): unknown, supported, or unsupported.
+//! Callers can translate manifest metadata into these values without this crate
+//! depending on a manifest schema. Capabilities do not imply host emulation;
+//! forwarding and fallback policies are documented by the concrete executor.
+//!
 //! # Options and defaults
 //!
 //! Every options type supports `Default`, direct field access, and a
@@ -51,7 +60,8 @@
 //! are stored without checking whether the selected program supports them.
 //!
 //! The companion [`asimov-runner`][runner] wrappers emit configured fields as
-//! individual `--name=value` arguments. `None` omits an option rather than
+//! individual `--name=value` arguments. Hosts may additionally enforce limits
+//! to protect callers from program bugs. `None` omits an option rather than
 //! supplying an empty value. A conforming program then applies these defaults:
 //!
 //! | Patterns | Input format | Output format | Other defaults |

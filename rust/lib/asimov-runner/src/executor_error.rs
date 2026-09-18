@@ -18,13 +18,16 @@ use std::{ffi::OsString, io::Cursor};
 /// returned; it is not a live stream from the child.
 pub type ExecutorResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>;
 
-/// A failure to launch, communicate with, or successfully complete a child process.
+/// A configuration failure, or a failure to launch, communicate with, or complete a child process.
 ///
 /// Conversion from a process output decodes stderr strictly as UTF-8: invalid
 /// UTF-8 yields `None`, while empty stderr yields `Some(String::new())`.
 /// Conversion from an exit status alone has no stderr and always uses `None`.
 #[derive(Debug)]
 pub enum ExecutorError {
+    /// Supplied capability metadata declares a requested option unsupported.
+    /// Contains the long option name (such as `--sort`); no child was spawned.
+    UnsupportedOption(&'static str),
     /// Spawning returned `NotFound`; contains the selected program name or path.
     MissingProgram(OsString),
     /// The process could not be started for a reason other than `NotFound`.
@@ -49,6 +52,9 @@ impl core::error::Error for ExecutorError {}
 impl fmt::Display for ExecutorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedOption(option) => {
+                write!(f, "Program does not support requested option: {}", option)
+            },
             Self::MissingProgram(program) => {
                 write!(f, "Missing program: {}", program.to_string_lossy())
             },
