@@ -38,6 +38,7 @@ clientele.workspace = true
 derive_more = { workspace = true, features = ["debug"] }
 futures-lite.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "process", "rt"] }
+url.workspace = true
 
 # Optional dependencies:
 tracing = { workspace = true, optional = true }

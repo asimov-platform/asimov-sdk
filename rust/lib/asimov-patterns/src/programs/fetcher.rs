@@ -21,15 +21,13 @@ use bon::Builder;
 /// using [`FetcherOptions::output`] (`jsonl` by default). The program validates
 /// the URL and rejects unsupported schemes.
 ///
-/// `T` is the implementation's result representation. The `asimov-runner`
-/// wrapper passes the URL without validation and returns a live, fallible stream
-/// of JSONL byte-vector lines. Consume it to completion to check process success;
-/// retrieval, redirects, authentication, caching, and resource-to-RDF mapping
-/// belong to the external program. See [`crate::programs`] and the
+/// `T` is the implementation's result representation. Retrieval, redirects,
+/// authentication, caching, and resource-to-RDF mapping belong to the program.
+/// See [`crate::programs`] for links to concrete execution behavior and the
 /// [fetcher specification][spec].
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#fetcher
-pub trait Fetcher<T, E>: Execute<T, E> {}
+pub trait Fetcher<T>: Execute<T> {}
 
 /// Output-format selection and additional arguments for a [`Fetcher`].
 ///

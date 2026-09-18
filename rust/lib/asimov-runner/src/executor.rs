@@ -10,13 +10,11 @@
 //! [`Executor::execute_jsonl`] and [`Executor::execute_jsonl_with_input`] instead
 //! return live line streams with concurrent input/output handling.
 
-use crate::{Command, ExecutorError, ExecutorResult, Input};
-use alloc::borrow::ToOwned;
-use std::{
-    ffi::OsStr,
-    io::{Cursor, ErrorKind},
-    process::Stdio,
+use crate::{
+    Command, ExecutionCompletion, ExecutorError, ExecutorResult, Input, InputCompletion, Output,
 };
+use alloc::borrow::ToOwned;
+use std::{ffi::OsStr, io::ErrorKind, process::Stdio};
 use tokio::process::Child;
 
 /// A configured command that reports process failures as [`ExecutorError`].
@@ -30,8 +28,9 @@ use tokio::process::Child;
 /// Each execution spawns a new process using the stored command configuration.
 /// Stdout is returned only when configured as a pipe; otherwise the successful
 /// result is an empty cursor or stream. Captured stderr is included in process
-/// exit errors when it is valid UTF-8 and is discarded on success. An input or
-/// I/O error may be reported before an exit error, without captured diagnostics.
+/// exit errors when it is valid UTF-8. [`ExecutionCompletion`] exposes exit status,
+/// input delivery, and diagnostics separately; its `into_result` method defines
+/// the error precedence used by the convenience APIs.
 ///
 /// # Example
 ///
@@ -138,9 +137,11 @@ impl Executor {
     ///
     /// Input is fed concurrently with draining stdout and stderr. JSONL input
     /// is written one line at a time with backpressure and source error propagation.
-    /// Once process completion and output collection are observed, any pending
-    /// input feed is cancelled. A successful result does not prove the entire
-    /// input was consumed; unread source errors may not have been observed.
+    /// Early child exit cancels a pending input feed and is reported as
+    /// [`ExecutorError::IncompleteInput`] on an otherwise successful exit. Use
+    /// [`execute_with_io_completion`](Self::execute_with_io_completion) to inspect
+    /// intentional early exit. Success confirms EOF and delivery to the pipe,
+    /// not application-level processing of the supplied data.
     ///
     /// # Errors
     ///
@@ -148,12 +149,48 @@ impl Executor {
     /// child exits unsuccessfully. Non-ignored input requires piped stdin;
     /// otherwise feeding it returns an I/O `InvalidInput` error.
     pub async fn execute_with_input(&mut self, input: &mut Input) -> ExecutorResult {
-        let process = self.spawn().await?;
-        let output = communicate(process, input).await?;
-        if !output.status.success() {
-            return Err(output.into());
-        }
-        Ok(Cursor::new(output.stdout))
+        self.execute_with_io(input, &mut Output::Captured).await
+    }
+
+    /// Feeds input and routes stdout concurrently, requiring complete delivery
+    /// and a successful exit. Configure stdin/stdout from `input.as_stdio()` and
+    /// `output.as_stdio()` first. Only [`Output::Captured`] returns payload bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns spawn, transport, forwarding, input-delivery, or exit errors using
+    /// the precedence documented by [`ExecutionCompletion::into_result`].
+    pub async fn execute_with_io(
+        &mut self,
+        input: &mut Input,
+        output: &mut Output,
+    ) -> ExecutorResult {
+        self.execute_with_io_completion(input, output)
+            .await?
+            .into_result()
+    }
+
+    /// Executes with explicit exit and input-delivery outcomes.
+    ///
+    /// Configure stdin/stdout from the supplied input/output policies before
+    /// calling. Input and writers are borrowed and retained for reuse, without
+    /// rewinding. Stdout forwarding and stderr collection run concurrently with
+    /// feeding stdin and waiting for exit. Early exit cancels pending input;
+    /// source errors terminate the child, while broken pipes allow it to finish
+    /// naturally so its exit diagnostics are preserved. Ready input outcomes are
+    /// polled before exit to give EOF and source errors consistent precedence.
+    ///
+    /// # Errors
+    ///
+    /// Only spawn, stdout/stderr transport, writer, and wait failures are returned
+    /// directly. Child exit and input failures are fields of the returned
+    /// [`ExecutionCompletion`], even when the exit status is unsuccessful.
+    pub async fn execute_with_io_completion(
+        &mut self,
+        input: &mut Input,
+        output: &mut Output,
+    ) -> Result<ExecutionCompletion, ExecutorError> {
+        communicate(self.spawn().await?, input, output).await
     }
 
     /// Starts a new child process using the current command configuration.
@@ -191,33 +228,75 @@ impl Executor {
     /// or [`ExecutorError::UnexpectedFailure`] otherwise, with captured UTF-8
     /// stderr attached. Stdout is not retained in either failure variant.
     pub async fn wait(&mut self, process: Child) -> ExecutorResult {
-        let output = process.wait_with_output().await?;
-
-        #[cfg(feature = "tracing")]
-        tracing::trace!("The command exited with: {}", output.status);
-
-        if !output.status.success() {
-            return Err(output.into());
-        }
-
-        Ok(Cursor::new(output.stdout))
+        communicate(process, &mut Input::Ignored, &mut Output::Captured)
+            .await?
+            .into_result()
     }
 }
 
-/// Feeds stdin while draining the remaining pipes. When exit and pipe collection
-/// complete before the input feed, cancel that feed rather than await its source.
+/// Supervises input and process exit independently from draining stdout/stderr.
 pub(crate) async fn communicate(
     mut process: Child,
     input: &mut Input,
-) -> Result<std::process::Output, ExecutorError> {
-    let feed = input.write_to(process.stdin.take());
-    let completion = process.wait_with_output();
-    tokio::pin!(feed, completion);
-    tokio::select! {
-        result = &mut completion => Ok(result?),
-        result = &mut feed => {
-            result?;
-            Ok(completion.await?)
+    output: &mut Output,
+) -> Result<ExecutionCompletion, ExecutorError> {
+    use crate::completion::InputFailure;
+    use alloc::vec::Vec;
+    use tokio::io::AsyncReadExt;
+
+    let stdin = process.stdin.take();
+    let stdout = process.stdout.take();
+    let stderr = process.stderr.take();
+    let supervise = async {
+        let feed = input.write_to(stdin);
+        tokio::pin!(feed);
+        let input = tokio::select! {
+            biased;
+            result = &mut feed => match result {
+                Ok(()) => InputCompletion::Complete,
+                Err(InputFailure::Source(error)) => {
+                    process.start_kill()?;
+                    InputCompletion::SourceFailed(error)
+                },
+                Err(InputFailure::Write(error)) => {
+                    if error.kind() != ErrorKind::BrokenPipe {
+                        process.start_kill()?;
+                    }
+                    InputCompletion::WriteFailed(error)
+                },
+            },
+            status = process.wait() => {
+                return Ok::<_, std::io::Error>((status?, InputCompletion::Interrupted));
+            },
+        };
+        Ok((process.wait().await?, input))
+    };
+    let read_stderr = async {
+        let mut bytes = Vec::new();
+        if let Some(mut stderr) = stderr {
+            stderr.read_to_end(&mut bytes).await?;
+        }
+        Ok::<_, std::io::Error>(bytes)
+    };
+    let result = tokio::try_join!(supervise, output.read_from(stdout), read_stderr);
+    match result {
+        Ok(((status, input), stdout, stderr)) => {
+            #[cfg(feature = "tracing")]
+            tracing::trace!("The command exited with: {}", status);
+            Ok(ExecutionCompletion {
+                output: std::process::Output {
+                    status,
+                    stdout,
+                    stderr,
+                },
+                input,
+            })
+        },
+        Err(error) => {
+            // A failed destination must not leave the producer blocked on its pipes.
+            let _ = process.start_kill();
+            let _ = process.wait().await;
+            Err(error.into())
         },
     }
 }

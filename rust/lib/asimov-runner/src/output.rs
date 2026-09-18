@@ -23,10 +23,9 @@ pub type TextOutput = Output;
 
 /// How a child's stdout should be connected or collected.
 ///
-/// Most program wrappers return bytes only when stdout is piped, using
-/// [`Captured`](Self::Captured) or [`AsyncWrite`](Self::AsyncWrite). Ignored and
-/// inherited streams produce no captured bytes. A prompter always captures
-/// stdout regardless of this setting.
+/// Only [`Captured`](Self::Captured) returns payload bytes. Ignored, inherited,
+/// and forwarded output produces an empty result payload. Execution still checks
+/// input delivery and process success for every mode.
 ///
 /// With `std` enabled, conversion to `Stdio` only configures the stream; it does
 /// not copy bytes into a writer. The consuming conversion drops any stored
@@ -41,12 +40,51 @@ pub enum Output {
     Captured,
     /// Stores an asynchronous destination and requests a pipe for the child.
     ///
-    /// Current program wrappers capture the pipe but do not forward bytes to
-    /// this writer. The writer is omitted from debug output.
+    /// Wrappers forward stdout incrementally with backpressure and flush the
+    /// writer at EOF, without shutting it down. No bytes are also captured.
+    /// Write/flush failures fail execution. Graph streams own the writer after
+    /// successful spawning; subsequent calls on that wrapper discard stdout.
+    /// Buffered wrappers retain the writer for reuse. Omitted from debug output.
     AsyncWrite(#[debug(skip)] Box<dyn AsyncWrite + Send + Sync + Unpin>),
 }
 
 impl Output {
+    #[cfg(feature = "std")]
+    pub(crate) fn take_for_stream(&mut self) -> Self {
+        match self {
+            Self::Ignored => Self::Ignored,
+            Self::Inherited => Self::Inherited,
+            Self::Captured => Self::Captured,
+            Self::AsyncWrite(_) => core::mem::replace(self, Self::Ignored),
+        }
+    }
+
+    #[cfg(feature = "std")]
+    pub(crate) async fn read_from(
+        &mut self,
+        stdout: Option<tokio::process::ChildStdout>,
+    ) -> std::io::Result<alloc::vec::Vec<u8>> {
+        use alloc::vec::Vec;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let mut captured = Vec::new();
+        if let Some(mut stdout) = stdout {
+            match self {
+                Self::Captured => {
+                    stdout.read_to_end(&mut captured).await?;
+                },
+                Self::AsyncWrite(writer) => {
+                    tokio::io::copy(&mut stdout, writer).await?;
+                    writer.flush().await?;
+                },
+                Self::Ignored | Self::Inherited => {
+                    tokio::io::copy(&mut stdout, &mut tokio::io::sink()).await?;
+                },
+            }
+        }
+        Ok(captured)
+    }
+
     /// Selects the child's stream configuration without consuming this value.
     ///
     /// Both [`Captured`](Self::Captured) and [`AsyncWrite`](Self::AsyncWrite)

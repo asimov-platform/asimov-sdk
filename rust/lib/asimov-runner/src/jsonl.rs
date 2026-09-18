@@ -29,7 +29,7 @@
 //! # }
 //! ```
 
-use crate::{Executor, ExecutorError, Input};
+use crate::{Executor, ExecutorError, Input, Output};
 use alloc::{boxed::Box, vec::Vec};
 use core::pin::Pin;
 use futures_lite::{Stream, StreamExt};
@@ -50,6 +50,10 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 /// a fixed-size read buffer, with no maximum line length. Dropping a process
 /// stream requests termination under the executor's default kill-on-drop policy;
 /// overriding that policy through [`Executor::command`] also affects streaming.
+/// [`Executor::execute_jsonl_with_io`] additionally supports forwarding instead
+/// of capture: those streams yield no payload lines but must still be consumed
+/// to drive I/O and observe completion. Errors use
+/// [`crate::ExecutionCompletion::into_result`] precedence.
 pub type JsonlStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>, ExecutorError>> + Send>>;
 
 /// Splits an asynchronous byte reader into lines, preserving all bytes.
@@ -98,8 +102,9 @@ impl Executor {
     /// This method does not automatically adapt byte input into JSONL.
     ///
     /// Polling drives I/O; see [`JsonlStream`] for buffering and drop behavior.
-    /// Early child completion cancels the input feed, so successful completion
-    /// does not establish that all input or upstream errors were consumed.
+    /// Early child completion cancels the input feed and reports
+    /// [`ExecutorError::IncompleteInput`] if the child otherwise succeeded.
+    /// Errors follow [`crate::ExecutionCompletion::into_result`] precedence.
     ///
     /// # Errors
     ///
@@ -110,12 +115,52 @@ impl Executor {
         &mut self,
         input: &mut Input,
     ) -> Result<JsonlStream, ExecutorError> {
+        self.execute_jsonl_with_io(input, &mut Output::Captured)
+            .await
+    }
+
+    /// Spawns a graph producer with the supplied stdout policy and no input.
+    /// Configure stdout with [`Output::as_stdio`] first. Forwarded output is
+    /// written while the returned stream is polled and yields no payload items.
+    /// Spawn errors are returned directly; subsequent failures are stream items.
+    pub async fn execute_jsonl_with_output(
+        &mut self,
+        output: &mut Output,
+    ) -> Result<JsonlStream, ExecutorError> {
+        self.execute_jsonl_with_io(&mut Input::Ignored, output)
+            .await
+    }
+
+    /// Spawns a graph program with concurrent input and stdout routing.
+    ///
+    /// Configure the command using the policies' `as_stdio` methods first.
+    /// Successful spawning transfers input and any output writer into the stream.
+    /// Captured stdout yields lines; other modes yield only eventual errors.
+    /// A transferred writer is flushed at EOF, not shut down, and the wrapper's
+    /// output policy becomes [`Output::Ignored`] for subsequent executions.
+    /// Non-writer output policies remain reusable. Spawn failure consumes neither.
+    ///
+    /// # Errors
+    ///
+    /// Spawn errors are returned directly. Input, transport, writer, wait, and
+    /// exit failures are stream items. Success requires complete input delivery
+    /// and zero exit status; see [`crate::ExecutionCompletion::into_result`].
+    pub async fn execute_jsonl_with_io(
+        &mut self,
+        input: &mut Input,
+        output: &mut Output,
+    ) -> Result<JsonlStream, ExecutorError> {
         let mut process = self.spawn().await?;
-        let stdout = process.stdout.take();
+        let stdout = if matches!(output, Output::Captured) {
+            process.stdout.take()
+        } else {
+            None
+        };
         let mut input = core::mem::replace(input, Input::Ignored);
+        let mut destination = output.take_for_stream();
         Ok(Box::pin(async_stream::try_stream! {
             let completion = async move {
-                crate::executor::communicate(process, &mut input).await
+                crate::executor::communicate(process, &mut input, &mut destination).await
             };
             tokio::pin!(completion);
             let mut output = None;
@@ -139,9 +184,7 @@ impl Executor {
                 Some(output) => output?,
                 None => completion.await?,
             };
-            if !output.status.success() {
-                Err(ExecutorError::from(output))?;
-            }
+            output.into_result()?;
         }))
     }
 }

@@ -10,7 +10,8 @@
 //!
 //! This crate provides two building blocks:
 //!
-//! - [`Execute<T, E>`] is the asynchronous operation shared by all pattern traits.
+//! - [`Execute<T>`] is the asynchronous operation shared by all pattern traits,
+//!   with an implementation-specific associated [`Error`](Execute::Error) type.
 //! - [`programs`] contains role-specific marker traits and owned option values
 //!   such as [`ReaderOptions`], with builders for configuring invocations.
 //!
@@ -47,9 +48,9 @@
 //! data, a fallible stream, or another documented result representation; it is
 //! not the number of RDF statements or logical results. [`Indexer`] fixes its result to `()`
 //! because indexing has no payload output.
-//! In `asimov-runner`, graph producers return live JSONL line streams: an `Ok`
-//! execution result means the child was spawned, and eventual failures are stream
-//! items. See [`programs`] for the distinction between streaming and buffered results.
+//! A streaming implementation can return successful startup before execution
+//! finishes; its result must expose subsequent failures. See [`programs`] for
+//! links to concrete transport, completion, and result semantics.
 //!
 //! The options do not parse, validate, or transcode RDF. The spec's default
 //! `jsonl` token requires a shared [RDF mapping profile][rdf-mapping]; it does

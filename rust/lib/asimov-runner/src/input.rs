@@ -86,9 +86,10 @@ impl Input {
     pub(crate) async fn write_to(
         &mut self,
         stdin: Option<tokio::process::ChildStdin>,
-    ) -> Result<(), crate::ExecutorError> {
+    ) -> Result<(), crate::completion::InputFailure> {
+        use crate::completion::InputFailure;
         use futures_lite::StreamExt;
-        use tokio::io::AsyncWriteExt;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         if matches!(self, Self::Ignored) {
             return Ok(());
@@ -99,11 +100,21 @@ impl Input {
         match self {
             Self::Ignored => {},
             Self::AsyncRead(reader) => {
-                tokio::io::copy(reader, &mut stdin).await?;
+                let mut buffer = [0; 8192];
+                loop {
+                    let count = reader
+                        .read(&mut buffer)
+                        .await
+                        .map_err(|error| InputFailure::Source(error.into()))?;
+                    if count == 0 {
+                        break;
+                    }
+                    stdin.write_all(&buffer[..count]).await?;
+                }
             },
             Self::Jsonl(lines) => {
                 while let Some(line) = lines.next().await {
-                    let line = line?;
+                    let line = line.map_err(InputFailure::Source)?;
                     stdin.write_all(&line).await?;
                     if !line.ends_with(b"\n") {
                         stdin.write_all(b"\n").await?;

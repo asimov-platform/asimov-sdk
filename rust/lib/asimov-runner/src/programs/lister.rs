@@ -117,14 +117,18 @@ impl Lister {
     /// Returns an [`ExecutorError`] if spawning fails. Subsequent I/O and exit
     /// errors are delivered through the stream, after any preceding output lines.
     pub async fn execute(&mut self) -> ListerResult {
-        self.executor.execute_jsonl().await
+        self.executor
+            .execute_jsonl_with_output(&mut self.output)
+            .await
     }
 }
 
-impl asimov_patterns::Lister<ListerStream, ExecutorError> for Lister {}
+impl asimov_patterns::Lister<ListerStream> for Lister {}
 
 #[async_trait]
-impl asimov_patterns::Execute<ListerStream, ExecutorError> for Lister {
+impl asimov_patterns::Execute<ListerStream> for Lister {
+    type Error = ExecutorError;
+
     async fn execute(&mut self) -> ListerResult {
         self.execute().await
     }

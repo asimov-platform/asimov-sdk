@@ -23,13 +23,11 @@ use bon::Builder;
 /// use a form for which the intended adapter's profile defines an RDF mapping.
 /// There are no standard pattern-specific options or output-file operand.
 ///
-/// `T` is the implementation's query representation. The `asimov-runner`
-/// wrapper returns a cursor over captured bytes without decoding UTF-8,
-/// parsing SPARQL, or executing the generated query. See [`crate::programs`]
-/// and the [compiler specification][spec].
+/// `T` is the implementation's query representation. See [`crate::programs`]
+/// for links to concrete execution behavior and the [compiler specification][spec].
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#compiler
-pub trait Compiler<T, E>: Execute<T, E> {}
+pub trait Compiler<T>: Execute<T> {}
 
 /// Additional arguments and an optional input file for a [`Compiler`].
 ///

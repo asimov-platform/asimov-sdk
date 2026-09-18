@@ -27,13 +27,11 @@ use bon::Builder;
 /// trimming other whitespace, percent-decoding, or splitting on commas/spaces.
 ///
 /// `T` is the implementation's result representation, not necessarily one URL.
-/// **The current `asimov-runner` wrapper does not parse resolver output:** it
-/// returns an empty vector after any successful process exit, even if stdout
-/// contained results. That value cannot establish that resolution found no
-/// locations. See [`crate::programs`] and the [resolver specification][spec].
+/// See [`crate::programs`] for links to concrete execution and parsing behavior,
+/// and the [resolver specification][spec].
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#resolver
-pub trait Resolver<T, E>: Execute<T, E> {}
+pub trait Resolver<T>: Execute<T> {}
 
 /// Result-count selection and additional arguments for a [`Resolver`].
 ///

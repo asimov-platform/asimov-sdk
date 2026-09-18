@@ -22,14 +22,12 @@ use bon::Builder;
 /// repeatable `--define=VAR=VAL` option. No standard input/output-format
 /// options or output-file operand are defined for this pattern.
 ///
-/// `T` is the implementation's result representation. The `asimov-runner`
-/// `Runner` transports raw bytes without enforcing the runtime's text grammar
-/// or decoding its response. Its `Executor` is the generic process-launching
-/// facility; this trait identifies the specific language-runtime role. See
-/// [`crate::programs`] and the [runner specification][spec].
+/// `T` is the implementation's result representation. This trait identifies the
+/// language-runtime role, not generic process launching. See [`crate::programs`]
+/// for links to concrete execution behavior and the [runner specification][spec].
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#runner
-pub trait Runner<T, E>: Execute<T, E> {}
+pub trait Runner<T>: Execute<T> {}
 
 /// Runtime variable definitions and additional arguments for a [`Runner`].
 ///

@@ -22,13 +22,12 @@ use bon::Builder;
 /// result mislabeled as RDF.
 ///
 /// `T` represents the implementation's result, not necessarily a parsed graph.
-/// The `asimov-runner` adapter returns a live, fallible stream of JSONL byte-vector
-/// lines; consume it to completion to check process success. See
-/// [`crate::programs`] for shared option and transport conventions, and the
+/// See [`crate::programs`] for shared options and links to concrete execution
+/// behavior, and the
 /// [adapter specification][spec] for the external program's requirements.
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#adapter
-pub trait Adapter<T, E>: Execute<T, E> {}
+pub trait Adapter<T>: Execute<T> {}
 
 /// Output-format selection and additional arguments for an [`Adapter`].
 ///
@@ -70,5 +69,32 @@ impl<S: adapter_options_builder::State> AdapterOptionsBuilder<S> {
     pub fn other(mut self, flag: impl Into<String>) -> Self {
         self.other.push(flag.into());
         self
+    }
+
+    /// Appends a present argument to [`AdapterOptions::other`]; `None` adds nothing.
+    pub fn maybe_other(mut self, flag: Option<impl Into<String>>) -> Self {
+        if let Some(flag) = flag {
+            self.other.push(flag.into());
+        }
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn optional_arguments_preserve_order_and_boundaries() {
+        let options = AdapterOptions::builder()
+            .other("--dataset")
+            .maybe_other(Some("value with spaces"))
+            .maybe_other(None::<&str>)
+            .other("query.rq")
+            .build();
+        assert_eq!(
+            options.other,
+            ["--dataset", "value with spaces", "query.rq"]
+        );
     }
 }

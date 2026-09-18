@@ -76,19 +76,21 @@ impl Matcher {
     ///
     /// # Errors
     ///
-    /// Spawn failures are returned directly; input, read, wait, and exit failures are
+    /// Spawn failures are returned directly; input, output, wait, and exit failures are
     /// stream items. Consume the stream to completion to check process success.
     pub async fn execute(&mut self) -> MatcherResult {
         self.executor
-            .execute_jsonl_with_input(&mut self.input)
+            .execute_jsonl_with_io(&mut self.input, &mut self.output)
             .await
     }
 }
 
-impl asimov_patterns::Matcher<JsonlStream, ExecutorError> for Matcher {}
+impl asimov_patterns::Matcher<JsonlStream> for Matcher {}
 
 #[async_trait]
-impl asimov_patterns::Execute<JsonlStream, ExecutorError> for Matcher {
+impl asimov_patterns::Execute<JsonlStream> for Matcher {
+    type Error = ExecutorError;
+
     async fn execute(&mut self) -> MatcherResult {
         self.execute().await
     }

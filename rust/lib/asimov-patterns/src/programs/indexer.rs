@@ -23,13 +23,13 @@ use bon::Builder;
 /// or directory according to the program. It cannot be `-`; use `./-` for a
 /// literal path of that name. Stdout carries no payload.
 ///
-/// [`IndexerOptions::input`] selects the RDF format (`jsonl` by default). The
-/// `asimov-runner` constructor accepts JSONL line input but no dedicated index
-/// path, so supply the destination through [`IndexerOptions::other`]. See
-/// [`crate::programs`] and the [indexer specification][spec].
+/// [`IndexerOptions::input`] selects the RDF format (`jsonl` by default).
+/// [`IndexerOptions::other`] can supply the destination operand. See
+/// [`crate::programs`] for links to concrete execution behavior and the
+/// [indexer specification][spec].
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#indexer
-pub trait Indexer<E>: Execute<(), E> {}
+pub trait Indexer: Execute<()> {}
 
 /// Input-format selection and additional arguments for an [`Indexer`].
 ///

@@ -4,8 +4,10 @@
 //!
 //! Each trait is a marker extending [`Execute`](crate::Execute). It identifies
 //! the intended operation but adds no constructor, input parameter, or runtime
-//! validation. `T` and `E` are the implementation's success and error types;
-//! [`Indexer`] uses `()` for success because it has no payload output.
+//! validation. `T` is the result type; the implementation chooses the associated
+//! [`Error`](crate::Execute::Error) type. Bounds can constrain it with, for example,
+//! `Fetcher<T, Error = E>`. [`Indexer`] has no type parameters and uses `()` for
+//! its result; its error can likewise be constrained with `Indexer<Error = E>`.
 //!
 //! # Pattern catalog
 //!
@@ -31,23 +33,15 @@
 //!
 //! # Results and streaming
 //!
-//! These traits do not prescribe buffering or a stream type. In `asimov-runner`,
-//! graph producers return `JsonlStream`, with items of type
-//! `Result<Vec<u8>, ExecutorError>`. The outer execution result reports spawning;
-//! input, read, wait, and exit failures are delivered through the stream.
-//! Receiving a line does not establish process success: consume to completion.
+//! These traits prescribe semantic roles, not buffering, stream types, or
+//! process management. A streaming implementation must distinguish successful
+//! startup from eventual completion and expose later errors through its result.
+//! Receiving output alone does not establish success; see [`Execute`](crate::Execute).
 //!
-//! The runner preserves output line endings and a final unterminated line.
-//! Graph consumers accept these streams directly or adapt byte readers into
-//! lines, appending an LF to input items that lack one. Input feeding and output
-//! draining run concurrently when the returned stream is polled. Graph-output
-//! runners move input ownership into that stream after spawning; repeated calls
-//! do not replay it. Dropping the stream requests child termination.
-//!
-//! `Writer` consumes JSONL but buffers its arbitrary-format output; `Indexer`
-//! consumes JSONL and returns `()`. Compiler and runtime results are buffered
-//! bytes, and prompter results are buffered UTF-8 text. See the [runner][runner]
-//! for output routing and the resolver's currently unimplemented result parsing.
+//! Concrete behavior is documented in [`asimov-runner`][runner]: consult its
+//! [execution and results][results] section for result types, input ownership,
+//! output routing, and cancellation; [completion outcomes][completion] for error
+//! precedence; and [JSONL transport][jsonl] for graph framing and composition.
 //!
 //! # Options and defaults
 //!
@@ -77,8 +71,6 @@
 //! format detection or selection to the program. `jsonl` needs a documented
 //! [RDF mapping profile][rdf-mapping] shared by producer and consumer. Setting
 //! a format option does not encode, decode, or convert any bytes in this crate.
-//! The runner's graph transport remains line-based regardless of format options;
-//! use `jsonl` for graph input/output. Neither crate validates JSON or RDF profiles.
 //!
 //! # Additional arguments and files
 //!
@@ -87,7 +79,7 @@
 //! URL or URI operand. Each entry is passed verbatim as one argument: use two
 //! entries for `--name value`, or one for `--name=value`. Do not add shell quotes
 //! or redirection syntax. Repeated builder `other(...)` calls append; the
-//! `maybe_other(...)` helpers, where available, append only `Some` values.
+//! `maybe_other(...)` helpers append only `Some` values.
 //!
 //! Additional arguments can supply documented extensions or positional files.
 //! Keep options before operands; use `--` to end option parsing when a filename
@@ -101,14 +93,16 @@
 //! requires its final operand to name the persistent index. See each trait's
 //! synopsis for the applicable operand rules.
 //!
-//! With a named input file, configure a stream-input wrapper's input as ignored:
-//! the file replaces stdin as the payload source. The prompter instead always
-//! writes its stored prompt; see [`PrompterOptions::other`] for that limitation.
-//! Selecting an output file does not arrange for the wrapper to read that file
-//! back. Capturing stdout in that case does not capture the file's contents.
+//! A named input file replaces stdin as the payload source, and a named output
+//! file replaces stdout as the destination. Consult the concrete invocation API
+//! for file selection and stream-routing behavior; see the [runner's file operands][files].
 //!
 //! [pps]: https://asimov-specs.github.io/program-patterns/#patterns
 //! [runner]: https://docs.rs/asimov-runner/latest/asimov_runner/programs/
+//! [results]: https://docs.rs/asimov-runner/latest/asimov_runner/programs/#execution-and-results
+//! [completion]: https://docs.rs/asimov-runner/latest/asimov_runner/struct.ExecutionCompletion.html
+//! [jsonl]: https://docs.rs/asimov-runner/latest/asimov_runner/jsonl/
+//! [files]: https://docs.rs/asimov-runner/latest/asimov_runner/programs/#file-operands
 //! [rdf-mapping]: https://asimov-specs.github.io/program-patterns/#rdf-mapping
 
 mod adapter;

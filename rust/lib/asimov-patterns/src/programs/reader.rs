@@ -23,14 +23,12 @@ use bon::Builder;
 /// output. The program must document its detection procedure and fail if it
 /// cannot select a supported input format.
 ///
-/// `T` is the implementation's imported-result representation. The
-/// `asimov-runner` wrapper feeds source bytes concurrently with returning a live,
-/// fallible stream of JSONL byte-vector lines, without parsing or validating RDF.
-/// Consume the stream to completion to check process success. See
-/// [`crate::programs`] and the [reader specification][spec].
+/// `T` is the implementation's imported-result representation. See
+/// [`crate::programs`] for links to concrete execution behavior and the
+/// [reader specification][spec].
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#reader
-pub trait Reader<T, E>: Execute<T, E> {}
+pub trait Reader<T>: Execute<T> {}
 
 /// Source and RDF output formats for a [`Reader`], plus additional arguments.
 ///

@@ -23,16 +23,12 @@ use bon::Builder;
 /// model (default `auto`). Repeated invocations need not be deterministic.
 /// Response whitespace and newlines are part of the result and are preserved.
 ///
-/// `T` is the implementation's response representation. The `asimov-runner`
-/// wrapper formats its stored `Prompt` with `Display` and decodes stdout into
-/// a `String`; options do not change that encoding/decoding behavior. Its
-/// current output-routing and prompt-write limitations are documented in
-/// [`asimov-runner`][implementation]. See also [`crate::programs`] and the
+/// `T` is the implementation's response representation. See [`crate::programs`]
+/// for links to concrete execution behavior and the
 /// [prompter specification][spec].
 ///
-/// [implementation]: https://docs.rs/asimov-runner/latest/asimov_runner/struct.Prompter.html
 /// [spec]: https://asimov-specs.github.io/program-patterns/#prompter
-pub trait Prompter<T, E>: Execute<T, E> {}
+pub trait Prompter<T>: Execute<T> {}
 
 /// Prompt/response formats and inference-model selection for a [`Prompter`].
 ///
@@ -59,8 +55,7 @@ pub struct PrompterOptions {
     ///
     /// The wrapper appends these after generated format/model options. Each
     /// string is one literal argument; see [`crate::programs`] for ordering.
-    /// A named prompt file replaces stdin as the program's payload source;
-    /// the current runner still attempts to write its stored prompt to stdin.
+    /// A named prompt file replaces stdin as the program's payload source.
     #[builder(field)]
     pub other: Vec<String>,
 
@@ -81,8 +76,7 @@ pub struct PrompterOptions {
     /// Response serialization passed as `--output=FORMAT` (`-o` in the CLI).
     ///
     /// `None` omits the option; the specified default is `text` (UTF-8).
-    /// This selects neither a response file nor a capture policy. The runner
-    /// decodes captured stdout as UTF-8 even when a different token is supplied.
+    /// This selects neither a response file nor a capture policy.
     pub output: Option<String>,
 }
 

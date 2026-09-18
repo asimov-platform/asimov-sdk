@@ -39,6 +39,9 @@ pub enum ExecutorError {
     /// An I/O failure outside spawning, such as copying stdin, waiting for the
     /// child, or decoding a prompter's stdout as UTF-8.
     UnexpectedOther(std::io::Error),
+    /// The child exited successfully before its input feed completed. Use
+    /// [`crate::ExecutionCompletion`] to explicitly handle intentional early exit.
+    IncompleteInput,
 }
 
 impl core::error::Error for ExecutorError {}
@@ -73,6 +76,7 @@ impl fmt::Display for ExecutorError {
                 Ok(())
             },
             Self::UnexpectedOther(err) => write!(f, "Unexpected error: {}", err),
+            Self::IncompleteInput => write!(f, "Process exited before input delivery completed"),
         }
     }
 }

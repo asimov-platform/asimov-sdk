@@ -75,17 +75,21 @@ impl Fetcher {
     ///
     /// # Errors
     ///
-    /// Spawn failures are returned directly; read, wait, and exit failures are stream
+    /// Spawn failures are returned directly; output, wait, and exit failures are stream
     /// items. Consume the stream to completion to check process success.
     pub async fn execute(&mut self) -> FetcherResult {
-        self.executor.execute_jsonl().await
+        self.executor
+            .execute_jsonl_with_output(&mut self.output)
+            .await
     }
 }
 
-impl asimov_patterns::Fetcher<JsonlStream, ExecutorError> for Fetcher {}
+impl asimov_patterns::Fetcher<JsonlStream> for Fetcher {}
 
 #[async_trait]
-impl asimov_patterns::Execute<JsonlStream, ExecutorError> for Fetcher {
+impl asimov_patterns::Execute<JsonlStream> for Fetcher {
+    type Error = ExecutorError;
+
     async fn execute(&mut self) -> FetcherResult {
         self.execute().await
     }

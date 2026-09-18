@@ -23,14 +23,12 @@ use bon::Builder;
 /// selection. The program must define automatic selection even when stdout
 /// has no filename from which to infer a format.
 ///
-/// `T` is the implementation's exported-result representation. The
-/// `asimov-runner` wrapper consumes JSONL lines and returns a cursor over the
-/// complete captured output after successful execution, without decoding it or
-/// checking preservation of RDF information. See [`crate::programs`] and the
+/// `T` is the implementation's exported-result representation. See
+/// [`crate::programs`] for links to concrete execution behavior and the
 /// [writer specification][spec].
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#writer
-pub trait Writer<T, E>: Execute<T, E> {}
+pub trait Writer<T>: Execute<T> {}
 
 /// RDF input and export formats for a [`Writer`], plus additional arguments.
 ///

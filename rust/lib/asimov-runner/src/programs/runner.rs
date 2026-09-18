@@ -84,15 +84,20 @@ impl Runner {
     /// Returns an [`ExecutorError`] if spawning, copying input, or waiting fails,
     /// or if the runner exits unsuccessfully.
     pub async fn execute(&mut self) -> RunnerResult {
-        let stdout = self.executor.execute_with_input(&mut self.input).await?;
+        let stdout = self
+            .executor
+            .execute_with_io(&mut self.input, &mut self.output)
+            .await?;
         Ok(stdout)
     }
 }
 
-impl asimov_patterns::Runner<Cursor<Vec<u8>>, ExecutorError> for Runner {}
+impl asimov_patterns::Runner<Cursor<Vec<u8>>> for Runner {}
 
 #[async_trait]
-impl asimov_patterns::Execute<Cursor<Vec<u8>>, ExecutorError> for Runner {
+impl asimov_patterns::Execute<Cursor<Vec<u8>>> for Runner {
+    type Error = ExecutorError;
+
     async fn execute(&mut self) -> RunnerResult {
         self.execute().await
     }

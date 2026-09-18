@@ -21,15 +21,11 @@ use bon::Builder;
 /// input; two select input then output, with `-` denoting a standard stream.
 /// [`ReasonerOptions`] selects RDF serializations, both defaulting to `jsonl`.
 ///
-/// `T` is the implementation's result representation. The `asimov-runner`
-/// wrapper feeds JSONL input concurrently with returning a live, fallible stream
-/// of JSONL byte-vector lines, without interpreting the inference result or
-/// checking entailment. Consume the stream to completion to check process success.
-/// See [`crate::programs`] and the
-/// [reasoner specification][spec].
+/// `T` is the implementation's result representation. See [`crate::programs`]
+/// for links to concrete execution behavior and the [reasoner specification][spec].
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#reasoner
-pub trait Reasoner<T, E>: Execute<T, E> {}
+pub trait Reasoner<T>: Execute<T> {}
 
 /// RDF input/output formats and additional arguments for a [`Reasoner`].
 ///

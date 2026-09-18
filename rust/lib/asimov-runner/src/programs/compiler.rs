@@ -119,15 +119,20 @@ impl Compiler {
     /// or if the compiler exits unsuccessfully. Query syntax and UTF-8 validity
     /// are the external program's responsibility and are not checked here.
     pub async fn execute(&mut self) -> CompilerResult {
-        let stdout = self.executor.execute_with_input(&mut self.input).await?;
+        let stdout = self
+            .executor
+            .execute_with_io(&mut self.input, &mut self.output)
+            .await?;
         Ok(stdout)
     }
 }
 
-impl asimov_patterns::Compiler<Cursor<Vec<u8>>, ExecutorError> for Compiler {}
+impl asimov_patterns::Compiler<Cursor<Vec<u8>>> for Compiler {}
 
 #[async_trait]
-impl asimov_patterns::Execute<Cursor<Vec<u8>>, ExecutorError> for Compiler {
+impl asimov_patterns::Execute<Cursor<Vec<u8>>> for Compiler {
+    type Error = ExecutorError;
+
     async fn execute(&mut self) -> CompilerResult {
         self.execute().await
     }
@@ -188,7 +193,7 @@ mod tests {
         use futures_lite::StreamExt;
 
         async fn compile(
-            compiler: &mut impl asimov_patterns::Compiler<Cursor<Vec<u8>>, ExecutorError>,
+            compiler: &mut impl asimov_patterns::Compiler<Cursor<Vec<u8>>, Error = ExecutorError>,
         ) -> CompilerResult {
             compiler.execute().await
         }

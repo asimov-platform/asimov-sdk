@@ -75,7 +75,8 @@ impl Indexer {
     /// Sends the remaining graph input to a new child and waits for indexing to finish.
     ///
     /// Input is fed concurrently with draining stderr. Early child completion can
-    /// cancel the remaining input feed; see [`Executor::execute_with_input`].
+    /// interrupt the input feed and fail execution even on a zero exit status;
+    /// see [`Executor::execute_with_input`].
     ///
     /// # Errors
     ///
@@ -87,10 +88,12 @@ impl Indexer {
     }
 }
 
-impl asimov_patterns::Indexer<ExecutorError> for Indexer {}
+impl asimov_patterns::Indexer for Indexer {}
 
 #[async_trait]
-impl asimov_patterns::Execute<(), ExecutorError> for Indexer {
+impl asimov_patterns::Execute<()> for Indexer {
+    type Error = ExecutorError;
+
     async fn execute(&mut self) -> IndexerResult {
         self.execute().await
     }

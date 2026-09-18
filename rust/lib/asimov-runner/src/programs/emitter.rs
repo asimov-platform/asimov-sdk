@@ -61,17 +61,21 @@ impl Emitter {
     ///
     /// # Errors
     ///
-    /// Spawn failures are returned directly; read, wait, and exit failures are stream
+    /// Spawn failures are returned directly; output, wait, and exit failures are stream
     /// items. Consume the stream to completion to check process success.
     pub async fn execute(&mut self) -> EmitterResult {
-        self.executor.execute_jsonl().await
+        self.executor
+            .execute_jsonl_with_output(&mut self.output)
+            .await
     }
 }
 
-impl asimov_patterns::Emitter<JsonlStream, ExecutorError> for Emitter {}
+impl asimov_patterns::Emitter<JsonlStream> for Emitter {}
 
 #[async_trait]
-impl asimov_patterns::Execute<JsonlStream, ExecutorError> for Emitter {
+impl asimov_patterns::Execute<JsonlStream> for Emitter {
+    type Error = ExecutorError;
+
     async fn execute(&mut self) -> EmitterResult {
         self.execute().await
     }

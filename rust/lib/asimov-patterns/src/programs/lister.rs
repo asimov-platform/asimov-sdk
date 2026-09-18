@@ -24,14 +24,12 @@ use clientele::options::sort::SortKeys;
 /// optional program capabilities: when supported, sorting precedes skipping
 /// entries, and the limit applies last.
 ///
-/// The generic result `T` need not be a Rust iterator. The `asimov-runner`
-/// wrapper returns a live, fallible stream of JSONL byte-vector lines without
-/// parsing entries. A line is not necessarily a complete logical entry. Consume
-/// the stream to completion to check process success. See [`crate::programs`]
-/// and the [lister specification][spec].
+/// The generic result `T` need not be a Rust iterator. A serialized line is not
+/// necessarily a complete logical entry. See [`crate::programs`] for links to
+/// concrete execution behavior and the [lister specification][spec].
 ///
 /// [spec]: https://asimov-specs.github.io/program-patterns/#lister
-pub trait Lister<T, E>: Execute<T, E> {}
+pub trait Lister<T>: Execute<T> {}
 
 /// Output-format and pagination requests for a [`Lister`].
 ///

@@ -75,23 +75,29 @@ impl Writer {
     /// Sends the remaining graph input to a new child and returns captured serialized bytes.
     ///
     /// Input is fed concurrently with draining stdout and stderr. Output is
-    /// buffered until completion. Early child completion can cancel the remaining
-    /// input feed; see [`Executor::execute_with_input`].
+    /// captured until completion, or forwarded incrementally for `AsyncWrite`.
+    /// Early child completion with unfinished input fails execution; see
+    /// [`Executor::execute_with_input`].
     ///
     /// # Errors
     ///
     /// Returns an [`ExecutorError`] if spawning, copying input, or waiting fails,
     /// or if the writer exits unsuccessfully.
     pub async fn execute(&mut self) -> WriterResult {
-        let stdout = self.executor.execute_with_input(&mut self.input).await?;
+        let stdout = self
+            .executor
+            .execute_with_io(&mut self.input, &mut self.output)
+            .await?;
         Ok(stdout)
     }
 }
 
-impl asimov_patterns::Writer<Cursor<Vec<u8>>, ExecutorError> for Writer {}
+impl asimov_patterns::Writer<Cursor<Vec<u8>>> for Writer {}
 
 #[async_trait]
-impl asimov_patterns::Execute<Cursor<Vec<u8>>, ExecutorError> for Writer {
+impl asimov_patterns::Execute<Cursor<Vec<u8>>> for Writer {
+    type Error = ExecutorError;
+
     async fn execute(&mut self) -> WriterResult {
         self.execute().await
     }

@@ -58,10 +58,9 @@
 //!
 //! # Features
 //!
-//! - `std` enables the executor, execution errors, JSONL transport (including
+//! - `std` enables the executor, completion outcomes, execution errors, JSONL transport (including
 //!   `Input::Jsonl`), and program wrappers.
-//! - `tracing` enables exit-status trace events in `Executor::wait`. The
-//!   concurrent-input and JSONL execution paths currently do not emit these events.
+//! - `tracing` enables exit-status trace events for buffered and streaming execution.
 //! - `all` enables `tracing`; the default features enable both `all` and `std`.
 //! - `unstable` is reserved for future use and currently enables no behavior.
 //!
@@ -85,6 +84,11 @@ extern crate std;
 pub use asimov_patterns::Execute;
 pub use clientele::SysexitsError;
 pub use tokio::process::Command;
+
+#[cfg(feature = "std")]
+pub mod completion;
+#[cfg(feature = "std")]
+pub use completion::*;
 
 #[cfg(feature = "std")]
 pub mod executor;
@@ -114,3 +118,6 @@ pub use pipeline::*;
 pub mod programs;
 #[cfg(feature = "std")]
 pub use programs::*;
+
+#[cfg(all(test, feature = "std", unix))]
+mod transport_tests;

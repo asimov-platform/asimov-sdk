@@ -70,19 +70,21 @@ impl Adapter {
     ///
     /// # Errors
     ///
-    /// Spawn failures are returned directly; input, read, wait, and exit failures are
+    /// Spawn failures are returned directly; input, output, wait, and exit failures are
     /// stream items. Consume the stream to completion to check process success.
     pub async fn execute(&mut self) -> AdapterResult {
         self.executor
-            .execute_jsonl_with_input(&mut self.input)
+            .execute_jsonl_with_io(&mut self.input, &mut self.output)
             .await
     }
 }
 
-impl asimov_patterns::Adapter<JsonlStream, ExecutorError> for Adapter {}
+impl asimov_patterns::Adapter<JsonlStream> for Adapter {}
 
 #[async_trait]
-impl asimov_patterns::Execute<JsonlStream, ExecutorError> for Adapter {
+impl asimov_patterns::Execute<JsonlStream> for Adapter {
+    type Error = ExecutorError;
+
     async fn execute(&mut self) -> AdapterResult {
         self.execute().await
     }

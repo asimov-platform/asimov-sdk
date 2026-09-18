@@ -7,6 +7,10 @@
 //! `asimov-patterns`. Constructors prepare commands; each `execute` call starts a
 //! new child process. Every wrapper also implements [`Execute`](crate::Execute)
 //! and its corresponding pattern trait.
+//! All wrappers set `Execute::Error` to [`ExecutorError`](crate::ExecutorError).
+//! Generic bounds use associated-type equality, for example
+//! `asimov_patterns::Fetcher<JsonlStream, Error = ExecutorError>` or
+//! `asimov_patterns::Indexer<Error = ExecutorError>`.
 //!
 //! # Choosing a program
 //!
@@ -25,7 +29,7 @@
 //! | [`Prompter`] | LLM inference provider | Formatted [`Prompt`] on stdin | Response text |
 //! | [`Reader`] | RDF dataset importer | Arbitrary bytes on stdin | RDF |
 //! | [`Reasoner`] | RDF dataset entailer | RDF on stdin | Entailed RDF |
-//! | [`Resolver`] | URI resolver | URI as an argument | URLs (not yet parsed) |
+//! | [`Resolver`] | URI resolver | URI as an argument | Parsed absolute URLs |
 //! | [`Runner`] | Language runtime engine | Program text on stdin | Execution result as text |
 //! | [`Writer`] | RDF dataset exporter | RDF on stdin | Serialized bytes |
 //!
@@ -82,19 +86,39 @@
 //! Input feeding, stdout reading, and stderr draining run concurrently with
 //! backpressure. Graph-output execution transfers input ownership into the
 //! returned stream after successful spawning; subsequent executions have no
-//! input. Other stream-input wrappers consume input from its current position;
+//! input. Output writers also move into graph streams after spawning; subsequent
+//! calls on that wrapper discard stdout. Other stream-input wrappers consume input from its current position;
 //! the prompter resends its stored prompt. None rewind stream input.
 //! Once early child completion is observed, any pending feed is cancelled.
-//! Process success does not establish that all input or upstream errors were
-//! consumed. See [`Executor::execute_with_input`](crate::Executor::execute_with_input).
+//! A zero exit status with an unfinished feed produces
+//! [`ExecutorError::IncompleteInput`](crate::ExecutorError::IncompleteInput), not
+//! silent success. For intentional early exit, the low-level
+//! [`Executor::execute_with_io_completion`](crate::Executor::execute_with_io_completion)
+//! returns separate process and input outcomes. Convenience APIs use the error
+//! precedence in [`ExecutionCompletion::into_result`](crate::ExecutionCompletion::into_result):
+//! source errors and non-broken-pipe stdin errors precede exit errors, which
+//! precede broken-pipe or incomplete-input errors. Transport/forwarding and wait
+//! failures are returned directly. Successful input delivery confirms bytes
+//! reached the pipe, not that the child processed them at the application level.
 //!
 //! [`Writer`] retains arbitrary-format, buffered output; [`Compiler`] and
 //! [`Runner`] also return in-memory cursors. [`Indexer`] discards stdout and
-//! returns `()` on success. [`Output::Captured`](crate::Output::Captured) retrieves
-//! stdout; ignored or inherited stdout produces an empty cursor or stream.
+//! returns `()` on success. [`Prompter`] decodes captured stdout as UTF-8 text;
+//! [`Resolver`] parses it as ordered, validated absolute URL lines, preserving
+//! spelling and duplicates. Both buffer captured output before decoding.
+//! [`Output::Captured`](crate::Output::Captured) returns the payload. Ignored,
+//! inherited, or forwarded output returns an empty cursor, stream, string, or
+//! vector as appropriate, while still checking execution success.
+//!
+//! [`Output::AsyncWrite`](crate::Output::AsyncWrite) forwards stdout incrementally
+//! with backpressure and flushes the writer at EOF, without shutting it down or
+//! also capturing the bytes. Write/flush failures fail execution and terminate
+//! the child. Graph streams drive forwarding when polled; buffered wrappers
+//! await it and retain their writer for reuse. Forwarded bytes are not decoded.
 //! All wrappers capture stderr without a size bound for
 //! [`ExecutorError`](crate::ExecutorError) diagnostics on unsuccessful exits.
-//! Successful stderr is discarded; invalid UTF-8 diagnostics are omitted.
+//! Successful stderr is discarded by convenience APIs; detailed completions
+//! retain it. Invalid UTF-8 diagnostics are omitted from exit-error messages.
 //! Dropping an in-progress execution future drops its owned child handle and,
 //! under the executor's default kill-on-drop policy, requests termination.
 //! The same applies to dropping a returned graph stream, including its upstream
@@ -106,19 +130,9 @@
 //! [`Pipeline`](crate::Pipeline) is a placeholder and supplies no stage execution
 //! or completion tracking.
 //!
-//! # Current limitations
-//!
-//! - [`Output::AsyncWrite`](crate::Output::AsyncWrite) requests captured output,
-//!   but wrappers do not forward bytes to the supplied writer.
-//! - [`Prompter`] always captures stdout and decodes it as UTF-8, regardless of
-//!   its output argument. Its separate prompt-writing task is not awaited, so
-//!   write failures are not propagated through the execution result and cancelling
-//!   execution does not explicitly abort that task.
-//! - [`Resolver`] checks process success but currently returns an empty list
-//!   instead of parsing stdout.
-//!
-//! These gaps matter when assessing the specification's host requirements;
-//! implementing the role traits is not itself a conformance guarantee.
+//! All subprocess I/O is awaited within execution or the returned stream;
+//! prompt writing does not use a detached task. Buffered captures, individual
+//! JSONL lines, and captured stderr have no configured size bound.
 //!
 //! [patterns]: https://asimov-specs.github.io/program-patterns/
 //! [rdf-mapping]: https://asimov-specs.github.io/program-patterns/#rdf-mapping
