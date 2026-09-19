@@ -68,6 +68,8 @@ impl Emitter {
 
 impl asimov_patterns::Emitter<JsonlStream> for Emitter {}
 
+crate::batch::with_batching!(Emitter);
+
 crate::pipeline::stage!(
     Emitter,
     value,

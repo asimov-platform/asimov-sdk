@@ -168,6 +168,8 @@ async fn tests() {
         graph_failure(&program)
     );
     case!("single_stage_pipelines", single_stage(&program));
+    case!("configured_graph_batches", configured_batches(&program));
+    case!("lister_limit_precedes_batching", limited_batches(&program));
     println!("pipeline integration tests: {passed} passed");
 }
 
@@ -267,7 +269,8 @@ async fn streaming_and_drop(program: &Path, poll: bool) {
             other: source_args,
             ..Default::default()
         },
-    );
+    )
+    .with_batching(BatchOptions::new(1000, 1024 * 1024, Duration::from_secs(30)).unwrap());
     let sink = Reasoner::new(
         program,
         Input::Ignored,
@@ -285,7 +288,10 @@ async fn streaming_and_drop(program: &Path, poll: bool) {
         sockets.push(socket);
     }
     if poll {
-        assert_eq!(stream.next().await.unwrap().unwrap(), RECORD);
+        assert_eq!(
+            stream.next().await.unwrap().unwrap().into_lines(),
+            vec![RECORD.to_vec()]
+        );
     }
     drop(stream);
     for mut socket in sockets {
@@ -576,7 +582,10 @@ async fn single_stage(program: &Path) {
         .execute()
         .await
         .unwrap();
-    assert_eq!(stream.next().await.unwrap().unwrap(), RECORD);
+    assert_eq!(
+        stream.next().await.unwrap().unwrap().into_lines(),
+        vec![RECORD.to_vec()]
+    );
     assert!(stream.next().await.is_none());
     let lister = Lister::new(
         program,
@@ -589,6 +598,71 @@ async fn single_stage(program: &Path) {
         },
     );
     let mut stream = Pipeline::new(lister).execute().await.unwrap();
-    assert_eq!(stream.next().await.unwrap().unwrap(), RECORD);
+    assert_eq!(
+        stream.next().await.unwrap().unwrap().into_lines(),
+        vec![RECORD.to_vec()]
+    );
     assert!(stream.next().await.is_none());
+}
+
+async fn configured_batches(program: &Path) {
+    for override_tail in [false, true] {
+        let mut source_args = args("emit");
+        source_args.push("--count=5".into());
+        let source = Emitter::new(
+            program,
+            Output::Captured,
+            EmitterOptions {
+                other: source_args,
+                ..Default::default()
+            },
+        );
+        let tail = reasoner(program, "echo")
+            .with_batching(BatchOptions::new(2, 1024, Duration::from_secs(1)).unwrap());
+        let pipeline = if override_tail {
+            Pipeline::new(source)
+                .with_batching(BatchOptions::new(3, 1024, Duration::from_secs(1)).unwrap())
+                .pipe(tail)
+        } else {
+            Pipeline::new(source).pipe(tail)
+        };
+        let mut batches = pipeline.execute().await.unwrap();
+        let expected = if override_tail {
+            vec![3, 2]
+        } else {
+            vec![2, 2, 1]
+        };
+        for count in expected {
+            let batch = batches.next().await.unwrap().unwrap();
+            assert_eq!(batch.len(), count);
+            assert_eq!(batch.byte_len(), count * RECORD.len());
+            for line in batch.lines() {
+                assert_eq!(line, RECORD);
+            }
+        }
+        assert!(batches.next().await.is_none());
+    }
+}
+
+async fn limited_batches(program: &Path) {
+    let mut source_args = args("emit-hang");
+    source_args.push("--count=10".into());
+    let lister = Lister::new(
+        program,
+        "example:",
+        Output::Captured,
+        ListerOptions {
+            limit: Some(3),
+            other: source_args,
+            ..Default::default()
+        },
+    )
+    .with_batching(BatchOptions::new(2, 1024, Duration::from_secs(30)).unwrap())
+    .with_capabilities(ListerCapabilities::default());
+    // The tail inherits the lister's policy even after capability reconfiguration.
+    // The second partial batch flushes at the line cap, not after the 30 s delay.
+    let mut batches = Pipeline::new(lister).execute().await.unwrap();
+    assert_eq!(batches.next().await.unwrap().unwrap().len(), 2);
+    assert_eq!(batches.next().await.unwrap().unwrap().len(), 1);
+    assert!(batches.next().await.is_none());
 }

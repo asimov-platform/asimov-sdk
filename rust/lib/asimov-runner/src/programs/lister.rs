@@ -2,7 +2,10 @@
 
 //! URL-based directory iteration through an external lister program.
 
-use crate::{CommandExt, Executor, ExecutorError, GraphOutput, JsonlStream, OptionSupport};
+use crate::{
+    CommandExt, Executor, ExecutorError, GraphOutput, Input, JsonlStream, LineStream,
+    OptionSupport, batch_lines,
+};
 use alloc::{
     boxed::Box,
     format,
@@ -16,10 +19,10 @@ use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 pub use asimov_patterns::{ListerCapabilities, ListerOptions};
 
-/// A live stream of JSONL lines from a [`Lister`].
+/// A live stream of JSONL batches from a [`Lister`].
 ///
-/// Lines retain their LF or CRLF terminators; a final unterminated line is also
-/// yielded. Bytes are neither decoded nor validated as JSON. Read, wait, and
+/// Lines within each batch retain LF/CRLF terminators and a final unterminated
+/// line. Bytes are neither decoded nor validated as JSON. Read, wait, and
 /// unsuccessful-exit errors are yielded as a final error item. Consume the stream
 /// to completion to check process success, even when stdout is not captured,
 /// unless the configured line limit is reached. Reaching that limit intentionally
@@ -38,7 +41,7 @@ pub type ListerResult = Result<ListerStream, ExecutorError>;
 /// maximum number of stdout lines in every output mode; `--limit` is also passed
 /// unless native limit support is explicitly unsupported. The local cap works
 /// without native support and protects against bugs in programs that accept the
-/// flag. Captured stdout is streamed one line at a time with
+/// flag. Captured stdout is framed into lines, then streamed in bounded batches with
 /// backpressure rather than buffered until the program exits. Stderr is drained
 /// concurrently while reading and retained for failure diagnostics.
 ///
@@ -163,15 +166,18 @@ impl Lister {
     ///     .offset(OptionSupport::Supported)
     ///     .limit(OptionSupport::Unsupported)
     ///     .build());
-    /// let mut lines = lister.execute().await?;
-    /// while let Some(line) = lines.next().await {
-    ///     let bytes = line?;
+    /// let mut batches = lister.execute().await?;
+    /// while let Some(batch) = batches.next().await {
+    ///     for bytes in batch?.lines() {
+    ///         // Process a line, or use the entire batch for postprocessing.
+    ///     }
     /// }
     /// # Ok(())
     /// # }
     /// ```
     #[must_use]
     pub fn with_capabilities(mut self, capabilities: ListerCapabilities) -> Self {
+        let batching = self.executor.batch_options();
         let program = self
             .executor
             .command()
@@ -179,19 +185,21 @@ impl Lister {
             .get_program()
             .to_os_string();
         Self::configured(program, self.input, self.output, self.options, capabilities)
+            .with_batching(batching)
     }
 
     /// Starts a new lister process and returns its live listing stream, or returns
     /// an empty stream without spawning when the limit is zero.
     ///
     /// Returns after spawning, without waiting for output or process completion.
-    /// With captured stdout, each item contains one line, retaining its terminator
-    /// when present. A final unterminated line is also yielded.
-    /// Other output modes yield no payload lines. With a limit, inherited and
+    /// With captured stdout, items contain batches of complete lines retaining
+    /// terminators when present, including a final unterminated line. Configure
+    /// thresholds with [`Self::with_batching`]; the local line cap applies first.
+    /// Other output modes yield no payload batches. With a limit, inherited and
     /// forwarded stdout is routed through the same line cap; ignored stdout is
     /// read and discarded until EOF or the cap.
-    /// Stderr is buffered without a size bound; stdout buffers only the current
-    /// line and a fixed-size read buffer. JSONL framing does not establish how
+    /// Stderr and individual line sizes are unbounded. Batch accumulation follows
+    /// [`crate::BatchOptions`]. JSONL framing does not establish how
     /// many lines or RDF statements belong to one logical listing entry.
     ///
     /// After option and capability validation, `None` leaves output unlimited.
@@ -201,6 +209,7 @@ impl Lister {
     /// retains the stream. Reaching the cap ends the listing intentionally: no
     /// later output or exit error is observed. Forwarded output is flushed on
     /// completion. Blank and unterminated final lines each count as one line.
+    /// A partially filled final batch is emitted immediately at the cap.
     ///
     /// # Errors
     ///
@@ -209,21 +218,31 @@ impl Lister {
     /// Returns [`ExecutorError::UnsupportedOption`] before spawning if requested
     /// sorting, offset, or a cursor bound is explicitly unsupported, even with a
     /// zero limit. Otherwise returns an [`ExecutorError`] if spawning fails. Subsequent I/O and exit
-    /// errors are delivered through the stream, after any preceding output lines.
+    /// errors are delivered through the stream, after flushing buffered complete lines.
     pub async fn execute(&mut self) -> ListerResult {
+        let batching = self.executor.batch_options();
+        Ok(batch_lines(self.execute_lines().await?, batching))
+    }
+
+    /// Limits raw lines before batching so even a small cap stops the source
+    /// immediately, without collecting a full batch or counting batches as lines.
+    pub(crate) async fn execute_lines(&mut self) -> Result<LineStream, ExecutorError> {
         self.validate()?;
         let Some(limit) = self.options.limit else {
             return self
                 .executor
-                .execute_jsonl_with_output(&mut self.output)
+                .execute_jsonl_lines_with_io(&mut Input::Ignored, &mut self.output)
                 .await;
         };
         if limit == 0 {
             return Ok(Box::pin(futures_lite::stream::empty()));
         }
 
-        let mut source = self.executor.execute_jsonl().await?;
-        let stream: JsonlStream = Box::pin(async_stream::try_stream! {
+        let mut source = self
+            .executor
+            .execute_jsonl_lines_with_io(&mut Input::Ignored, &mut GraphOutput::Captured)
+            .await?;
+        let stream: LineStream = Box::pin(async_stream::try_stream! {
             for remaining in (0..limit).rev() {
                 let Some(line) = source.next().await else {
                     break;
@@ -320,9 +339,9 @@ impl Lister {
 
 /// Consumes a bounded listing without returning payload lines to the caller.
 fn forward_lines(
-    mut stream: JsonlStream,
+    mut stream: LineStream,
     mut writer: Option<Box<dyn AsyncWrite + Send + Sync + Unpin>>,
-) -> JsonlStream {
+) -> LineStream {
     Box::pin(async_stream::stream! {
         let result = async move {
             while let Some(line) = stream.next().await {
@@ -344,6 +363,8 @@ fn forward_lines(
 
 impl asimov_patterns::Lister<ListerStream> for Lister {}
 
+crate::batch::with_batching!(Lister);
+
 impl From<Lister> for crate::pipeline::PipelineStage {
     fn from(mut value: Lister) -> Self {
         let error = value
@@ -358,7 +379,8 @@ impl From<Lister> for crate::pipeline::PipelineStage {
                 .get_program()
                 .to_os_string();
             let writer = matches!(value.output, GraphOutput::AsyncWrite(_));
-            Self::limited_lister(value, program, writer, error)
+            let batching = value.executor.batch_options();
+            Self::limited_lister(value, program, writer, error, batching)
         } else {
             Self::native(value.executor, crate::Input::Ignored, value.output, error)
         }
@@ -475,7 +497,8 @@ mod tests {
             ),
         ];
         for (options, expected) in cases {
-            let mut stream = cursor_lister(options).execute().await.unwrap();
+            let mut stream =
+                crate::flatten_batches(cursor_lister(options).execute().await.unwrap());
             for id in expected {
                 assert_eq!(
                     stream.next().await.unwrap().unwrap(),
@@ -497,6 +520,7 @@ mod tests {
             })
             .execute()
             .await
+            .map(crate::flatten_batches)
             .unwrap();
             assert_eq!(
                 stream.next().await.unwrap().unwrap(),
@@ -669,6 +693,7 @@ mod tests {
             )
             .execute()
             .await
+            .map(crate::flatten_batches)
             .unwrap();
             timeout(Duration::from_secs(5), async {
                 if captured {
@@ -775,7 +800,7 @@ mod tests {
             offset: OptionSupport::Unsupported,
             ..Default::default()
         });
-        let mut stream = lister.execute().await.unwrap();
+        let mut stream = crate::flatten_batches(lister.execute().await.unwrap());
         assert_eq!(
             timeout(Duration::from_secs(5), stream.next())
                 .await
@@ -890,6 +915,7 @@ mod tests {
                 )
                 .execute()
                 .await
+                .map(crate::flatten_batches)
                 .unwrap();
                 for line in &expected[..limit.min(expected.len())] {
                     assert_eq!(stream.next().await.unwrap().unwrap(), *line);
@@ -931,6 +957,7 @@ mod tests {
         )
         .execute()
         .await
+        .map(crate::flatten_batches)
         .unwrap();
         let pid = timeout(Duration::from_secs(5), stream.next())
             .await
@@ -985,6 +1012,7 @@ mod tests {
             )
             .execute()
             .await
+            .map(crate::flatten_batches)
             .unwrap();
             assert_eq!(stream.next().await.unwrap().unwrap(), b"{}\n");
             if limit == 2 {
@@ -1000,13 +1028,14 @@ mod tests {
 
     #[tokio::test]
     async fn streams_before_process_exit() {
-        let mut stream = timeout(
+        let stream = timeout(
             Duration::from_secs(5),
             shell("printf '{}\\n'; exec sleep 30", GraphOutput::Captured).execute(),
         )
         .await
         .expect("execute must return before the process exits")
         .unwrap();
+        let mut stream = crate::flatten_batches(stream);
         let line = timeout(Duration::from_secs(5), stream.next())
             .await
             .expect("the first line must arrive before the process exits");
@@ -1022,6 +1051,7 @@ mod tests {
         )
         .execute()
         .await
+        .map(crate::flatten_batches)
         .unwrap();
         for expected in [b"{}\n".as_slice(), b"\r\n", b"\xff\n", b"{\"last\":true}"] {
             assert_eq!(stream.next().await.unwrap().unwrap(), expected);
@@ -1039,6 +1069,7 @@ mod tests {
             )
             .execute()
             .await
+            .map(crate::flatten_batches)
             .unwrap();
             assert_eq!(stream.next().await.unwrap().unwrap(), b"{}\n");
             match stream.next().await.unwrap().unwrap_err() {

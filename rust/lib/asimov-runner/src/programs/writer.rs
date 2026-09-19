@@ -39,7 +39,7 @@ impl Writer {
     /// Adds any configured `--input=<format>` and `--output=<format>` arguments,
     /// followed by `options.other`. The input and output values select stdin
     /// and stdout; stderr is captured for failure diagnostics.
-    /// Byte input is lazily adapted into JSONL lines using [`GraphInput::into_jsonl`].
+    /// Byte input is lazily adapted into JSONL batches using [`GraphInput::into_jsonl`].
     pub fn new(
         program: impl AsRef<OsStr>,
         input: GraphInput,

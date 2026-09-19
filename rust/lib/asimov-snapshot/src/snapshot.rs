@@ -127,8 +127,12 @@ impl<S: crate::storage::Storage> Snapshotter<S> {
                 .execute()
                 .await?;
                 let mut data = Vec::new();
-                while let Some(line) = stream.next().await {
-                    data.extend(line?);
+                while let Some(batch) = stream.next().await {
+                    let batch = batch?;
+                    data.reserve(batch.byte_len());
+                    for line in batch.lines() {
+                        data.extend_from_slice(line);
+                    }
                 }
                 Ok::<_, asimov_runner::ExecutorError>(data)
             }
@@ -166,8 +170,12 @@ impl<S: crate::storage::Storage> Snapshotter<S> {
                 .execute()
                 .await?;
                 let mut data = Vec::new();
-                while let Some(line) = stream.next().await {
-                    data.extend(line?);
+                while let Some(batch) = stream.next().await {
+                    let batch = batch?;
+                    data.reserve(batch.byte_len());
+                    for line in batch.lines() {
+                        data.extend_from_slice(line);
+                    }
                 }
                 Ok::<_, asimov_runner::ExecutorError>(data)
             }

@@ -1,10 +1,10 @@
 // This is free and unencumbered software released into the public domain.
 
-//! Line-based JSONL transport for graph programs.
+//! Batched JSONL transport for graph programs, with line framing underneath.
 //!
 //! # Connecting graph programs
 //!
-//! `GraphInput::Jsonl` below connects user-space line streams. For a supervised
+//! `GraphInput::Jsonl` below connects user-space batch streams. For a supervised
 //! process chain using native OS pipes, use [`crate::Pipeline`].
 //!
 //! ```no_run
@@ -24,21 +24,24 @@
 //!     GraphOutput::Captured,
 //!     Default::default(),
 //! ).execute().await?;
-//! while let Some(line) = matches.next().await {
-//!     let bytes = line?;
-//!     // Process this line; continue to EOF to observe eventual failures.
+//! while let Some(batch) = matches.next().await {
+//!     for bytes in batch?.lines() {
+//!         // Process a line, or submit the whole batch to a network service.
+//!     }
+//!     // Continue to EOF to observe eventual failures.
 //! }
 //! # Ok(())
 //! # }
 //! ```
 
-use crate::{Executor, ExecutorError, Input, Output};
+use crate::{
+    BatchOptions, BatchStream, Executor, ExecutorError, Input, LineStream, Output, batch_lines,
+};
 use alloc::{boxed::Box, vec::Vec};
-use core::pin::Pin;
-use futures_lite::{Stream, StreamExt};
+use futures_lite::StreamExt;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 
-/// A fallible stream of JSONL lines, without JSON parsing or UTF-8 validation.
+/// A fallible stream of [`crate::JsonlBatch`] values, without JSON parsing or UTF-8 validation.
 ///
 /// This alias is also usable for reader adapters and caller-supplied streams;
 /// the type alone imposes no process lifecycle or record-validation behavior.
@@ -48,16 +51,17 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 /// a final unterminated line. Execution returns after spawning; polling drives
 /// input, stdout, and stderr concurrently, with backpressure. No background task
 /// drains the pipes while the stream is idle. Consume to completion to check
-/// exit status: errors are final items, following any lines already yielded.
-/// Stderr is buffered without a size bound; stdout buffers the current line and
-/// a fixed-size read buffer, with no maximum line length. Dropping a process
+/// exit status: buffered complete lines are flushed in a partial batch before a
+/// subsequent error is yielded as the final item. [`BatchOptions`] bounds batch
+/// count/size and collection delay. Stderr and individual lines have no configured
+/// size bound. Dropping a process
 /// stream requests termination under the executor's default kill-on-drop policy;
 /// overriding that policy through [`Executor::command`] also affects streaming.
 /// [`Executor::execute_jsonl_with_io`] additionally supports forwarding instead
-/// of capture: those streams yield no payload lines but must still be consumed
+/// of capture: those streams yield no payload batches but must still be consumed
 /// to drive I/O and observe completion. Errors use
 /// [`crate::ExecutionCompletion::into_result`] precedence.
-pub type JsonlStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>, ExecutorError>> + Send>>;
+pub type JsonlStream = BatchStream<ExecutorError>;
 
 /// Splits an asynchronous byte reader into lines, preserving all bytes.
 ///
@@ -66,7 +70,7 @@ pub type JsonlStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>, ExecutorError>>
 /// by polling, with no maximum line length. A read error is yielded once and
 /// ends the stream; bytes in a partially read line are not yielded on error.
 /// Dropping this stream drops its reader, without checking any process status.
-pub fn jsonl_lines(reader: impl AsyncRead + Send + Unpin + 'static) -> JsonlStream {
+pub fn jsonl_lines(reader: impl AsyncRead + Send + Unpin + 'static) -> LineStream {
     Box::pin(async_stream::try_stream! {
         let mut reader = BufReader::new(reader);
         loop {
@@ -79,10 +83,19 @@ pub fn jsonl_lines(reader: impl AsyncRead + Send + Unpin + 'static) -> JsonlStre
     })
 }
 
+/// Reads and batches JSONL without changing bytes or line endings. Reading is
+/// lazy; see [`batch_lines`] for thresholds, timer, EOF, and error behavior.
+pub fn jsonl_batches(
+    reader: impl AsyncRead + Send + Unpin + 'static,
+    options: BatchOptions,
+) -> JsonlStream {
+    batch_lines(jsonl_lines(reader), options)
+}
+
 impl Executor {
-    /// Spawns a program and streams its stdout as JSONL lines.
+    /// Spawns a program and streams its stdout as JSONL batches.
     ///
-    /// Uses the configured standard streams; stdout must be piped to yield lines.
+    /// Uses the configured standard streams; stdout must be piped to yield batches.
     /// No input is written. Any piped stdin is closed when the stream is polled.
     /// Even with ignored or inherited stdout, consume the stream to completion
     /// to check process success. See [`JsonlStream`] for polling and drop behavior.
@@ -138,7 +151,9 @@ impl Executor {
     ///
     /// Configure the command using the policies' `as_stdio` methods first.
     /// Successful spawning transfers input and any output writer into the stream.
-    /// Captured stdout yields lines; other modes yield only eventual errors.
+    /// Captured stdout yields batches using [`Self::batch_options`]; other modes
+    /// yield only eventual errors. Complete lines buffered before an error are
+    /// delivered as a partial batch first.
     /// A transferred writer is flushed at EOF, not shut down, and the wrapper's
     /// output policy becomes [`Output::Ignored`] for subsequent executions.
     /// Non-writer output policies remain reusable. Spawn failure consumes neither.
@@ -153,6 +168,18 @@ impl Executor {
         input: &mut Input,
         output: &mut Output,
     ) -> Result<JsonlStream, ExecutorError> {
+        let options = self.batch_options();
+        let lines = self.execute_jsonl_lines_with_io(input, output).await?;
+        Ok(batch_lines(lines, options))
+    }
+
+    /// The single process-lifecycle implementation. Batching and local line caps
+    /// are layered above this primitive rather than duplicating execution logic.
+    pub(crate) async fn execute_jsonl_lines_with_io(
+        &mut self,
+        input: &mut Input,
+        output: &mut Output,
+    ) -> Result<LineStream, ExecutorError> {
         let mut process = self.spawn().await?;
         let stdout = if matches!(output, Output::Captured) {
             process.stdout.take()
@@ -213,7 +240,7 @@ mod tests {
                 let line = timeout(Duration::from_secs(5), stream.next())
                     .await
                     .expect("output must not wait for exit");
-                assert_eq!(line.unwrap().unwrap(), b"{}\n");
+                assert_eq!(line.unwrap().unwrap().into_lines(), vec![b"{}\n".to_vec()]);
             }};
         }
         check!(Adapter::new(
@@ -275,7 +302,7 @@ mod tests {
     async fn output_is_available_while_input_is_still_open() {
         timeout(Duration::from_secs(5), async {
             let source = Box::pin(async_stream::try_stream! {
-                yield b"{}".to_vec();
+                yield JsonlBatch::new(vec![b"{}".to_vec()]);
                 core::future::pending::<()>().await;
             });
             let mut stream = Matcher::new(
@@ -287,7 +314,10 @@ mod tests {
             .execute()
             .await
             .unwrap();
-            assert_eq!(stream.next().await.unwrap().unwrap(), b"{}\n");
+            assert_eq!(
+                stream.next().await.unwrap().unwrap().into_lines(),
+                vec![b"{}\n".to_vec()]
+            );
         })
         .await
         .expect("output must not wait for input EOF");
@@ -311,7 +341,9 @@ mod tests {
             .unwrap()
             .unwrap()
             .unwrap();
-        let pid = std::str::from_utf8(&pid).unwrap().trim();
+        let pid = std::str::from_utf8(pid.lines().next().unwrap())
+            .unwrap()
+            .trim();
         drop(stream);
         timeout(Duration::from_secs(5), async {
             while tokio::process::Command::new("/bin/kill")
@@ -336,8 +368,8 @@ mod tests {
             let line = [b"\"".as_slice(), &vec![b'x'; 1024], b"\"\n"].concat();
             let source_line = line.clone();
             let source = Box::pin(async_stream::try_stream! {
-                for _ in 0..4096 {
-                    yield source_line.clone();
+                for _ in 0..64 {
+                    yield JsonlBatch::new(vec![source_line.clone(); 64]);
                 }
             });
             let mut stream = Reasoner::new(
@@ -350,8 +382,11 @@ mod tests {
             ).execute().await.unwrap();
             let mut count = 0;
             while let Some(actual) = stream.next().await {
-                assert_eq!(actual.unwrap(), line);
-                count += 1;
+                let batch = actual.unwrap();
+                for actual in batch.lines() {
+                    assert_eq!(actual, line);
+                }
+                count += batch.len();
             }
             assert_eq!(count, 4096);
         }).await.expect("full-duplex graph transport must not deadlock");
@@ -378,6 +413,7 @@ mod tests {
         )
         .execute()
         .await
+        .map(flatten_batches)
         .unwrap();
         assert_eq!(stream.next().await.unwrap().unwrap(), b"{}\r\n");
         assert_eq!(stream.next().await.unwrap().unwrap(), b"{\"last\":true}\n");
@@ -450,8 +486,8 @@ mod tests {
     async fn writer_and_indexer_consume_jsonl() {
         let input = || {
             GraphInput::Jsonl(Box::pin(futures_lite::stream::iter([
-                Ok(b"{}".to_vec()),
-                Ok(b"[]\r\n".to_vec()),
+                Ok(JsonlBatch::default()),
+                Ok(JsonlBatch::new(vec![b"{}".to_vec(), b"[]\r\n".to_vec()])),
             ])))
         };
         let script = "test \"$(cat)\" = \"$(printf '{}\\n[]\\r')\" || exit 65";
@@ -494,7 +530,10 @@ mod tests {
             .stdout(Stdio::piped());
         let mut stream = executor.execute_jsonl_with_input(&mut input).await.unwrap();
         assert!(matches!(input, Input::Ignored));
-        assert_eq!(stream.next().await.unwrap().unwrap(), b"{}\n");
+        assert_eq!(
+            stream.next().await.unwrap().unwrap().into_lines(),
+            vec![b"{}\n".to_vec()]
+        );
         assert!(stream.next().await.is_none());
     }
 }

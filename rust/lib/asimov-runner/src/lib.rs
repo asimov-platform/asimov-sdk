@@ -13,18 +13,20 @@
 //! configuration, process management, and exit-status handling. The wrappers in
 //! `programs` translate pattern-specific options into command-line arguments
 //! and implement the corresponding traits from `asimov-patterns`, including
-//! [`Execute`]. Execution requires a Tokio runtime with process and I/O support.
+//! [`Execute`]. Execution requires a Tokio runtime with process, I/O, and time support.
 //!
 //! # Input and output
 //!
-//! [`Input`] selects empty stdin, an asynchronous byte reader, or a JSONL line
+//! [`Input`] selects empty stdin, an asynchronous byte reader, or a JSONL batch
 //! stream. [`Output`] selects how a child's standard output is handled. Aliases
 //! such as [`GraphInput`] and [`TextOutput`] describe a stream's intended content;
 //! they do not parse, validate, or convert that content.
 //!
-//! With `std`, graph producers return a live [JSONL stream][jsonl] of byte-vector
-//! lines. Graph consumers accept `GraphInput::Jsonl` for direct composition, or
-//! adapt an asynchronous reader into lines. Other results are buffered until completion.
+//! With `std`, graph producers return a live [JSONL stream][jsonl] of `JsonlBatch`
+//! values containing owned byte-vector lines. Graph consumers accept
+//! `GraphInput::Jsonl` for direct composition, or adapt byte readers into batches.
+//! `BatchOptions` controls count, byte target, and collection delay; `flatten_batches`
+//! adapts the result for line-at-a-time consumers. Other results are buffered until completion.
 //! Choose [`Output::Captured`] to retrieve stdout. Pattern-specific behavior and
 //! current limitations are described in the `programs` module.
 //! With `std`, `Pipeline::new(source).pipe(consumer)` constructs a typed linear
@@ -50,9 +52,10 @@
 //!     FetcherOptions::default(),
 //! );
 //! let mut graph = fetcher.execute().await?;
-//! while let Some(line) = graph.next().await {
-//!     let bytes = line?;
-//!     // Process this JSONL graph line.
+//! while let Some(batch) = graph.next().await {
+//!     for bytes in batch?.lines() {
+//!         // Process a JSONL line, or pass the whole batch to a service.
+//!     }
 //! }
 //! # Ok(())
 //! # }
@@ -87,6 +90,11 @@ pub use asimov_patterns::Execute;
 pub use asimov_patterns::OptionSupport;
 pub use clientele::SysexitsError;
 pub use tokio::process::Command;
+
+#[cfg(feature = "std")]
+pub mod batch;
+#[cfg(feature = "std")]
+pub use batch::*;
 
 #[cfg(feature = "std")]
 pub mod command_ext;

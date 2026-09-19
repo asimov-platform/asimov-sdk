@@ -12,7 +12,7 @@ use tokio::io::AsyncWrite;
 
 /// An output stream with no prescribed content type.
 pub type AnyOutput = Output;
-/// Stdout handling for a graph producer, whose captured output is a JSONL line stream.
+/// Stdout handling for a graph producer, whose captured output is a JSONL batch stream.
 pub type GraphOutput = Output;
 /// The absence of an output value for a program pattern.
 pub type NoOutput = ();

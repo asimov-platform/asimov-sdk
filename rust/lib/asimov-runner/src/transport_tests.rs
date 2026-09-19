@@ -343,7 +343,10 @@ async fn completion_separates_successful_exit_from_interrupted_input() {
     ));
 
     let mut stream = executor.execute_jsonl_with_input(&mut input).await.unwrap();
-    assert_eq!(stream.next().await.unwrap().unwrap(), b"done");
+    assert_eq!(
+        stream.next().await.unwrap().unwrap().into_lines(),
+        vec![b"done".to_vec()]
+    );
     assert!(matches!(
         stream.next().await,
         Some(Err(ExecutorError::IncompleteInput))

@@ -41,7 +41,7 @@
 //! Concrete behavior is documented in [`asimov-runner`][runner]: consult its
 //! [execution and results][results] section for result types, input ownership,
 //! output routing, and cancellation; [completion outcomes][completion] for error
-//! precedence; and [JSONL transport][jsonl] for graph framing and composition.
+//! precedence; and [JSONL transport][jsonl] for graph framing, batching, and composition.
 //! The runner's [linear pipelines][pipelines] connect compatible process-backed
 //! programs and coordinate their completion independently of these marker traits.
 //!

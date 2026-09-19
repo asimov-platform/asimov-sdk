@@ -35,7 +35,7 @@ impl Reasoner {
     /// Adds any configured `--input=<format>` and `--output=<format>` arguments,
     /// followed by `options.other`. The input and output values select stdin
     /// and stdout; stderr is captured for failure diagnostics.
-    /// Byte input is lazily adapted into JSONL lines using [`GraphInput::into_jsonl`].
+    /// Byte input is lazily adapted into JSONL batches using [`GraphInput::into_jsonl`].
     pub fn new(
         program: impl AsRef<OsStr>,
         input: GraphInput,
@@ -77,6 +77,8 @@ impl Reasoner {
 }
 
 impl asimov_patterns::Reasoner<JsonlStream> for Reasoner {}
+
+crate::batch::with_batching!(Reasoner);
 
 crate::pipeline::stage!(
     Reasoner,

@@ -8,7 +8,7 @@
 //! those steps. `execute` and `wait` buffer captured output until the child exits;
 //! `spawn` returns the live child handle without collecting its output.
 //! [`Executor::execute_jsonl`] and [`Executor::execute_jsonl_with_input`] instead
-//! return live line streams with concurrent input/output handling.
+//! return live batch streams with concurrent input/output handling.
 
 use crate::{
     Command, ExecutionCompletion, ExecutorError, ExecutorResult, Input, InputCompletion, Output,
@@ -52,7 +52,7 @@ use tokio::process::Child;
 /// # }
 /// ```
 #[derive(Debug)]
-pub struct Executor(Command);
+pub struct Executor(Command, crate::BatchOptions);
 
 impl Executor {
     /// Prepares a command with the executor's default environment and streams.
@@ -77,7 +77,20 @@ impl Executor {
         command.stdout(Stdio::null());
         command.stderr(Stdio::null());
         command.kill_on_drop(true);
-        Self(command)
+        Self(command, crate::BatchOptions::default())
+    }
+
+    /// Configures batching for captured JSONL results, without changing the
+    /// subprocess command or byte-oriented execution methods.
+    #[must_use]
+    pub fn with_batching(mut self, options: crate::BatchOptions) -> Self {
+        self.1 = options;
+        self
+    }
+
+    /// The policy used for captured JSONL batches.
+    pub fn batch_options(&self) -> crate::BatchOptions {
+        self.1
     }
 
     /// Returns the underlying command for configuring arguments, environment,
@@ -101,7 +114,7 @@ impl Executor {
         self.0.stderr(Stdio::null());
     }
 
-    /// Pipes stdout for buffered execution or live JSONL streaming.
+    /// Pipes stdout for buffered execution or live JSONL batch streaming.
     pub fn capture_stdout(&mut self) {
         self.0.stdout(Stdio::piped());
     }
@@ -136,7 +149,7 @@ impl Executor {
     /// bytes after early exit or cancellation.
     ///
     /// Input is fed concurrently with draining stdout and stderr. JSONL input
-    /// is written one line at a time with backpressure and source error propagation.
+    /// is coalesced per batch with backpressure and source error propagation.
     /// Early child exit cancels a pending input feed and is reported as
     /// [`ExecutorError::IncompleteInput`] on an otherwise successful exit. Use
     /// [`execute_with_io_completion`](Self::execute_with_io_completion) to inspect

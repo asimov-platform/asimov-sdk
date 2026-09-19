@@ -63,7 +63,9 @@
 //! Programs must agree on a JSON-LD profile and use the connected standard streams;
 //! arbitrary `other` arguments and file operands are not interpreted by this API.
 //!
-//! Graph-producing tails return a live [`PipelineStream`]; a [`Writer`] tail
+//! Graph-producing tails return a live [`PipelineStream`] of [`crate::JsonlBatch`]
+//! values. [`Pipeline::with_batching`] overrides the tail program's default
+//! batching policy; intermediate native pipe edges remain byte streams. A [`Writer`] tail
 //! returns buffered arbitrary-format bytes, and an [`Indexer`] tail returns `()`.
 //! Success requires every stage to complete successfully, not just the tail.
 //! Failures include their zero-based stage index and executable. The first
@@ -77,8 +79,11 @@
 //! endpoints are released immediately after spawning. Polling the execution or
 //! returned stream drives supervision and boundary I/O; no detached tasks are
 //! created. Stderr and buffered final output have no configured size bound.
+//! Graph batch sizes and collection delay follow [`BatchOptions`]. EOF flushes
+//! a partial batch. Already-read complete lines are delivered before a terminal
+//! error, without delaying cleanup once that error is observed.
 //!
-//! A limited [`Lister`] uses its existing bounded line stream at the first edge
+//! A limited [`Lister`] applies its line cap before producing batches at the first edge
 //! so native pipe wiring cannot bypass the runner's limit. That edge is relayed
 //! with backpressure through `Input::Jsonl` (which terminates unterminated input
 //! lines with LF); other edges remain direct OS pipes. A zero-limit lister starts
@@ -87,9 +92,33 @@
 //! lister execution, including its kill-on-drop/reaping policy. Native pipes
 //! otherwise preserve bytes exactly. Neither a
 //! successful exit nor writing to a pipe proves application-level processing.
+//!
+//! # Batch-oriented postprocessing
+//!
+//! ```no_run
+//! use asimov_runner::{BatchOptions, Fetcher, GraphOutput, Pipeline};
+//! use futures_lite::StreamExt;
+//! use std::time::Duration;
+//!
+//! # async fn example() -> Result<(), asimov_runner::PipelineError> {
+//! let fetcher = Fetcher::new(
+//!     "asimov-example-fetcher", "https://example.com/resource",
+//!     GraphOutput::Captured, Default::default(),
+//! );
+//! let policy = BatchOptions::new(128, 64 * 1024, Duration::from_millis(5))
+//!     .expect("nonzero thresholds");
+//! let mut batches = Pipeline::new(fetcher).with_batching(policy).execute().await?;
+//! while let Some(batch) = batches.next().await {
+//!     let batch = batch?;
+//!     // Submit the whole batch to a network service, or iterate batch.lines().
+//! }
+//! # Ok(())
+//! # }
+//! ```
 
 use crate::{
-    Executor, ExecutorError, Indexer, Input, InputCompletion, JsonlStream, Lister, Output, Writer,
+    BatchOptions, BatchStream, Executor, ExecutorError, Indexer, Input, InputCompletion,
+    LineStream, Lister, Output, Writer, batch_lines,
 };
 use alloc::{boxed::Box, vec, vec::Vec};
 use core::{
@@ -99,7 +128,7 @@ use core::{
     pin::Pin,
     task::Poll,
 };
-use futures_lite::{Stream, StreamExt};
+use futures_lite::StreamExt;
 use std::{
     ffi::OsString,
     io::{self, Cursor},
@@ -136,9 +165,9 @@ impl core::error::Error for PipelineError {
     }
 }
 
-/// Live final graph lines; consume to EOF to check every stage's outcome.
+/// Live final graph batches; consume to EOF to check every stage's outcome.
 /// Dropping the stream requests termination of all owned children.
-pub type PipelineStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>, PipelineError>> + Send>>;
+pub type PipelineStream = BatchStream<PipelineError>;
 
 mod sealed {
     pub trait Sealed {}
@@ -197,6 +226,7 @@ programs! {
 #[derive(Debug)]
 pub struct Pipeline<P> {
     stages: Vec<PipelineStage>,
+    batching: Option<BatchOptions>,
     tail: PhantomData<fn() -> P>,
 }
 
@@ -206,6 +236,7 @@ impl<P: PipelineProgram> Pipeline<P> {
     pub fn new(program: P) -> Self {
         Self {
             stages: vec![program.into()],
+            batching: None,
             tail: PhantomData,
         }
     }
@@ -218,14 +249,32 @@ impl<P: GraphProducer> Pipeline<P> {
         self.stages.push(program.into());
         Pipeline {
             stages: self.stages,
+            batching: self.batching,
             tail: PhantomData,
         }
     }
 
-    /// Spawns the pipeline and returns final JSONL lines without waiting for exit.
+    /// Overrides batching for the final Rust-facing graph stream. Native pipe
+    /// edges are unchanged. This override survives `pipe` calls; otherwise the
+    /// final program's batching policy is used. Byte/unit tails do not batch output.
+    #[must_use]
+    pub fn with_batching(mut self, options: BatchOptions) -> Self {
+        self.batching = Some(options);
+        self
+    }
+
+    /// Spawns the pipeline and returns final JSONL batches without waiting for exit.
     /// Configuration/launch errors are returned directly; later failures are
-    /// final stream items. Non-captured final output yields no payload lines.
+    /// final stream items after any buffered complete lines. Non-captured final
+    /// output yields no payload batches.
     pub async fn execute(self) -> Result<PipelineStream, PipelineError> {
+        let batching = self
+            .batching
+            .unwrap_or(self.stages.last().unwrap().batching);
+        Ok(batch_lines(self.execute_lines().await?, batching))
+    }
+
+    async fn execute_lines(self) -> Result<LineStream<PipelineError>, PipelineError> {
         let mut running = start(self.stages, true).await?;
         let mut lines = running.lines.take();
         let tail = running.tail.clone();
@@ -285,6 +334,7 @@ pub struct PipelineStage {
     error: Option<ExecutorError>,
     external_input: bool,
     external_writer: bool,
+    batching: BatchOptions,
 }
 
 #[derive(Debug)]
@@ -306,6 +356,7 @@ impl PipelineStage {
     ) -> Self {
         Self {
             program: executor.command().as_std().get_program().to_os_string(),
+            batching: executor.batch_options(),
             external_input: !matches!(input, Input::Ignored),
             external_writer: matches!(output, Output::AsyncWrite(_)),
             kind: StageKind::Native {
@@ -322,6 +373,7 @@ impl PipelineStage {
         program: OsString,
         external_writer: bool,
         error: Option<ExecutorError>,
+        batching: BatchOptions,
     ) -> Self {
         Self {
             program,
@@ -329,6 +381,7 @@ impl PipelineStage {
             error,
             external_input: false,
             external_writer,
+            batching,
         }
     }
 }
@@ -383,7 +436,7 @@ type Job = Pin<Box<dyn Future<Output = Result<Vec<u8>, PipelineError>> + Send>>;
 struct Running {
     jobs: Vec<Option<Job>>,
     stop: watch::Sender<bool>,
-    lines: Option<JsonlStream>,
+    lines: Option<LineStream>,
     tail: StageInfo,
     failure: Option<PipelineError>,
     output: Vec<u8>,
@@ -530,7 +583,12 @@ async fn start(
             unreachable!()
         };
         if stages.is_empty() {
-            running.lines = Some(lister.execute().await.map_err(|error| info.error(error))?);
+            running.lines = Some(
+                lister
+                    .execute_lines()
+                    .await
+                    .map_err(|error| info.error(error))?,
+            );
             return Ok(running);
         }
         limited_source = Some(lister);

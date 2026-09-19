@@ -78,6 +78,8 @@ impl Reader {
 
 impl asimov_patterns::Reader<JsonlStream> for Reader {}
 
+crate::batch::with_batching!(Reader);
+
 crate::pipeline::stage!(
     Reader,
     value,

@@ -77,6 +77,8 @@ impl Adapter {
 
 impl asimov_patterns::Adapter<JsonlStream> for Adapter {}
 
+crate::batch::with_batching!(Adapter);
+
 crate::pipeline::stage!(
     Adapter,
     value,

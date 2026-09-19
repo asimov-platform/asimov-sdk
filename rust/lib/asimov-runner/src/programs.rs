@@ -75,11 +75,20 @@
 //!
 //! Graph producers ([`Adapter`], [`Emitter`], [`Fetcher`], [`Lister`], [`Matcher`],
 //! [`Reader`], and [`Reasoner`]) return a live [`JsonlStream`](crate::JsonlStream).
-//! Execution returns after spawning; polling yields byte-vector lines, preserving
-//! LF/CRLF terminators and an unterminated final line. Spawn errors are returned
-//! directly; input, read, and exit errors are stream items. Consume the stream to
+//! Execution returns after spawning; polling yields [`JsonlBatch`](crate::JsonlBatch)
+//! values containing byte-vector lines, preserving LF/CRLF terminators and an
+//! unterminated final line. Spawn errors are returned directly; input, read, and
+//! exit errors are stream items after any buffered complete lines. Consume the stream to
 //! completion to check process success. Ignored or inherited stdout yields no
-//! lines but still checks the exit status when polled to completion.
+//! batches but still checks the exit status when polled to completion.
+//!
+//! Graph producers expose `with_batching(BatchOptions)` to configure the captured
+//! output stream. Defaults are 256 lines, a 256 KiB target, and 10 ms after a batch
+//! begins. EOF or an error flushes a partial batch; no empty batches are emitted.
+//! An oversized line is a singleton batch. Backpressure bounds read-ahead, and
+//! batching needs a Tokio runtime with time enabled. Batch boundaries are not
+//! graph/entry boundaries or additional subprocess framing. Use
+//! [`flatten_batches`](crate::flatten_batches) for individual-line consumers.
 //! [`Lister`] enforces its configured limit locally as a stdout line cap in every
 //! output mode. Native `--limit` support is optional: the flag is forwarded for
 //! unknown/supported capability and omitted when explicitly unsupported. The
@@ -95,12 +104,14 @@
 //! JSON-LD `@id` URIs. Limit applies after sorting and pagination. On reaching
 //! the line cap it stops the child
 //! and ends the stream without checking eventual exit status. A zero limit does
-//! not spawn a child. This cap counts serialized lines, not logical RDF entries.
+//! not spawn a child. This cap counts serialized lines, not batches or logical
+//! RDF entries, and is applied before batching so the child stops promptly.
 //!
 //! Graph consumers ([`Matcher`], [`Reasoner`], [`Indexer`], and [`Writer`]) accept
 //! [`GraphInput::Jsonl`](crate::GraphInput::Jsonl) for direct stream composition.
-//! Byte readers are adapted into lines. Each input item is written with an LF
-//! appended if missing, preserving existing LF/CRLF endings. Blank lines are
+//! Byte readers are adapted into batches. Each batch is coalesced into a reusable
+//! write buffer, with an LF appended to each line if missing. Existing LF/CRLF
+//! endings are preserved. Empty input batches are ignored and blank lines are
 //! preserved; JSON, UTF-8, and RDF are not validated. Use `jsonl` (the pattern
 //! default) for graph format options; selecting another format does not change
 //! the line-based transport.
@@ -154,6 +165,8 @@
 //! limited-lister source uses a bounded relay to preserve the local line cap.
 //! Pipeline construction consumes configured wrappers; external stdin belongs
 //! to the first stage and the final stage's output policy selects the result.
+//! `Pipeline::with_batching` overrides final graph batching; otherwise the final
+//! program's policy applies. Native pipe edges are not parsed into Rust batches.
 //!
 //! All subprocess I/O is awaited within execution or the returned stream;
 //! prompt writing does not use a detached task. Buffered captures, individual

@@ -80,6 +80,8 @@ impl Fetcher {
 
 impl asimov_patterns::Fetcher<JsonlStream> for Fetcher {}
 
+crate::batch::with_batching!(Fetcher);
+
 crate::pipeline::stage!(
     Fetcher,
     value,

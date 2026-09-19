@@ -36,7 +36,7 @@ impl Matcher {
     /// Adds any configured `--input=<format>` and `--output=<format>` arguments,
     /// followed by `options.other`. The input and output values select stdin
     /// and stdout; stderr is captured for failure diagnostics.
-    /// Byte input is lazily adapted into JSONL lines using [`GraphInput::into_jsonl`].
+    /// Byte input is lazily adapted into JSONL batches using [`GraphInput::into_jsonl`].
     pub fn new(
         program: impl AsRef<OsStr>,
         input: GraphInput,
@@ -78,6 +78,8 @@ impl Matcher {
 }
 
 impl asimov_patterns::Matcher<JsonlStream> for Matcher {}
+
+crate::batch::with_batching!(Matcher);
 
 crate::pipeline::stage!(
     Matcher,
@@ -150,7 +152,9 @@ mod tests {
         let mut output = asimov_patterns::Execute::execute(&mut matcher)
             .await
             .unwrap();
-        assert_eq!(output.next().await.unwrap().unwrap(), graph);
+        let batch = output.next().await.unwrap().unwrap();
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch.lines().next().unwrap(), graph);
         assert!(output.next().await.is_none());
     }
 }

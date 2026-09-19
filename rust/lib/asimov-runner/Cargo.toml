@@ -37,14 +37,14 @@ async-trait.workspace = true
 clientele.workspace = true
 derive_more = { workspace = true, features = ["debug"] }
 futures-lite.workspace = true
-tokio = { workspace = true, features = ["io-std", "io-util", "macros", "process", "rt", "sync"] }
+tokio = { workspace = true, features = ["io-std", "io-util", "macros", "process", "rt", "sync", "time"] }
 url.workspace = true
 
 # Optional dependencies:
 tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["full", "test-util"] }
 
 [[test]]
 name = "pipeline"

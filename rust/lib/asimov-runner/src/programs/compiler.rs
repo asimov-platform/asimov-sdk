@@ -59,9 +59,10 @@ pub type CompilerResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>;
 ///     AdapterOptions::default(),
 /// );
 /// let mut graph = adapter.execute().await?;
-/// while let Some(line) = graph.next().await {
-///     let bytes = line?;
-///     // Process this JSONL graph line.
+/// while let Some(batch) = graph.next().await {
+///     for bytes in batch?.lines() {
+///         // Process this JSONL graph line.
+///     }
 /// }
 /// # Ok(())
 /// # }
@@ -230,8 +231,10 @@ mod tests {
         );
         let mut stream = adapter.execute().await.unwrap();
         let mut output = Vec::new();
-        while let Some(line) = stream.next().await {
-            output.extend(line.unwrap());
+        while let Some(batch) = stream.next().await {
+            for line in batch.unwrap().lines() {
+                output.extend_from_slice(line);
+            }
         }
         assert_eq!(output, expected);
     }
