@@ -7,8 +7,7 @@ use alloc::{
 };
 use asimov_module::{ModuleName, resolve::Resolver};
 use asimov_registry::Registry;
-use asimov_runner::GraphOutput;
-use futures_lite::StreamExt;
+use asimov_runner::{GraphOutput, StreamExt};
 use jiff::{Span, Timestamp, ToSpan};
 use std::io::{self, Result};
 

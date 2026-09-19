@@ -4,7 +4,7 @@
 
 use crate::{
     CommandExt, Executor, ExecutorError, GraphOutput, Input, JsonlStream, LineStream,
-    OptionSupport, batch_lines,
+    OptionSupport, StreamExt, batch_lines,
 };
 use alloc::{
     boxed::Box,
@@ -13,7 +13,6 @@ use alloc::{
 };
 use async_trait::async_trait;
 use derive_more::Debug;
-use futures_lite::StreamExt;
 use std::{ffi::OsStr, process::Stdio};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
@@ -152,8 +151,7 @@ impl Lister {
     /// order: local sorting cannot operate on output truncated by a native limit.
     ///
     /// ```no_run
-    /// use asimov_runner::{GraphOutput, Lister, ListerCapabilities, ListerOptions, OptionSupport};
-    /// use futures_lite::StreamExt;
+    /// use asimov_runner::{GraphOutput, Lister, ListerCapabilities, ListerOptions, OptionSupport, StreamExt};
     ///
     /// # async fn example() -> Result<(), asimov_runner::ExecutorError> {
     /// let mut lister = Lister::new(
@@ -235,7 +233,7 @@ impl Lister {
                 .await;
         };
         if limit == 0 {
-            return Ok(Box::pin(futures_lite::stream::empty()));
+            return Ok(Box::pin(crate::stream::empty()));
         }
 
         let mut source = self
@@ -399,8 +397,8 @@ impl asimov_patterns::Execute<ListerStream> for Lister {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use crate::StreamExt;
     use alloc::vec;
-    use futures_lite::StreamExt;
     use std::time::Duration;
     use tokio::time::timeout;
 

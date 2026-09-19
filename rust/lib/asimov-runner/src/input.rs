@@ -135,8 +135,8 @@ async fn write_batches(
     batches: &mut crate::JsonlStream,
     writer: &mut (impl tokio::io::AsyncWrite + Unpin),
 ) -> Result<(), crate::completion::InputFailure> {
+    use crate::StreamExt;
     use crate::completion::InputFailure;
-    use futures_lite::StreamExt;
     use tokio::io::AsyncWriteExt;
 
     let mut buffer = alloc::vec::Vec::new();
@@ -199,7 +199,7 @@ mod tests {
     #[tokio::test]
     async fn coalesces_batches_preserving_line_endings_and_handling_partial_writes() {
         for max_write in [usize::MAX, 3] {
-            let mut batches: JsonlStream = Box::pin(futures_lite::stream::iter([
+            let mut batches: JsonlStream = Box::pin(crate::stream::iter([
                 Ok(JsonlBatch::default()),
                 Ok(JsonlBatch::new(vec![
                     b"{}".to_vec(),
@@ -223,7 +223,7 @@ mod tests {
 
     #[tokio::test]
     async fn batch_source_error_stops_writing_after_complete_batches() {
-        let mut batches: JsonlStream = Box::pin(futures_lite::stream::iter([
+        let mut batches: JsonlStream = Box::pin(crate::stream::iter([
             Ok(JsonlBatch::new(vec![b"first".to_vec()])),
             Err(ExecutorError::UnexpectedOther(io::Error::other(
                 "source failed",

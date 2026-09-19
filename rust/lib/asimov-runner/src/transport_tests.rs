@@ -6,7 +6,6 @@ use core::{
     pin::Pin,
     task::{Context, Poll},
 };
-use futures_lite::StreamExt;
 use std::{
     io::{self, Cursor},
     process::Stdio,
@@ -324,7 +323,7 @@ async fn prompter_reports_failed_prompt_delivery() {
 
 #[tokio::test]
 async fn completion_separates_successful_exit_from_interrupted_input() {
-    let mut input = Input::Jsonl(Box::pin(futures_lite::stream::pending()));
+    let mut input = Input::Jsonl(Box::pin(crate::stream::pending()));
     let mut output = Output::Captured;
     let mut executor = shell("printf 'done'", &input, &output);
     let completion = timeout(
@@ -380,9 +379,9 @@ async fn broken_pipe_does_not_hide_exit_diagnostics() {
 
 #[tokio::test]
 async fn upstream_error_terminates_child_and_is_not_masked_by_signal() {
-    let source = futures_lite::stream::iter([Err(ExecutorError::UnexpectedOther(
-        io::Error::other("source failed"),
-    ))]);
+    let source = crate::stream::iter([Err(ExecutorError::UnexpectedOther(io::Error::other(
+        "source failed",
+    )))]);
     let mut input = Input::Jsonl(Box::pin(source));
     let mut output = Output::Captured;
     let mut executor = shell("exec sleep 30", &input, &output);

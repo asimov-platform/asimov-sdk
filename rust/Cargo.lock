@@ -1570,7 +1570,6 @@ dependencies = [
  "bon",
  "cap-std",
  "cap-tempfile",
- "futures-lite",
  "hex",
  "jiff",
  "sha2 0.10.9",

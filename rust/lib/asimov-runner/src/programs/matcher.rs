@@ -102,8 +102,8 @@ impl asimov_patterns::Execute<JsonlStream> for Matcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::StreamExt;
     use alloc::vec::Vec;
-    use futures_lite::StreamExt;
     use std::io::Cursor;
 
     #[test]

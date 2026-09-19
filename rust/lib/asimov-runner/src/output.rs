@@ -30,8 +30,7 @@
 //! # #[cfg(feature = "std")]
 //! #[tokio::main(flavor = "current_thread")]
 //! async fn main() -> Result<(), asimov_runner::ExecutorError> {
-//!     use asimov_runner::{Fetcher, FetcherOptions, GraphOutput};
-//!     use futures_lite::StreamExt;
+//!     use asimov_runner::{Fetcher, FetcherOptions, GraphOutput, StreamExt};
 //!
 //!     let mut fetcher = Fetcher::new(
 //!         "asimov-example-fetcher",

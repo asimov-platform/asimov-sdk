@@ -15,7 +15,7 @@
 //! `https://schema.org/Person`. It assumes one JSON-LD object per line, with
 //! expanded type IRIs; it does not perform JSON-LD context expansion. Retained
 //! lines keep their original bytes and ordering. The example uses `serde_json`
-//! to inspect records, plus `async-stream` and `futures-lite` for stream adapters.
+//! to inspect records; the stream traits and generator macro come from this crate.
 //!
 //! Unlike a direct native [`crate::Pipeline::pipe`] connection, an in-process
 //! filter is passed to the next program as [`crate::GraphInput::Jsonl`]. Empty
@@ -27,9 +27,8 @@
 //! ```no_run
 //! use asimov_runner::{
 //!     AnyOutput, BatchOptions, ExecutorError, Fetcher, GraphInput, GraphOutput,
-//!     JsonlBatch, JsonlStream, Writer,
+//!     JsonlBatch, JsonlStream, StreamExt, Writer, stream,
 //! };
-//! use futures_lite::StreamExt;
 //! use serde_json::Value;
 //! use std::{io, time::Duration};
 //!
@@ -53,7 +52,7 @@
 //! }
 //!
 //! fn people_only(mut source: JsonlStream) -> JsonlStream {
-//!     Box::pin(async_stream::stream! {
+//!     Box::pin(stream! {
 //!         while let Some(batch) = source.next().await {
 //!             match batch.and_then(keep_people) {
 //!                 Ok(batch) if !batch.is_empty() => yield Ok(batch),
@@ -86,14 +85,13 @@
 //! # }
 //! ```
 
-use crate::ExecutorError;
+use crate::{ExecutorError, Stream, StreamExt};
 use alloc::{boxed::Box, vec::Vec};
 use core::{
     num::{NonZeroUsize, TryFromIntError},
     pin::Pin,
     time::Duration,
 };
-use futures_lite::{Stream, StreamExt};
 
 /// Owned JSONL lines, retaining their original bytes and line endings.
 ///
@@ -358,7 +356,7 @@ mod tests {
     }
 
     fn lines(values: &[&[u8]]) -> LineStream<Infallible> {
-        Box::pin(futures_lite::stream::iter(
+        Box::pin(crate::stream::iter(
             values
                 .iter()
                 .map(|line| Ok(line.to_vec()))
@@ -427,7 +425,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn flushes_sparse_stream_on_deadline_without_waiting_for_eof() {
-        let source = lines(&[b"first\n"]).chain(futures_lite::stream::pending());
+        let source = lines(&[b"first\n"]).chain(crate::stream::pending());
         let mut batches = batch_lines(source, options(100, 1024, Duration::from_millis(10)));
         let start = Instant::now();
         assert_eq!(
@@ -440,7 +438,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn never_emits_empty_batches_and_zero_delay_emits_immediately() {
         let mut pending = batch_lines(
-            futures_lite::stream::pending::<Result<Vec<u8>, Infallible>>(),
+            crate::stream::pending::<Result<Vec<u8>, Infallible>>(),
             BatchOptions::default(),
         );
         assert!(
@@ -555,7 +553,7 @@ mod tests {
     async fn flattening_round_trips_raw_lines_and_ignores_empty_batches() {
         let expected = [b"{}\n".as_slice(), b"\r\n", b"\xff\n", b"tail"];
         let source = batch_lines(lines(&expected), options(2, 1024, Duration::from_secs(1)));
-        let empty = futures_lite::stream::iter([Ok(JsonlBatch::default())]);
+        let empty = crate::stream::iter([Ok(JsonlBatch::default())]);
         let mut flattened = flatten_batches(empty.chain(source));
         for line in expected {
             assert_eq!(flattened.next().await.unwrap().unwrap(), line);

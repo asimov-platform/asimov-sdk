@@ -103,7 +103,7 @@ impl asimov_patterns::Execute<JsonlStream> for Fetcher {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use futures_lite::StreamExt;
+    use crate::StreamExt;
 
     #[tokio::test]
     async fn test_execute() {

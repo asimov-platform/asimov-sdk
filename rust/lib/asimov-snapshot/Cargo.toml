@@ -36,7 +36,6 @@ asimov-registry = { workspace = true, default-features = true }
 asimov-runner = { workspace = true, default-features = true }
 async-trait.workspace = true
 bon.workspace = true
-futures-lite.workspace = true
 jiff.workspace = true
 tracing = { workspace = true, features = ["attributes"] }
 

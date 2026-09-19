@@ -35,6 +35,13 @@
 //! by a program-selected output file; it does not establish an empty logical
 //! result. Captured output has no configured size limit in this API.
 //!
+//! Import [`Stream`] and [`StreamExt`] from this crate to implement and consume
+//! streams. The [`stream` module](mod@stream) supplies constructors such as
+//! `iter`, `empty`, and `pending`; [`stream!`](macro@stream) and
+//! [`try_stream!`](macro@try_stream) build asynchronous generators. These are
+//! re-exports, so callers need no direct `futures-lite` or `async-stream`
+//! dependency for these operations.
+//!
 //! # Example
 //!
 //! Configure a fetcher to capture the graph emitted for a resource:
@@ -42,8 +49,7 @@
 //! ```no_run
 //! # #[cfg(feature = "std")]
 //! # async fn example() -> Result<(), asimov_runner::ExecutorError> {
-//! use asimov_runner::{Fetcher, FetcherOptions, GraphOutput};
-//! use futures_lite::StreamExt;
+//! use asimov_runner::{Fetcher, FetcherOptions, GraphOutput, StreamExt};
 //!
 //! let mut fetcher = Fetcher::new(
 //!     "asimov-example-fetcher",
@@ -88,7 +94,9 @@ extern crate std;
 
 pub use asimov_patterns::Execute;
 pub use asimov_patterns::OptionSupport;
+pub use async_stream::{stream, try_stream};
 pub use clientele::SysexitsError;
+pub use futures_lite::{Stream, StreamExt, stream};
 pub use tokio::process::Command;
 
 #[cfg(feature = "std")]

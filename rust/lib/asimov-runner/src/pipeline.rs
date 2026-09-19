@@ -96,8 +96,7 @@
 //! # Batch-oriented postprocessing
 //!
 //! ```no_run
-//! use asimov_runner::{BatchOptions, Fetcher, GraphOutput, Pipeline};
-//! use futures_lite::StreamExt;
+//! use asimov_runner::{BatchOptions, Fetcher, GraphOutput, Pipeline, StreamExt};
 //! use std::time::Duration;
 //!
 //! # async fn example() -> Result<(), asimov_runner::PipelineError> {
@@ -118,7 +117,7 @@
 
 use crate::{
     BatchOptions, BatchStream, Executor, ExecutorError, Indexer, Input, InputCompletion,
-    LineStream, Lister, Output, Writer, batch_lines,
+    LineStream, Lister, Output, StreamExt, Writer, batch_lines,
 };
 use alloc::{boxed::Box, vec, vec::Vec};
 use core::{
@@ -128,7 +127,6 @@ use core::{
     pin::Pin,
     task::Poll,
 };
-use futures_lite::StreamExt;
 use std::{
     ffi::OsString,
     io::{self, Cursor},

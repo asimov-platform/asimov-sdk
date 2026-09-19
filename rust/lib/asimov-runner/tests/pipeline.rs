@@ -3,7 +3,6 @@
 // A custom test harness doubles as a portable subprocess fixture. Unlike a shell
 // script or a libtest child, fixture mode emits only the requested payload.
 use asimov_runner::*;
-use futures_lite::StreamExt;
 use std::{
     env,
     io::{self, Cursor, Read, Write},
@@ -442,9 +441,9 @@ async fn limited_lister(program: &Path) {
 }
 
 async fn input_failure(program: &Path) {
-    let source = futures_lite::stream::iter([Err(ExecutorError::UnexpectedOther(
-        io::Error::other("source failed"),
-    ))]);
+    let source = stream::iter([Err(ExecutorError::UnexpectedOther(io::Error::other(
+        "source failed",
+    )))]);
     let producer = Reasoner::new(
         program,
         Input::Jsonl(Box::pin(source)),

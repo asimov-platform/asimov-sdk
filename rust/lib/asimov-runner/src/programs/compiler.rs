@@ -38,10 +38,9 @@ pub type CompilerResult = std::result::Result<Cursor<Vec<u8>>, ExecutorError>;
 /// ```no_run
 /// use asimov_runner::{
 ///     Adapter, AdapterOptions, Compiler, CompilerOptions, GraphOutput,
-///     QueryInput, QueryOutput, TextInput,
+///     QueryInput, QueryOutput, StreamExt, TextInput,
 /// };
 /// use std::io::Cursor;
-/// use futures_lite::StreamExt;
 ///
 /// # async fn example() -> Result<(), asimov_runner::ExecutorError> {
 /// let mut compiler = Compiler::new(
@@ -190,8 +189,7 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn test_compile_and_pass_query_to_adapter() {
-        use crate::{Adapter, AdapterOptions, GraphOutput, QueryInput};
-        use futures_lite::StreamExt;
+        use crate::{Adapter, AdapterOptions, GraphOutput, QueryInput, StreamExt};
 
         async fn compile(
             compiler: &mut impl asimov_patterns::Compiler<Cursor<Vec<u8>>, Error = ExecutorError>,

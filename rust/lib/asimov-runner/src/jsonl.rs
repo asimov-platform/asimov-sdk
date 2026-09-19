@@ -8,8 +8,7 @@
 //! process chain using native OS pipes, use [`crate::Pipeline`].
 //!
 //! ```no_run
-//! use asimov_runner::{Fetcher, GraphInput, GraphOutput, Matcher};
-//! use futures_lite::StreamExt;
+//! use asimov_runner::{Fetcher, GraphInput, GraphOutput, Matcher, StreamExt};
 //!
 //! # async fn example() -> Result<(), asimov_runner::ExecutorError> {
 //! let source = Fetcher::new(
@@ -35,10 +34,10 @@
 //! ```
 
 use crate::{
-    BatchOptions, BatchStream, Executor, ExecutorError, Input, LineStream, Output, batch_lines,
+    BatchOptions, BatchStream, Executor, ExecutorError, Input, LineStream, Output, StreamExt,
+    batch_lines,
 };
 use alloc::{boxed::Box, vec::Vec};
-use futures_lite::StreamExt;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 
 /// A fallible stream of [`crate::JsonlBatch`] values, without JSON parsing or UTF-8 validation.
@@ -459,7 +458,7 @@ mod tests {
     #[tokio::test]
     async fn early_exit_cancels_idle_input() {
         timeout(Duration::from_secs(5), async {
-            let input = Input::Jsonl(Box::pin(futures_lite::stream::pending()));
+            let input = Input::Jsonl(Box::pin(crate::stream::pending()));
             let mut stream = Matcher::new(
                 "/bin/sh",
                 input,
@@ -485,7 +484,7 @@ mod tests {
     #[tokio::test]
     async fn writer_and_indexer_consume_jsonl() {
         let input = || {
-            GraphInput::Jsonl(Box::pin(futures_lite::stream::iter([
+            GraphInput::Jsonl(Box::pin(crate::stream::iter([
                 Ok(JsonlBatch::default()),
                 Ok(JsonlBatch::new(vec![b"{}".to_vec(), b"[]\r\n".to_vec()])),
             ])))
