@@ -1486,6 +1486,7 @@ dependencies = [
  "clientele",
  "derive_more",
  "futures-lite",
+ "serde_json",
  "tokio",
  "tracing",
  "url",

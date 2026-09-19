@@ -44,6 +44,7 @@ url.workspace = true
 tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
+serde_json = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["full", "test-util"] }
 
 [[test]]

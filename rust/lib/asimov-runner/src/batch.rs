@@ -7,6 +7,84 @@
 //! pipes. Batch size and network-processing concurrency are separate controls:
 //! callers can apply bounded concurrent stream adapters, preserving order when
 //! processing sorted or paginated data.
+//!
+//! # An intermediate batch filter
+//!
+//! This example connects **Fetcher → Rust filter → Writer**. The filter receives
+//! one batch at a time and forwards only records whose `@type` includes
+//! `https://schema.org/Person`. It assumes one JSON-LD object per line, with
+//! expanded type IRIs; it does not perform JSON-LD context expansion. Retained
+//! lines keep their original bytes and ordering. The example uses `serde_json`
+//! to inspect records, plus `async-stream` and `futures-lite` for stream adapters.
+//!
+//! Unlike a direct native [`crate::Pipeline::pipe`] connection, an in-process
+//! filter is passed to the next program as [`crate::GraphInput::Jsonl`]. Empty
+//! filtered batches are skipped, but the source is still consumed to completion
+//! so later errors are observed. Pulling batches supplies backpressure; processing
+//! and upstream errors fail the downstream execution rather than silently
+//! becoming an empty result.
+//!
+//! ```no_run
+//! use asimov_runner::{
+//!     AnyOutput, BatchOptions, ExecutorError, Fetcher, GraphInput, GraphOutput,
+//!     JsonlBatch, JsonlStream, Writer,
+//! };
+//! use futures_lite::StreamExt;
+//! use serde_json::Value;
+//! use std::{io, time::Duration};
+//!
+//! // Process an entire batch and retain only selected lines, without reserializing.
+//! fn keep_people(batch: JsonlBatch) -> Result<JsonlBatch, ExecutorError> {
+//!     let mut kept = Vec::new();
+//!     for line in batch.into_lines() {
+//!         let record: Value = serde_json::from_slice(&line)
+//!             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+//!         let wanted = "https://schema.org/Person";
+//!         let keep = match record.get("@type") {
+//!             Some(Value::String(kind)) => kind == wanted,
+//!             Some(Value::Array(kinds)) => kinds.iter().any(|kind| kind.as_str() == Some(wanted)),
+//!             _ => false,
+//!         };
+//!         if keep {
+//!             kept.push(line);
+//!         }
+//!     }
+//!     Ok(JsonlBatch::new(kept))
+//! }
+//!
+//! fn people_only(mut source: JsonlStream) -> JsonlStream {
+//!     Box::pin(async_stream::stream! {
+//!         while let Some(batch) = source.next().await {
+//!             match batch.and_then(keep_people) {
+//!                 Ok(batch) if !batch.is_empty() => yield Ok(batch),
+//!                 Ok(_) => {}, // All records in this batch were filtered out.
+//!                 Err(error) => {
+//!                     drop(source); // Release the producer before yielding the error.
+//!                     yield Err(error);
+//!                     return;
+//!                 },
+//!             }
+//!         }
+//!     })
+//! }
+//!
+//! # async fn example() -> Result<(), ExecutorError> {
+//! let batching = BatchOptions::new(128, 64 * 1024, Duration::from_millis(5))
+//!     .expect("nonzero thresholds");
+//! let source = Fetcher::new(
+//!     "asimov-example-fetcher", "https://example.com/collection",
+//!     GraphOutput::Captured, Default::default(),
+//! ).with_batching(batching).execute().await?;
+//!
+//! let exported = Writer::new(
+//!     "asimov-example-writer",
+//!     GraphInput::Jsonl(people_only(source)),
+//!     AnyOutput::Captured,
+//!     Default::default(),
+//! ).execute().await?.into_inner();
+//! # Ok(())
+//! # }
+//! ```
 
 use crate::ExecutorError;
 use alloc::{boxed::Box, vec::Vec};
