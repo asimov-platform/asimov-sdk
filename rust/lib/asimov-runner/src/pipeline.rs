@@ -115,9 +115,10 @@
 //! # }
 //! ```
 
+use crate::batch::{FrameStream, batch_frames};
 use crate::{
-    BatchOptions, BatchStream, Executor, ExecutorError, Indexer, Input, InputCompletion,
-    LineStream, Lister, Output, StreamExt, Writer, batch_lines,
+    BatchOptions, BatchStream, Executor, ExecutorError, Indexer, Input, InputCompletion, Lister,
+    Output, StreamExt, Writer,
 };
 use alloc::{boxed::Box, vec, vec::Vec};
 use core::{
@@ -269,10 +270,10 @@ impl<P: GraphProducer> Pipeline<P> {
         let batching = self
             .batching
             .unwrap_or(self.stages.last().unwrap().batching);
-        Ok(batch_lines(self.execute_lines().await?, batching))
+        Ok(batch_frames(self.execute_frames().await?, batching))
     }
 
-    async fn execute_lines(self) -> Result<LineStream<PipelineError>, PipelineError> {
+    async fn execute_frames(self) -> Result<FrameStream<PipelineError>, PipelineError> {
         let mut running = start(self.stages, true).await?;
         let mut lines = running.lines.take();
         let tail = running.tail.clone();
@@ -434,7 +435,7 @@ type Job = Pin<Box<dyn Future<Output = Result<Vec<u8>, PipelineError>> + Send>>;
 struct Running {
     jobs: Vec<Option<Job>>,
     stop: watch::Sender<bool>,
-    lines: Option<LineStream>,
+    lines: Option<FrameStream>,
     tail: StageInfo,
     failure: Option<PipelineError>,
     output: Vec<u8>,
@@ -583,7 +584,7 @@ async fn start(
         if stages.is_empty() {
             running.lines = Some(
                 lister
-                    .execute_lines()
+                    .execute_frames()
                     .await
                     .map_err(|error| info.error(error))?,
             );
@@ -661,7 +662,7 @@ async fn start(
             },
         };
         if info.index + 1 == count && capture_graph && matches!(output, Output::Captured) {
-            running.lines = child.stdout.take().map(crate::jsonl_lines);
+            running.lines = child.stdout.take().map(crate::jsonl::jsonl_frames);
         }
         spawned.push(Spawned {
             child,

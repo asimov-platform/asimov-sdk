@@ -22,7 +22,7 @@ title = "ASIMOV.rs: Runner Implementation"
 [features]
 default = ["all", "std"]
 all = ["tracing"]
-std = ["asimov-core/std", "clientele/std", "tracing?/std"]
+std = ["asimov-core/std", "bytes/std", "clientele/std", "memchr/std", "tracing?/std"]
 tracing = ["dep:tracing"]
 unstable = []
 
@@ -34,9 +34,11 @@ asimov-patterns = { workspace = true, default-features = true }
 asimov-prompt = { workspace = true, default-features = true }
 async-stream.workspace = true
 async-trait.workspace = true
+bytes.workspace = true
 clientele.workspace = true
 derive_more = { workspace = true, features = ["debug"] }
 futures-lite.workspace = true
+memchr.workspace = true
 tokio = { workspace = true, features = ["io-std", "io-util", "macros", "process", "rt", "sync", "time"] }
 url.workspace = true
 

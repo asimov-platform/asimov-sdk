@@ -2,9 +2,9 @@
 
 //! URL-based directory iteration through an external lister program.
 
+use crate::batch::{FrameStream, batch_frames};
 use crate::{
-    CommandExt, Executor, ExecutorError, GraphOutput, Input, JsonlStream, LineStream,
-    OptionSupport, StreamExt, batch_lines,
+    CommandExt, Executor, ExecutorError, GraphOutput, Input, JsonlStream, OptionSupport, StreamExt,
 };
 use alloc::{
     boxed::Box,
@@ -219,17 +219,17 @@ impl Lister {
     /// errors are delivered through the stream, after flushing buffered complete lines.
     pub async fn execute(&mut self) -> ListerResult {
         let batching = self.executor.batch_options();
-        Ok(batch_lines(self.execute_lines().await?, batching))
+        Ok(batch_frames(self.execute_frames().await?, batching))
     }
 
     /// Limits raw lines before batching so even a small cap stops the source
     /// immediately, without collecting a full batch or counting batches as lines.
-    pub(crate) async fn execute_lines(&mut self) -> Result<LineStream, ExecutorError> {
+    pub(crate) async fn execute_frames(&mut self) -> Result<FrameStream, ExecutorError> {
         self.validate()?;
         let Some(limit) = self.options.limit else {
             return self
                 .executor
-                .execute_jsonl_lines_with_io(&mut Input::Ignored, &mut self.output)
+                .execute_jsonl_frames_with_io(&mut Input::Ignored, &mut self.output)
                 .await;
         };
         if limit == 0 {
@@ -238,9 +238,9 @@ impl Lister {
 
         let mut source = self
             .executor
-            .execute_jsonl_lines_with_io(&mut Input::Ignored, &mut GraphOutput::Captured)
+            .execute_jsonl_frames_with_io(&mut Input::Ignored, &mut GraphOutput::Captured)
             .await?;
-        let stream: LineStream = Box::pin(async_stream::try_stream! {
+        let stream: FrameStream = Box::pin(async_stream::try_stream! {
             for remaining in (0..limit).rev() {
                 let Some(line) = source.next().await else {
                     break;
@@ -264,7 +264,7 @@ impl Lister {
                 GraphOutput::Inherited => Some(Box::new(tokio::io::stdout())),
                 GraphOutput::AsyncWrite(writer) => Some(writer),
             };
-        Ok(forward_lines(stream, writer))
+        Ok(forward_frames(stream, writer))
     }
 
     fn validate(&self) -> Result<(), ExecutorError> {
@@ -336,16 +336,16 @@ impl Lister {
 }
 
 /// Consumes a bounded listing without returning payload lines to the caller.
-fn forward_lines(
-    mut stream: LineStream,
+fn forward_frames(
+    mut stream: FrameStream,
     mut writer: Option<Box<dyn AsyncWrite + Send + Sync + Unpin>>,
-) -> LineStream {
+) -> FrameStream {
     Box::pin(async_stream::stream! {
         let result = async move {
             while let Some(line) = stream.next().await {
                 let line = line?;
                 if let Some(writer) = &mut writer {
-                    writer.write_all(&line).await?;
+                    writer.write_all(line.as_bytes()).await?;
                 }
             }
             if let Some(writer) = &mut writer {
@@ -499,7 +499,7 @@ mod tests {
                 crate::flatten_batches(cursor_lister(options).execute().await.unwrap());
             for id in expected {
                 assert_eq!(
-                    stream.next().await.unwrap().unwrap(),
+                    stream.next().await.unwrap().unwrap().as_bytes(),
                     format!("{{\"@id\":\"{id}\"}}\n").as_bytes()
                 );
             }
@@ -521,7 +521,7 @@ mod tests {
             .map(crate::flatten_batches)
             .unwrap();
             assert_eq!(
-                stream.next().await.unwrap().unwrap(),
+                stream.next().await.unwrap().unwrap().as_bytes(),
                 b"{\"@id\":\"urn:item:beta\"}\n"
             );
             assert!(stream.next().await.is_none());
@@ -695,7 +695,7 @@ mod tests {
             .unwrap();
             timeout(Duration::from_secs(5), async {
                 if captured {
-                    assert_eq!(stream.next().await.unwrap().unwrap(), b"{}\n");
+                    assert_eq!(stream.next().await.unwrap().unwrap().as_bytes(), b"{}\n");
                 }
                 assert!(stream.next().await.is_none());
             })
@@ -804,7 +804,8 @@ mod tests {
                 .await
                 .unwrap()
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .as_bytes(),
             b"{}\n"
         );
         assert!(stream.next().await.is_none());
@@ -916,7 +917,7 @@ mod tests {
                 .map(crate::flatten_batches)
                 .unwrap();
                 for line in &expected[..limit.min(expected.len())] {
-                    assert_eq!(stream.next().await.unwrap().unwrap(), *line);
+                    assert_eq!(stream.next().await.unwrap().unwrap().as_bytes(), *line);
                 }
                 assert!(stream.next().await.is_none());
                 assert!(stream.next().await.is_none());
@@ -1012,7 +1013,7 @@ mod tests {
             .await
             .map(crate::flatten_batches)
             .unwrap();
-            assert_eq!(stream.next().await.unwrap().unwrap(), b"{}\n");
+            assert_eq!(stream.next().await.unwrap().unwrap().as_bytes(), b"{}\n");
             if limit == 2 {
                 assert!(matches!(
                     stream.next().await,
@@ -1037,7 +1038,7 @@ mod tests {
         let line = timeout(Duration::from_secs(5), stream.next())
             .await
             .expect("the first line must arrive before the process exits");
-        assert_eq!(line.unwrap().unwrap(), b"{}\n");
+        assert_eq!(line.unwrap().unwrap().as_bytes(), b"{}\n");
         // Dropping the stream terminates the still-running child.
     }
 
@@ -1052,7 +1053,7 @@ mod tests {
         .map(crate::flatten_batches)
         .unwrap();
         for expected in [b"{}\n".as_slice(), b"\r\n", b"\xff\n", b"{\"last\":true}"] {
-            assert_eq!(stream.next().await.unwrap().unwrap(), expected);
+            assert_eq!(stream.next().await.unwrap().unwrap().as_bytes(), expected);
         }
         assert!(stream.next().await.is_none());
         assert!(stream.next().await.is_none());
@@ -1069,7 +1070,7 @@ mod tests {
             .await
             .map(crate::flatten_batches)
             .unwrap();
-            assert_eq!(stream.next().await.unwrap().unwrap(), b"{}\n");
+            assert_eq!(stream.next().await.unwrap().unwrap().as_bytes(), b"{}\n");
             match stream.next().await.unwrap().unwrap_err() {
                 ExecutorError::UnexpectedFailure(Some(1), Some(stderr)) => {
                     assert_eq!(stderr, "diagnostic\n".repeat(10000));

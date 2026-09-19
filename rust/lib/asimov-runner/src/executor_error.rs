@@ -49,6 +49,12 @@ pub enum ExecutorError {
 
 impl core::error::Error for ExecutorError {}
 
+impl From<crate::JsonlLineError> for ExecutorError {
+    fn from(error: crate::JsonlLineError) -> Self {
+        std::io::Error::new(std::io::ErrorKind::InvalidData, error).into()
+    }
+}
+
 impl fmt::Display for ExecutorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

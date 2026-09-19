@@ -76,7 +76,7 @@
 //! Graph producers ([`Adapter`], [`Emitter`], [`Fetcher`], [`Lister`], [`Matcher`],
 //! [`Reader`], and [`Reasoner`]) return a live [`JsonlStream`](crate::JsonlStream).
 //! Execution returns after spawning; polling yields [`JsonlBatch`](crate::JsonlBatch)
-//! values containing byte-vector lines, preserving LF/CRLF terminators and an
+//! values containing immutable [`JsonlLine`](crate::JsonlLine) values, preserving LF/CRLF terminators and an
 //! unterminated final line. Spawn errors are returned directly; input, read, and
 //! exit errors are stream items after any buffered complete lines. Consume the stream to
 //! completion to check process success. Ignored or inherited stdout yields no
@@ -109,8 +109,10 @@
 //!
 //! Graph consumers ([`Matcher`], [`Reasoner`], [`Indexer`], and [`Writer`]) accept
 //! [`GraphInput::Jsonl`](crate::GraphInput::Jsonl) for direct stream composition.
-//! Byte readers are adapted into batches. Each batch is coalesced into a reusable
-//! write buffer, with an LF appended to each line if missing. Existing LF/CRLF
+//! Byte readers produce shared-buffer lines that are grouped into batches. Batch
+//! input uses contiguous zero-copy views or bounded vectored I/O when available,
+//! falling back to a reusable coalescing buffer. An LF is appended to each line
+//! if missing. Existing LF/CRLF
 //! endings are preserved. Empty input batches are ignored and blank lines are
 //! preserved; JSON, UTF-8, and RDF are not validated. Use `jsonl` (the pattern
 //! default) for graph format options; selecting another format does not change
@@ -167,6 +169,9 @@
 //! to the first stage and the final stage's output policy selects the result.
 //! `Pipeline::with_batching` overrides final graph batching; otherwise the final
 //! program's policy applies. Native pipe edges are not parsed into Rust batches.
+//! Shared line views can retain larger backing allocations. Use
+//! `JsonlLine::into_compact` or `JsonlBatch::into_compact` for sparse, long-lived
+//! retention; stored byte counts do not measure the memory retained by sharing.
 //!
 //! All subprocess I/O is awaited within execution or the returned stream;
 //! prompt writing does not use a detached task. Buffered captures, individual

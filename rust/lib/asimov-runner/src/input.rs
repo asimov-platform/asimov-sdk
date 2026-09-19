@@ -44,12 +44,13 @@ pub enum Input {
     /// and unpinned I/O (`Unpin`). Its contents are omitted from debug output.
     AsyncRead(#[debug(skip)] Box<dyn AsyncRead + Send + Sync + Unpin>),
     /// Supplies JSONL batches, applying backpressure and propagating source errors.
-    /// Lines are coalesced into a reusable write buffer for each batch. Batch
+    /// Contiguous terminated batches are written directly; fragmented batches
+    /// use bounded vectored I/O when supported, or a reusable copy buffer. Batch
     /// boundaries are not encoded on the wire. Empty batches are ignored.
     /// Existing line endings are preserved; an LF is appended to any line that
     /// does not end in LF so adjacent records cannot run together.
-    /// An empty line therefore writes a blank line. Lines are not checked for
-    /// embedded newlines, valid JSON, UTF-8, or an RDF mapping profile.
+    /// An empty line therefore writes a blank line. Line constructors enforce
+    /// framing; UTF-8, JSON, and RDF mapping profiles are not validated here.
     #[cfg(feature = "std")]
     Jsonl(#[debug(skip)] crate::JsonlStream),
 }
@@ -146,6 +147,30 @@ async fn write_batches(
             tokio::task::yield_now().await;
             continue;
         }
+        if let Some(bytes) = batch.as_contiguous_bytes() {
+            writer.write_all(bytes).await?;
+            continue;
+        }
+        if writer.is_write_vectored() {
+            // Sixteen is a conservative portable iovec bound. Coalescing shared
+            // spans usually needs far fewer; larger fragmented batches use the
+            // copy fallback rather than issuing many tiny vectored writes.
+            if let Some(mut slices) = batch.wire_slices(16) {
+                let mut remaining = slices.as_mut_slice();
+                while !remaining.is_empty() {
+                    let written = writer.write_vectored(remaining).await?;
+                    if written == 0 {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::WriteZero,
+                            "failed to write JSONL batch",
+                        )
+                        .into());
+                    }
+                    std::io::IoSlice::advance_slices(&mut remaining, written);
+                }
+                continue;
+            }
+        }
         buffer.clear();
         for line in batch.lines() {
             buffer.extend_from_slice(line);
@@ -176,6 +201,8 @@ mod tests {
         bytes: Vec<u8>,
         writes: usize,
         max_write: usize,
+        vectored: bool,
+        vectored_calls: usize,
     }
     impl AsyncWrite for Destination {
         fn poll_write(
@@ -191,6 +218,26 @@ mod tests {
         fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
             panic!("batches must not flush per line");
         }
+        fn is_write_vectored(&self) -> bool {
+            self.vectored
+        }
+        fn poll_write_vectored(
+            mut self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            slices: &[io::IoSlice<'_>],
+        ) -> Poll<io::Result<usize>> {
+            self.vectored_calls += 1;
+            let mut written = 0;
+            for slice in slices {
+                let count = slice.len().min(self.max_write - written);
+                self.bytes.extend_from_slice(&slice[..count]);
+                written += count;
+                if written == self.max_write {
+                    break;
+                }
+            }
+            Poll::Ready(Ok(written))
+        }
         fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
             Poll::Ready(Ok(()))
         }
@@ -201,17 +248,18 @@ mod tests {
         for max_write in [usize::MAX, 3] {
             let mut batches: JsonlStream = Box::pin(crate::stream::iter([
                 Ok(JsonlBatch::default()),
-                Ok(JsonlBatch::new(vec![
-                    b"{}".to_vec(),
-                    b"[]\r\n".to_vec(),
-                    Vec::new(),
-                ])),
-                Ok(JsonlBatch::new(vec![b"last".to_vec()])),
+                Ok(
+                    JsonlBatch::try_from(vec![b"{}".to_vec(), b"[]\r\n".to_vec(), Vec::new()])
+                        .unwrap(),
+                ),
+                Ok(JsonlBatch::try_from(vec![b"last".to_vec()]).unwrap()),
             ]));
             let mut destination = Destination {
                 bytes: Vec::new(),
                 writes: 0,
                 max_write,
+                vectored: false,
+                vectored_calls: 0,
             };
             assert!(write_batches(&mut batches, &mut destination).await.is_ok());
             assert_eq!(destination.bytes, b"{}\n[]\r\n\nlast\n");
@@ -224,22 +272,90 @@ mod tests {
     #[tokio::test]
     async fn batch_source_error_stops_writing_after_complete_batches() {
         let mut batches: JsonlStream = Box::pin(crate::stream::iter([
-            Ok(JsonlBatch::new(vec![b"first".to_vec()])),
+            Ok(JsonlBatch::try_from(vec![b"first".to_vec()]).unwrap()),
             Err(ExecutorError::UnexpectedOther(io::Error::other(
                 "source failed",
             ))),
-            Ok(JsonlBatch::new(vec![b"must not be written".to_vec()])),
+            Ok(JsonlBatch::try_from(vec![b"must not be written".to_vec()]).unwrap()),
         ]));
         let mut destination = Destination {
             bytes: Vec::new(),
             writes: 0,
             max_write: usize::MAX,
+            vectored: false,
+            vectored_calls: 0,
         };
         assert!(matches!(
             write_batches(&mut batches, &mut destination).await,
             Err(InputFailure::Source(_))
         ));
         assert_eq!(destination.bytes, b"first\n");
+    }
+
+    #[tokio::test]
+    async fn vectored_writes_handle_partial_progress_and_insert_missing_lf() {
+        let mut batches: JsonlStream =
+            Box::pin(crate::stream::iter([Ok(JsonlBatch::try_from(vec![
+                b"ab\n".to_vec(),
+                Vec::new(),
+                b"cd".to_vec(),
+            ])
+            .unwrap())]));
+        let mut destination = Destination {
+            bytes: Vec::new(),
+            writes: 0,
+            max_write: 2,
+            vectored: true,
+            vectored_calls: 0,
+        };
+        assert!(write_batches(&mut batches, &mut destination).await.is_ok());
+        assert_eq!(destination.bytes, b"ab\n\ncd\n");
+        assert_eq!(destination.writes, 0);
+        assert!(destination.vectored_calls > 1);
+    }
+
+    #[tokio::test]
+    async fn contiguous_batches_and_fragmented_fallback_use_single_writes() {
+        use crate::Bytes;
+        let backing = Bytes::from_static(b"a\nb\n");
+        let shared = JsonlBatch::from_bytes(backing);
+        let fragmented = JsonlBatch::try_from(vec![b"x\n".to_vec(); 32]).unwrap();
+        let mut batches: JsonlStream = Box::pin(crate::stream::iter([Ok(shared), Ok(fragmented)]));
+        let mut destination = Destination {
+            bytes: Vec::new(),
+            writes: 0,
+            max_write: usize::MAX,
+            vectored: true,
+            vectored_calls: 0,
+        };
+        assert!(write_batches(&mut batches, &mut destination).await.is_ok());
+        assert_eq!(
+            destination.bytes,
+            [b"a\nb\n".to_vec(), b"x\n".repeat(32)].concat()
+        );
+        assert_eq!(destination.writes, 2);
+        assert_eq!(destination.vectored_calls, 0);
+    }
+
+    #[tokio::test]
+    async fn zero_vectored_progress_is_an_error() {
+        let mut batches: JsonlStream =
+            Box::pin(crate::stream::iter([Ok(JsonlBatch::try_from(vec![
+                b"a".to_vec(),
+                b"b".to_vec(),
+            ])
+            .unwrap())]));
+        let mut destination = Destination {
+            bytes: Vec::new(),
+            writes: 0,
+            max_write: 0,
+            vectored: true,
+            vectored_calls: 0,
+        };
+        assert!(
+            matches!(write_batches(&mut batches, &mut destination).await,
+            Err(InputFailure::Write(error)) if error.kind() == io::ErrorKind::WriteZero)
+        );
     }
 }
 

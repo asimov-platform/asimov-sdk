@@ -23,7 +23,7 @@
 //! they do not parse, validate, or convert that content.
 //!
 //! With `std`, graph producers return a live [JSONL stream][jsonl] of `JsonlBatch`
-//! values containing owned byte-vector lines. Graph consumers accept
+//! values containing immutable [`JsonlLine`] values with owned or shared storage. Graph consumers accept
 //! `GraphInput::Jsonl` for direct composition, or adapt byte readers into batches.
 //! `BatchOptions` controls count, byte target, and collection delay; `flatten_batches`
 //! adapts the result for line-at-a-time consumers. Other results are buffered until completion.
@@ -41,6 +41,8 @@
 //! [`try_stream!`](macro@try_stream) build asynchronous generators. These are
 //! re-exports, so callers need no direct `futures-lite` or `async-stream`
 //! dependency for these operations.
+//! [`Bytes`] and [`BytesMut`] are also re-exported for shared-buffer integration.
+//! Line constructors enforce framing; they do not parse JSON or validate UTF-8.
 //!
 //! # Example
 //!
@@ -75,7 +77,7 @@
 //! - `all` enables `tracing`; the default features enable both `all` and `std`.
 //! - `unstable` is reserved for future use and currently enables no behavior.
 //!
-//! The crate declares `no_std` and uses `alloc`; the basic input/output policy
+//! The crate declares `no_std` and uses `alloc`; line types and basic input/output policy
 //! types are not gated on `std`. Pipelines and process execution require `std`.
 //! Dependencies may still require the standard library when that feature is disabled.
 //!
@@ -95,6 +97,7 @@ extern crate std;
 pub use asimov_patterns::Execute;
 pub use asimov_patterns::OptionSupport;
 pub use async_stream::{stream, try_stream};
+pub use bytes::{Bytes, BytesMut};
 pub use clientele::SysexitsError;
 pub use futures_lite::{Stream, StreamExt, stream};
 pub use tokio::process::Command;
@@ -126,6 +129,9 @@ pub use executor_error::*;
 
 pub mod input;
 pub use input::*;
+
+pub mod line;
+pub use line::*;
 
 #[cfg(feature = "std")]
 pub mod jsonl;

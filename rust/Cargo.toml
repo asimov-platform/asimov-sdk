@@ -177,6 +177,7 @@ libsql = { version = "0.9", default-features = false }
 liquid = { version = "0.26", default-features = false, features = ["stdlib"] }
 local-ip-address = { version = "0.6", default-features = false }
 mdns-sd = { version = "0.20", default-features = false }
+memchr = { version = "2.7", default-features = false }
 miette = { version = "7.6", default-features = false, features = ["derive"] }
 num-derive = { version = "0.4", default-features = false }
 num-traits = { version = "0.2", default-features = false }

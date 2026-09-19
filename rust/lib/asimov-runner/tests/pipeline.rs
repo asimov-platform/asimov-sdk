@@ -288,7 +288,13 @@ async fn streaming_and_drop(program: &Path, poll: bool) {
     }
     if poll {
         assert_eq!(
-            stream.next().await.unwrap().unwrap().into_lines(),
+            stream
+                .next()
+                .await
+                .unwrap()
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>(),
             vec![RECORD.to_vec()]
         );
     }
@@ -582,7 +588,13 @@ async fn single_stage(program: &Path) {
         .await
         .unwrap();
     assert_eq!(
-        stream.next().await.unwrap().unwrap().into_lines(),
+        stream
+            .next()
+            .await
+            .unwrap()
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
         vec![RECORD.to_vec()]
     );
     assert!(stream.next().await.is_none());
@@ -598,7 +610,13 @@ async fn single_stage(program: &Path) {
     );
     let mut stream = Pipeline::new(lister).execute().await.unwrap();
     assert_eq!(
-        stream.next().await.unwrap().unwrap().into_lines(),
+        stream
+            .next()
+            .await
+            .unwrap()
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
         vec![RECORD.to_vec()]
     );
     assert!(stream.next().await.is_none());
