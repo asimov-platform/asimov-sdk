@@ -27,6 +27,9 @@ extern crate std;
 mod collection_stub;
 pub use collection_stub::*;
 
+mod fetch_request;
+pub use fetch_request::*;
+
 mod follow_relationship;
 pub use follow_relationship::*;
 
@@ -35,6 +38,14 @@ pub use platform_handles::*;
 
 #[cfg(test)]
 mod platform_tests;
+
+mod list_request;
+pub use list_request::*;
+
+#[cfg(feature = "reqwest")]
+mod social_client;
+#[cfg(feature = "reqwest")]
+pub use social_client::*;
 
 mod social_handle;
 pub use social_handle::*;
