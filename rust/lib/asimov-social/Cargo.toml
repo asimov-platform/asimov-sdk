@@ -20,7 +20,7 @@ publish.workspace = true
 title = "ASIMOV.rs: Social Media"
 
 [features]
-default = ["all", "std"]
+default = ["all", "std", "client", "serde"]
 std = ["asimov-core/std"]
 unstable = []
 
@@ -67,7 +67,7 @@ async-graphql = [
     "known-types-x?/async-graphql",
 ]
 clap = ["dep:clap"]
-reqwest = ["dep:async-stream", "dep:futures", "dep:reqwest", "serde"]
+client = ["dep:asimov-remote", "asimov-remote/http", "serde"]
 serde = [
     "dep:serde",
     "dep:serde_json",
@@ -125,17 +125,12 @@ known-types-x = { workspace = true, optional = true }
 
 # Interoperability:
 async-graphql = { workspace = true, optional = true }
-async-stream = { workspace = true, optional = true }
+asimov-remote = { workspace = true, optional = true }
 clap = { workspace = true, features = ["derive", "std"], optional = true }
-futures = { workspace = true, features = ["alloc"], optional = true }
-reqwest = { workspace = true, features = ["json", "stream"], optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "sync", "time"] }
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]

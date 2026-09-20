@@ -21,26 +21,31 @@ title = "ASIMOV.rs: Flow Types"
 
 [features]
 default = ["all", "std"]
-all = []
-std = ["asimov-core/std", "tokio?/full"]
+all = ["tokio"]
+std = ["asimov-core/std", "async-flow/std", "bytes/std", "memchr/std"]
 unstable = []
 
 # Features:
 tracing = []
 
 # Integrations:
-tokio = ["dep:tokio"]
+tokio = ["std", "dep:tokio"]
 
 [dependencies]
 asimov-core.workspace = true
 async-flow.workspace = true
+async-stream.workspace = true
+bytes.workspace = true
+futures-lite.workspace = true
+memchr.workspace = true
 #flows.workspace = true
 
 # Integrations:
-tokio = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["io-util", "macros", "time"], optional = true }
 
 [dev-dependencies]
-tokio.workspace = true
+futures-lite = { workspace = true, features = ["std"] }
+tokio = { workspace = true, features = ["rt", "test-util"] }
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]

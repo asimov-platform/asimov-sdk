@@ -22,13 +22,14 @@ title = "ASIMOV.rs: Runner Implementation"
 [features]
 default = ["all", "std"]
 all = ["tracing"]
-std = ["asimov-core/std", "bytes/std", "clientele/std", "memchr/std", "tracing?/std"]
+std = ["asimov-core/std", "asimov-flow/tokio", "bytes/std", "clientele/std", "memchr/std", "tracing?/std"]
 tracing = ["dep:tracing"]
 unstable = []
 
 [dependencies]
 asimov-core.workspace = true
 asimov-env = { workspace = true, default-features = true }
+asimov-flow.workspace = true
 asimov-module = { workspace = true, default-features = true }
 asimov-patterns = { workspace = true, default-features = true }
 asimov-prompt = { workspace = true, default-features = true }

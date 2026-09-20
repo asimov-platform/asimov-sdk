@@ -1196,6 +1196,10 @@ version = "25.4.0"
 dependencies = [
  "asimov-core",
  "async-flow",
+ "async-stream",
+ "bytes",
+ "futures-lite",
+ "memchr",
  "tokio",
 ]
 
@@ -1466,6 +1470,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "asimov-remote"
+version = "25.4.0"
+dependencies = [
+ "asimov-flow",
+ "asimov-patterns",
+ "async-trait",
+ "http-body-util",
+ "hyper 1.11.0",
+ "hyper-util",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+]
+
+[[package]]
 name = "asimov-repository"
 version = "25.4.0"
 dependencies = [
@@ -1478,6 +1499,7 @@ version = "25.4.0"
 dependencies = [
  "asimov-core",
  "asimov-env",
+ "asimov-flow",
  "asimov-module",
  "asimov-patterns",
  "asimov-prompt",
@@ -1518,6 +1540,7 @@ dependencies = [
  "asimov-patterns",
  "asimov-prompt",
  "asimov-registry",
+ "asimov-remote",
  "asimov-runner",
  "asimov-snapshot",
  "tokio",
@@ -1585,11 +1608,10 @@ name = "asimov-social"
 version = "25.4.0"
 dependencies = [
  "asimov-core",
+ "asimov-remote",
  "async-graphql",
- "async-stream",
  "clap",
  "derive_more",
- "futures",
  "known-types",
  "known-types-facebook",
  "known-types-github",
@@ -1603,12 +1625,10 @@ dependencies = [
  "known-types-whatsapp",
  "known-types-x",
  "percent-encoding",
- "reqwest 0.12.28",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.19",
- "tokio",
  "tracing",
  "url",
 ]
@@ -1693,6 +1713,7 @@ dependencies = [
  "dogma 0.1.11",
  "replace_with",
  "thiserror 2.0.19",
+ "tokio",
 ]
 
 [[package]]
@@ -8841,6 +8862,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-util",
+ "h2",
  "http 1.5.0",
  "http-body 1.1.0",
  "http-body-util",

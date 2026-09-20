@@ -35,12 +35,10 @@
 
 use crate::batch::{FrameStream, FramedLine, batch_frames};
 use crate::{
-    BatchOptions, BatchStream, BytesMut, Executor, ExecutorError, Input, LineStream, Output,
-    StreamExt,
+    BatchOptions, BatchStream, Executor, ExecutorError, Input, LineStream, Output, StreamExt,
 };
 use alloc::boxed::Box;
-use bytes::BufMut;
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::AsyncRead;
 
 /// A fallible stream of [`crate::JsonlBatch`] values, without JSON parsing or UTF-8 validation.
 ///
@@ -81,34 +79,7 @@ pub fn jsonl_lines(reader: impl AsyncRead + Send + Unpin + 'static) -> LineStrea
 /// Internal line framing with enough read-buffer provenance to build contiguous
 /// batches. Public individual lines contain only their sliced Bytes views.
 pub(crate) fn jsonl_frames(reader: impl AsyncRead + Send + Unpin + 'static) -> FrameStream {
-    Box::pin(async_stream::try_stream! {
-        const READ_CHUNK: usize = 16 * 1024;
-        let mut reader = reader;
-        let mut buffer = BytesMut::with_capacity(READ_CHUNK);
-        let mut scanned = 0;
-        loop {
-            if let Some(last) = memchr::memrchr(b'\n', &buffer[scanned..]) {
-                let complete = buffer.split_to(scanned + last + 1).freeze();
-                scanned = 0;
-                let mut start = 0;
-                for newline in memchr::memchr_iter(b'\n', &complete) {
-                    yield FramedLine::new(complete.clone(), start..newline + 1);
-                    start = newline + 1;
-                }
-                continue;
-            }
-            // The old prefix has no LF; scan only newly read bytes next time.
-            scanned = buffer.len();
-            if buffer.capacity() == buffer.len() { buffer.reserve(READ_CHUNK); }
-            if reader.read_buf(&mut (&mut buffer).limit(READ_CHUNK)).await? == 0 {
-                if !buffer.is_empty() {
-                    let len = buffer.len();
-                    yield FramedLine::new(buffer.freeze(), 0..len);
-                }
-                break;
-            }
-        }
-    })
+    Box::pin(asimov_flow::jsonl::jsonl_frames(reader).map(|line| line.map_err(Into::into)))
 }
 
 /// Reads and batches JSONL without changing bytes or line endings. Reading is

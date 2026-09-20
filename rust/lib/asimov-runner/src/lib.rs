@@ -8,6 +8,10 @@
 //! supplies process-backed wrappers for those roles.
 //! The role traits and option values are defined by [`asimov-patterns`][traits];
 //! this crate provides their process transport and concrete result types.
+//! Raw JSONL line and batch types are shared with remote executors through
+//! asimov-flow and re-exported here with local execution-error defaults. This
+//! crate owns local process lifecycle and native-pipe optimization; remote
+//! execution lives in asimov-remote.
 //!
 //! With the `std` feature enabled, `Executor` provides low-level command
 //! configuration, process management, and exit-status handling. The wrappers in

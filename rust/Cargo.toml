@@ -50,6 +50,7 @@ asimov-prompt = { version = "25.4.0", default-features = false }
 asimov-protocol = { version = "25.4.0", default-features = false }
 asimov-proxy = { version = "25.4.0", default-features = false }
 asimov-registry = { version = "25.4.0", default-features = false }
+asimov-remote = { version = "25.4.0", default-features = false }
 asimov-repository = { version = "25.4.0", default-features = false }
 asimov-runner = { version = "25.4.0", default-features = false }
 asimov-runtime = { version = "25.4.0", default-features = false }
@@ -260,6 +261,7 @@ asimov-prompt = { path = "lib/asimov-prompt" }
 asimov-protocol = { path = "lib/asimov-protocol" }
 asimov-proxy = { path = "lib/asimov-proxy" }
 asimov-registry = { path = "lib/asimov-registry" }
+asimov-remote = { path = "lib/asimov-remote" }
 asimov-repository = { path = "lib/asimov-repository" }
 asimov-runner = { path = "lib/asimov-runner" }
 asimov-runtime = { path = "lib/asimov-runtime" }

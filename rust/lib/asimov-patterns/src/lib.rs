@@ -22,6 +22,11 @@
 //! Executable lookup, process management, stream transport, and result decoding
 //! belong to implementations. The companion [`asimov-runner`][runner] crate
 //! supplies Tokio-backed process wrappers and re-exports these option types.
+//! [`asimov-remote`][remote] supplies HTTP-backed fetch/list operations using the
+//! same traits. Shared raw JSONL payloads live in [`asimov-flow`][flow]; each
+//! executor chooses its own error type. These role traits are the execution
+//! boundary for reusable components, while explicit typed port schemas and
+//! generalized graph scheduling are still evolving.
 //! Consult its documentation for supported output modes and current limitations;
 //! implementing a marker trait does not by itself establish PPS conformance.
 //!
@@ -75,6 +80,8 @@
 //!
 //! [pps]: https://asimov-specs.github.io/program-patterns/
 //! [runner]: https://docs.rs/asimov-runner
+//! [remote]: https://docs.rs/asimov-remote
+//! [flow]: https://docs.rs/asimov-flow
 //! [rdf-mapping]: https://asimov-specs.github.io/program-patterns/#rdf-mapping
 
 #![no_std]

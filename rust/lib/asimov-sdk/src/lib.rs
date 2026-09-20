@@ -48,5 +48,8 @@ pub use asimov_registry as registry;
 #[cfg(feature = "runner")]
 pub use asimov_runner as runner;
 
+#[cfg(feature = "remote")]
+pub use asimov_remote as remote;
+
 #[cfg(feature = "snapshot")]
 pub use asimov_snapshot as snapshot;

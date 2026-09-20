@@ -42,9 +42,9 @@ mod platform_tests;
 mod list_request;
 pub use list_request::*;
 
-#[cfg(feature = "reqwest")]
+#[cfg(feature = "client")]
 mod social_client;
-#[cfg(feature = "reqwest")]
+#[cfg(feature = "client")]
 pub use social_client::*;
 
 mod social_handle;
