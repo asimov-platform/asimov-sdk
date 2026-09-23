@@ -49,6 +49,7 @@ pub trait Writer<T>: Execute<T> {}
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
 #[builder(derive(Debug), on(String, into))]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct WriterOptions {
     /// Additional arguments, including optional RDF input and exported output files.
     ///

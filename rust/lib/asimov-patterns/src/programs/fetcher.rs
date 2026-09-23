@@ -46,6 +46,7 @@ pub trait Fetcher<T>: Execute<T> {}
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
 #[builder(derive(Debug), on(String, into))]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct FetcherOptions {
     /// Additional arguments placed after generated options and before the URL.
     ///

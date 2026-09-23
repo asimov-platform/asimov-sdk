@@ -129,6 +129,7 @@ pub struct ListerCapabilities {
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, /*Ord,*/ PartialEq, /*PartialOrd,*/ Builder)]
 #[builder(derive(Debug), on(String, into))]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct ListerOptions {
     /// Additional arguments placed after generated options and before the URL.
     ///

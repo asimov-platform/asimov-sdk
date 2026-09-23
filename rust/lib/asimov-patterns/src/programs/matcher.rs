@@ -46,6 +46,7 @@ pub trait Matcher<T>: Execute<T> {}
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
 #[builder(derive(Debug), on(String, into))]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct MatcherOptions {
     /// Additional arguments, including optional input and output file operands.
     ///

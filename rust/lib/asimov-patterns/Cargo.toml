@@ -28,12 +28,18 @@ unstable = []
 # Features:
 tracing = []
 
+# Interoperability:
+clap = ["dep:clap"]
+
 [dependencies]
 asimov-core.workspace = true
 async-trait.workspace = true
 bon.workspace = true
 clientele = { workspace = true, features = ["clap"] }
 rdf-model.workspace = true
+
+# Interoperability:
+clap = { workspace = true, features = ["derive", "std"], optional = true }
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]

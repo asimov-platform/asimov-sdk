@@ -50,6 +50,7 @@ pub trait Resolver<T>: Execute<T> {}
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
 #[builder(derive(Debug), on(String, into))]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct ResolverOptions {
     /// Additional arguments placed after the generated limit and before the URI.
     ///

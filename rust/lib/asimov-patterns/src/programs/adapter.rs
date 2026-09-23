@@ -46,6 +46,7 @@ pub trait Adapter<T>: Execute<T> {}
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
 #[builder(derive(Debug), on(String, into))]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct AdapterOptions {
     /// Additional arguments, in order, including an optional query-file operand.
     ///

@@ -50,6 +50,7 @@ pub trait Prompter<T>: Execute<T> {}
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
 #[builder(derive(Debug), on(String, into))]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct PrompterOptions {
     /// Additional arguments, including optional prompt and response file operands.
     ///

@@ -50,6 +50,7 @@ pub trait Runner<T>: Execute<T> {}
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
 #[builder(derive(Debug), on(String, into))]
+// TODO: #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct RunnerOptions {
     /// Additional arguments appended after definitions, including an optional program file.
     ///

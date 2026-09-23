@@ -49,6 +49,7 @@ pub trait Indexer: Execute<()> {}
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
 #[builder(derive(Debug), on(String, into))]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct IndexerOptions {
     /// Additional arguments, including the required index-destination operand.
     ///
