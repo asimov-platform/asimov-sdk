@@ -2,10 +2,18 @@
 
 //! Collection enumeration: the lister marker trait, formats, and pagination.
 
+#![allow(unused)]
+
 use crate::{Execute, OptionSupport};
 use alloc::{string::String, vec::Vec};
 use bon::Builder;
 use clientele::options::sort::SortKeys;
+
+const HELP_SORT: &str =
+    r#"Sort resources by the specified keys (prefix a key with `-` for descending order)"#;
+const HELP_OFFSET: &str = r#"The index offset of the first output"#;
+const HELP_LIMIT: &str = r#"The maximum count of outputs [default: none]"#;
+const HELP_OUTPUT: &str = r#"The output format [default: auto]"#;
 
 /// A directory or collection iterator that describes its entries as RDF.
 ///
@@ -136,23 +144,29 @@ pub struct ListerOptions {
     /// Each string is one literal argument, without shell expansion. The runner
     /// supplies the URL separately; do not duplicate it here. See [`crate::programs`].
     #[builder(field)]
+    #[cfg_attr(feature = "clap", clap(skip))]
     pub other: Vec<String>,
 
+    /// Sort resources by the specified keys. (Prefix a key with `-` for descending order.)
+    ///
     /// Ordering request passed as `--sort=SORT` using [`SortKeys`]' display syntax.
     ///
     /// `SortKeys` uses a `-` prefix for descending keys. This is the SDK's
     /// representation, not a universally supported PPS grammar; the program
     /// must support both the option and the resulting expression. `None` omits
     /// the request and uses the program's documented default order.
+    #[cfg_attr(
+        feature = "clap",
+        clap(
+            aliases = ["sort-by", "order", "order-by"],
+            value_name = "SORT",
+            value_name = "[+|-]KEY,...",
+            long,
+            long_help = HELP_SORT,
+            allow_hyphen_values = true,
+        )
+    )]
     pub sort: Option<SortKeys>,
-
-    /// Number of entries to skip, passed as `--offset=COUNT`.
-    ///
-    /// `None` omits the option (default `0`); `Some(0)` explicitly skips none.
-    /// Offset is applied after sorting and before the limit. Programs may omit
-    /// native support. Do not combine an offset, even `Some(0)`, with `before`
-    /// or `after`; these are alternative pagination modes.
-    pub offset: Option<usize>,
 
     /// Exclusive upper cursor bound, passed as `--before=URI`.
     ///
@@ -161,6 +175,8 @@ pub struct ListerOptions {
     /// before that entry in the chosen sort order. May be combined with `after`
     /// to bound an interval, but not with numeric `offset`. `None` omits the bound.
     /// The options value stores this string without validation or normalization.
+    #[cfg_attr(feature = "clap", clap(skip))]
+    // TODO: #[cfg_attr(feature = "clap", clap(value_name = "URI", long))]
     pub before: Option<String>,
 
     /// Exclusive lower cursor bound, passed as `--after=URI`.
@@ -169,8 +185,31 @@ pub struct ListerOptions {
     /// that entry in the chosen sort order. May be combined with `before`, but
     /// not with numeric `offset`. `None` omits the bound. As with `before`, the
     /// options value stores the absolute URI string without validating it.
+    #[cfg_attr(feature = "clap", clap(skip))]
+    // TODO: #[cfg_attr(feature = "clap", clap(value_name = "URI", long))]
     pub after: Option<String>,
 
+    /// The index offset of the first output.
+    ///
+    /// Number of entries to skip, passed as `--offset=INDEX`.
+    ///
+    /// `None` omits the option (default `0`); `Some(0)` explicitly skips none.
+    /// Offset is applied after sorting and before the limit. Programs may omit
+    /// native support. Do not combine an offset, even `Some(0)`, with `before`
+    /// or `after`; these are alternative pagination modes.
+    #[cfg_attr(
+        feature = "clap",
+        clap(
+            value_name = "INDEX",
+            default_value = "0",
+            long,
+            long_help = HELP_OFFSET
+        )
+    )]
+    pub offset: Option<usize>,
+
+    /// The maximum count of outputs [default: none].
+    ///
     /// Requested listing limit (`--limit=COUNT`, or `-n`, when forwarded natively).
     ///
     /// `None` imposes no caller-requested limit; `Some(0)` requests no entries.
@@ -183,12 +222,32 @@ pub struct ListerOptions {
     /// does not validate entry boundaries.
     ///
     /// [implementation]: https://docs.rs/asimov-runner/latest/asimov_runner/struct.Lister.html
+    #[cfg_attr(
+        feature = "clap",
+        clap(
+            value_name = "COUNT",
+            short = 'n',
+            long,
+            long_help = HELP_LIMIT
+        )
+    )]
     pub limit: Option<usize>,
 
+    /// The output format.
+    ///
     /// RDF serialization passed as `--output=FORMAT` (`-o` in the CLI).
     ///
     /// `None` omits the option; the specified program default is `jsonl`.
     /// The option does not define how an entry maps to RDF or select a file.
+    #[cfg_attr(
+        feature = "clap",
+        clap(
+            value_name = "FORMAT",
+            short = 'o',
+            long,
+            long_help = HELP_OUTPUT
+        )
+    )]
     pub output: Option<String>,
 }
 

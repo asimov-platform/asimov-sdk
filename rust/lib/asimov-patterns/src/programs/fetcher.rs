@@ -2,9 +2,13 @@
 
 //! URL-to-RDF retrieval: the fetcher marker trait and options.
 
+#![allow(unused)]
+
 use crate::Execute;
 use alloc::{string::String, vec::Vec};
 use bon::Builder;
+
+const HELP_OUTPUT: &str = r#"The output format [default: auto]"#;
 
 /// A URL protocol client that retrieves one resource and represents it as RDF.
 ///
@@ -53,12 +57,19 @@ pub struct FetcherOptions {
     /// Each string is one literal argument, without shell expansion. The runner
     /// supplies the URL separately; do not duplicate it here. See [`crate::programs`].
     #[builder(field)]
+    #[cfg_attr(feature = "clap", clap(skip))]
     pub other: Vec<String>,
 
+    /// The output format.
+    ///
     /// RDF serialization passed as `--output=FORMAT` (`-o` in the CLI).
     ///
     /// `None` omits the option; the specified program default is `jsonl`.
     /// This names a serialization, not a file or a raw-response retrieval mode.
+    #[cfg_attr(
+        feature = "clap",
+        clap(value_name = "FORMAT", short = 'o', long, long_help = HELP_OUTPUT)
+    )]
     pub output: Option<String>,
 }
 
