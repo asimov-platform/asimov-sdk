@@ -171,7 +171,7 @@ jiff = { version = "0.2", default-features = false }
 keyring-core = { version = "1.0", default-features = false }
 know = { version = "0", default-features = true }
 known-errors = { version = "0.1", default-features = false, features = ["sysexits"] }
-kstring = { version = "=2.0.2", default-features = false }
+kstring = { version = "=2.0.5", default-features = false }
 lazy_static = { version = "1.5", default-features = false }
 libloading = { version = "0.8", default-features = false }
 libsql = { version = "0.9", default-features = false }
