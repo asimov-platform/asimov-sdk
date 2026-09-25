@@ -255,6 +255,7 @@ async fn binary_output(program: &Path) {
 
 async fn streaming_and_drop(program: &Path, poll: bool) {
     // TCP EOF provides a portable indication that each child has terminated.
+    // Windows may reset the connection when a child is forcibly killed.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let notify = format!("--notify={}", listener.local_addr().unwrap());
     let mut source_args = args(if poll { "emit-hang" } else { "hang" });
@@ -301,7 +302,12 @@ async fn streaming_and_drop(program: &Path, poll: bool) {
     drop(stream);
     for mut socket in sockets {
         let mut bytes = Vec::new();
-        socket.read_to_end(&mut bytes).await.unwrap();
+        let result = socket.read_to_end(&mut bytes).await;
+        if let Err(error) = result
+            && error.kind() != io::ErrorKind::ConnectionReset
+        {
+            panic!("failed to observe child termination: {error}");
+        }
         assert!(bytes.is_empty());
     }
 }
