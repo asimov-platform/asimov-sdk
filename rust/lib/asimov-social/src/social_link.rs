@@ -99,7 +99,9 @@ pub enum SocialLinkConversionError {
 /// [`Display`] and conversion into [`String`] produce the canonical URL shown
 /// on each variant, omitting `www.` and normalizing aliases. Public variants can
 /// also be constructed directly from decoded strings. Formatting escapes each
-/// payload as one URL path segment without validating it. Equality compares
+/// payload as one URL path segment without validating it, so providing already
+/// percent-encoded text (for example, `"%61lice"`) will escape `%` again.
+/// Equality compares
 /// variants and decoded payloads, not the original URL spelling.
 /// In particular, ambiguous Luma slugs can format identically while representing
 /// different variants; see [`LumaPage`](Self::LumaPage).
