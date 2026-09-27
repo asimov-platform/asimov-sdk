@@ -13,7 +13,7 @@ const HELP_SORT: &str =
     r#"Sort resources by the specified keys (prefix a key with `-` for descending order)"#;
 const HELP_OFFSET: &str = r#"The index offset of the first output"#;
 const HELP_LIMIT: &str = r#"The maximum count of outputs [default: none]"#;
-const HELP_OUTPUT: &str = r#"The output format [default: auto]"#;
+const HELP_OUTPUT: &str = r#"The output format."#;
 
 /// A directory or collection iterator that describes its entries as RDF.
 ///
@@ -108,6 +108,10 @@ pub struct ListerCapabilities {
 /// `Default` leaves all optional fields unset and `other` empty: no caller
 /// limit, no skipped entries or cursor bounds, and the program's default order
 /// and output format. The collection URL is supplied separately by the runner.
+/// Clap parsing uses the CLI's offset default of `Some(0)`, whereas `Default`
+/// and the builder leave it unset. A host can flatten [`crate::CachingOptions`],
+/// [`crate::FilteringOptions`], and [`crate::TimingOptions`] alongside this type
+/// for shared caching, output filtering, and execution timing arguments.
 ///
 /// These fields express requested behavior, not program capabilities; supply
 /// known native support separately using [`ListerCapabilities`].
@@ -138,6 +142,7 @@ pub struct ListerCapabilities {
 #[derive(Clone, Debug, Default, Eq, Hash, /*Ord,*/ PartialEq, /*PartialOrd,*/ Builder)]
 #[builder(derive(Debug), on(String, into))]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
+#[cfg_attr(feature = "clap", command(about = None, long_about = None))]
 pub struct ListerOptions {
     /// Additional arguments placed after generated options and before the URL.
     ///
@@ -159,9 +164,9 @@ pub struct ListerOptions {
         feature = "clap",
         clap(
             aliases = ["sort-by", "order", "order-by"],
-            value_name = "SORT",
             value_name = "[+|-]KEY,...",
             long,
+            help = HELP_SORT,
             long_help = HELP_SORT,
             allow_hyphen_values = true,
         )
@@ -203,6 +208,7 @@ pub struct ListerOptions {
             value_name = "INDEX",
             default_value = "0",
             long,
+            help = HELP_OFFSET,
             long_help = HELP_OFFSET
         )
     )]
@@ -228,6 +234,7 @@ pub struct ListerOptions {
             value_name = "COUNT",
             short = 'n',
             long,
+            help = HELP_LIMIT,
             long_help = HELP_LIMIT
         )
     )]
@@ -245,6 +252,7 @@ pub struct ListerOptions {
             value_name = "FORMAT",
             short = 'o',
             long,
+            help = HELP_OUTPUT,
             long_help = HELP_OUTPUT
         )
     )]

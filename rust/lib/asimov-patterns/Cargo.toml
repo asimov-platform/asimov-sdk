@@ -22,20 +22,21 @@ title = "ASIMOV.rs: Program Patterns"
 [features]
 default = ["all", "std"]
 all = []
-std = ["asimov-core/std", "clientele/std"]
+std = ["asimov-core/std", "clientele/std", "dep:humantime"]
 unstable = []
 
 # Features:
 tracing = []
 
 # Interoperability:
-clap = ["dep:clap"]
+clap = ["dep:clap", "dep:humantime"]
 
 [dependencies]
 asimov-core.workspace = true
 async-trait.workspace = true
 bon.workspace = true
 clientele = { workspace = true, features = ["clap"] }
+humantime = { workspace = true, optional = true }
 rdf-model.workspace = true
 
 # Interoperability:

@@ -69,14 +69,14 @@
 //! # Features
 //!
 //! The crate declares `no_std` and uses `alloc` for strings, collections, and
-//! boxed futures. None of its public APIs is gated on the `std` feature.
+//! boxed futures. Cache and timing argument formatting requires `std` or `clap`
+//! and uses `humantime`, which requires the standard library. The `clap` feature
+//! also requires the standard library and enables shared argument parsing,
+//! including human-readable cache ages and execution deadlines.
 //! The default features are `all` and `std`; `std` enables standard-library
 //! support in dependencies. `all`, `tracing`, and `unstable` currently enable no
 //! additional behavior in this crate. Disabling `std` here does not guarantee
 //! that the dependency graph is usable on a target without a standard library.
-//! Currently, a standalone `--no-default-features` build fails in the transitive
-//! `dogma` dependency because collection traits are enabled without its `alloc`
-//! feature; the ungated API should not be read as a working no-std build guarantee.
 //!
 //! [pps]: https://asimov-specs.github.io/program-patterns/
 //! [runner]: https://docs.rs/asimov-runner
@@ -90,7 +90,7 @@
 
 extern crate alloc;
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "clap"))]
 extern crate std;
 
 pub mod execute;
