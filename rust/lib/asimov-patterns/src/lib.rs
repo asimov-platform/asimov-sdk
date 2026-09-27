@@ -99,5 +99,8 @@ pub use execute::*;
 pub mod capabilities;
 pub use capabilities::*;
 
+pub mod options;
+pub use options::*;
+
 pub mod programs;
 pub use programs::*;
