@@ -303,8 +303,8 @@ async fn streaming_and_drop(program: &Path, poll: bool) {
     for mut socket in sockets {
         let mut bytes = Vec::new();
         match socket.read_to_end(&mut bytes).await {
-            Ok(_) => {}
-            Err(error) if cfg!(windows) && error.kind() == io::ErrorKind::ConnectionReset => {}
+            Ok(_) => {},
+            Err(error) if cfg!(windows) && error.kind() == io::ErrorKind::ConnectionReset => {},
             Err(error) => panic!("failed to observe child termination: {error}"),
         }
         assert!(bytes.is_empty());
