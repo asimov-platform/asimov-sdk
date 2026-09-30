@@ -1,8 +1,8 @@
 // This is free and unencumbered software released into the public domain.
 
-#[cfg(feature = "clap")]
 extern crate alloc;
 
+use alloc::string::String;
 use asimov_patterns::{
     CachingOptions, FetcherOptions, FilteringOptions, ListerOptions, TimingOptions,
 };
@@ -17,8 +17,11 @@ fn builders_preserve_unset_defaults() {
     );
     assert_eq!(TimingOptions::builder().build(), TimingOptions::default());
     assert_eq!(FetcherOptions::builder().build(), FetcherOptions::default());
-    assert_eq!(ListerOptions::builder().build(), ListerOptions::default());
-    assert_eq!(ListerOptions::default().offset, None);
+    assert_eq!(
+        ListerOptions::<String>::builder().build(),
+        ListerOptions::default()
+    );
+    assert_eq!(ListerOptions::<String>::default().offset, None);
 
     let cache = CachingOptions::builder()
         .max_age(Duration::from_secs(3600))
@@ -45,6 +48,7 @@ mod cli {
         string::{String, ToString},
         vec::Vec,
     };
+    use asimov_patterns::OutputFormat;
     use clap::{Args, Command, CommandFactory, Parser, error::ErrorKind};
 
     #[derive(Debug, Parser)]
@@ -82,7 +86,7 @@ mod cli {
             TimingOptions::augment_args(Command::new("timing")),
             FilteringOptions::augment_args(Command::new("filter")),
             FetcherOptions::augment_args(Command::new("fetch")),
-            ListerOptions::augment_args(Command::new("list")),
+            ListerOptions::<String>::augment_args(Command::new("list")),
         ] {
             assert!(command.get_about().is_none(), "{}", command.get_name());
             assert!(command.get_long_about().is_none(), "{}", command.get_name());
@@ -262,7 +266,7 @@ mod cli {
             assert_eq!(args.options.sort.unwrap().to_string(), "-name");
             assert_eq!(args.options.offset, Some(20));
             assert_eq!(args.options.limit, Some(100));
-            assert_eq!(args.options.output.as_deref(), Some("jsonl"));
+            assert_eq!(args.options.output, Some(OutputFormat::Jsonl));
             assert_eq!(args.filtering.jev.as_deref(), Some("The name is Ukrainian"));
             assert_eq!(args.filtering.jq.as_deref(), Some("select(.name)"));
             assert_eq!(args.cache.max_age, Some(Duration::from_secs(7 * 86400)));

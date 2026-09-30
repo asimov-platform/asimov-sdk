@@ -14,6 +14,8 @@ use std::{
 };
 use tokio::{io::AsyncWrite, time::timeout};
 
+type Lister = crate::Lister;
+
 #[derive(Default)]
 struct Written {
     bytes: Vec<u8>,

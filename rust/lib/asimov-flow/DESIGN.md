@@ -50,16 +50,20 @@ the `tokio` feature; vectored wire slices require `std`.
 
 Remote `http::Fetcher` and `http::Lister` are configured operations implementing
 the existing pattern traits and `Execute<BatchStream<http::Error>>`. Their wire
-profile is explicit: JSON POSTs to `fetch` and `list`, returning `application/jsonl`.
+profile is explicit: JSON POSTs to `fetch` and `list` with
+`Accept: application/jsonl`. Response bytes are framed without format validation.
 Fetcher input remains one resource URL; the SocialClient façade additionally
-supports the service's multi-URL request. Raw command-line `other` arguments and
-unsupported sort/cursor/output options are rejected before execution.
+supports the service's multi-URL request. Remote listing forwards all configured
+`ListerOptions` fields in the request's `options` object. Sort expressions and
+format names use their command-line spellings; `other` is an array of literal
+arguments. Endpoint validation determines which options it supports. Remote
+fetching rejects raw `other` arguments and non-JSONL output formats locally.
 
 Remote listing delegates offset and limit to the endpoint as entry counts; it
 does not silently treat records as entries. The existing local lister also has
 a protective *line* cap. A shared entry-aware limiting policy requires agreement
-on an RDF mapping/entry envelope. Zero-limit remote pattern invocations validate
-options and then return an empty stream without a request.
+on an RDF mapping/entry envelope. A zero limit is forwarded to the endpoint just
+like any other explicitly configured listing option.
 
 Successful `execute()` means startup succeeded. Streams report subsequent body
 or subprocess failures. Exhausting an HTTP body establishes transport completion,

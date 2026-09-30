@@ -197,10 +197,14 @@ macro_rules! programs {
     };
 }
 programs! {
-    producer: crate::Adapter, crate::Emitter, crate::Fetcher, Lister, crate::Reader;
+    producer: crate::Adapter, crate::Emitter, crate::Fetcher, crate::Reader;
     consumer: Writer, Indexer;
     both: crate::Matcher, crate::Reasoner
 }
+
+impl<T: Clone, F> sealed::Sealed for Lister<T, F> {}
+impl<T: Clone + fmt::Display, F: fmt::Display> PipelineProgram for Lister<T, F> {}
+impl<T: Clone + fmt::Display, F: fmt::Display> GraphProducer for Lister<T, F> {}
 
 /// An owned, nonempty linear pipeline, typed by its final program.
 ///

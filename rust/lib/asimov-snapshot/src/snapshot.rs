@@ -160,7 +160,7 @@ impl<S: crate::storage::Storage> Snapshotter<S> {
             tracing::debug!("attempting to capture a snapshot with lister");
             let start_timestamp = Timestamp::now();
             let result = async {
-                let mut stream = asimov_runner::Lister::new(
+                let mut stream = asimov_runner::Lister::<String>::new(
                     program,
                     &url,
                     GraphOutput::Captured,

@@ -16,6 +16,39 @@ use tokio::{
 
 const DEADLINE: Duration = Duration::from_secs(5);
 
+type Lister = super::Lister;
+
+// Wire names come from Display; neither generic type needs FromStr or Serde.
+#[derive(Clone, Debug)]
+enum Property {
+    Name,
+    FirstName,
+}
+
+impl fmt::Display for Property {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Name => "name",
+            Self::FirstName => "first-name",
+        })
+    }
+}
+
+#[derive(Debug)]
+enum Format {
+    JsonlAlias,
+    Csv,
+}
+
+impl fmt::Display for Format {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::JsonlAlias => "jsonl",
+            Self::Csv => "csv",
+        })
+    }
+}
+
 // A response held open after its first chunk proves the caller receives batches
 // before EOF. The server reads and reports the complete JSON request first.
 async fn http1_server(
@@ -194,43 +227,18 @@ async fn truncated_body_flushes_complete_records_then_reports_failure() {
 }
 
 #[tokio::test]
-async fn zero_limit_and_unsupported_options_do_not_start_requests() {
+async fn unsupported_fetcher_options_do_not_start_requests() {
     let executor = Executor::new("http://127.0.0.1:1", "token").unwrap();
-    let mut operation = Lister::new(
-        executor.clone(),
-        "https://example.com",
-        ListerOptions::builder().limit(0).build(),
-    );
-    assert!(operation.execute().await.unwrap().next().await.is_none());
-    assert_eq!(operation.capabilities().limit, OptionSupport::Supported);
-    assert_eq!(operation.capabilities().after, OptionSupport::Unsupported);
-    for options in [
-        ListerOptions::builder()
-            .limit(0)
-            .after("urn:entry:1")
-            .build(),
-        ListerOptions::builder().before("urn:entry:2").build(),
-        ListerOptions::builder()
-            .sort("name".parse().unwrap())
-            .build(),
-        ListerOptions::builder().other("--custom").build(),
-        ListerOptions::builder().output("turtle").build(),
+    for (options, expected) in [
+        (FetcherOptions::builder().output("turtle").build(), "output"),
+        (FetcherOptions::builder().other("--custom").build(), "other"),
     ] {
-        let mut operation = Lister::new(executor.clone(), "https://example.com", options);
+        let mut operation = Fetcher::new(executor.clone(), "https://example.com", options);
         assert!(matches!(
             operation.execute().await,
-            Err(Error::UnsupportedOption(_))
+            Err(Error::UnsupportedOption(actual)) if actual == expected
         ));
     }
-    let mut operation = Fetcher::new(
-        executor,
-        "https://example.com",
-        FetcherOptions::builder().output("turtle").build(),
-    );
-    assert!(matches!(
-        operation.execute().await,
-        Err(Error::UnsupportedOption("output"))
-    ));
 }
 
 #[test]
@@ -242,6 +250,176 @@ fn configuration_supports_prefixes_and_redacts_token() {
     for url in ["invalid", "file:///tmp/example", "mailto:me@example.com"] {
         assert!(Executor::new(url, "token").is_err());
     }
+}
+
+#[tokio::test]
+async fn typed_lister_forwards_all_options_and_preserves_response_bytes() {
+    async fn execute(
+        operation: &mut impl asimov_patterns::Lister<JsonlStream, Error = Error>,
+    ) -> JsonlStream {
+        operation.execute().await.unwrap()
+    }
+
+    for (output, name) in [
+        (OutputFormat::Jsonl, "jsonl"),
+        (OutputFormat::Other(Format::JsonlAlias), "jsonl"),
+        (OutputFormat::Url, "url"),
+        (OutputFormat::Other(Format::Csv), "csv"),
+    ] {
+        let (url, request, resume, server) = http1_server(200, b"{}\r\n", b"\xfftail").await;
+        let mut lister = super::Lister::new(
+            Executor::new(url, "token").unwrap(),
+            "https://example.com/collection",
+            ListerOptions::<Property, Format>::builder()
+                .sort(
+                    vec![
+                        (Property::Name, true).into(),
+                        (Property::FirstName, false).into(),
+                    ]
+                    .into(),
+                )
+                .before("urn:entry:9")
+                .after("urn:entry:1")
+                .offset(0)
+                .limit(0)
+                .output(output)
+                .other("--custom")
+                .other("literal argument")
+                .other("")
+                .build(),
+        );
+        assert_eq!(
+            lister.capabilities(),
+            ListerCapabilities {
+                sort: OptionSupport::Supported,
+                before: OptionSupport::Supported,
+                after: OptionSupport::Supported,
+                offset: OptionSupport::Supported,
+                limit: OptionSupport::Supported,
+            }
+        );
+        let mut stream = timeout(DEADLINE, execute(&mut lister)).await.unwrap();
+        let request = timeout(DEADLINE, request).await.unwrap().unwrap();
+        let (headers, body) = request.split_once("\r\n\r\n").unwrap();
+        assert!(headers.starts_with("POST /api/list HTTP/1.1"));
+        assert_eq!(
+            serde_json::from_str::<Value>(body).unwrap(),
+            json!({
+                "url": "https://example.com/collection",
+                "options": {
+                    "sort": "-name,first-name",
+                    "before": "urn:entry:9",
+                    "after": "urn:entry:1",
+                    "offset": 0,
+                    "limit": 0,
+                    "output": name,
+                    "other": ["--custom", "literal argument", ""],
+                },
+            })
+        );
+        let batch = timeout(DEADLINE, stream.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(batch.lines().collect::<Vec<_>>(), [b"{}\r\n".as_slice()]);
+        resume.send(()).unwrap();
+        let batch = timeout(DEADLINE, stream.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(batch.lines().collect::<Vec<_>>(), [b"\xfftail".as_slice()]);
+        assert!(stream.next().await.is_none());
+        server.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn absent_options_are_omitted_but_explicit_values_are_forwarded() {
+    let cases: Vec<(ListerOptions, Value)> = vec![
+        (ListerOptions::default(), json!({"url": "example:"})),
+        (
+            ListerOptions::builder()
+                .sort("-name,+first-name".parse().unwrap())
+                .build(),
+            json!({"url": "example:", "options": {"sort": "-name,first-name"}}),
+        ),
+        (
+            ListerOptions::builder().sort(Vec::new().into()).build(),
+            json!({"url": "example:", "options": {"sort": ""}}),
+        ),
+        (
+            ListerOptions::builder().before("urn:entry:2").build(),
+            json!({"url": "example:", "options": {"before": "urn:entry:2"}}),
+        ),
+        (
+            ListerOptions::builder().after("urn:entry:1").build(),
+            json!({"url": "example:", "options": {"after": "urn:entry:1"}}),
+        ),
+        (
+            ListerOptions::builder().offset(0).build(),
+            json!({"url": "example:", "options": {"offset": 0}}),
+        ),
+        (
+            ListerOptions::builder().limit(0).build(),
+            json!({"url": "example:", "options": {"limit": 0}}),
+        ),
+        (
+            ListerOptions::builder().output("turtle").build(),
+            json!({"url": "example:", "options": {"output": "turtle"}}),
+        ),
+        (
+            ListerOptions::builder().other("").build(),
+            json!({"url": "example:", "options": {"other": [""]}}),
+        ),
+    ];
+    for (options, expected) in cases {
+        let (url, request, resume, server) = http1_server(200, b"", b"").await;
+        let mut operation = Lister::new(Executor::new(url, "token").unwrap(), "example:", options);
+        let mut stream = timeout(DEADLINE, operation.execute())
+            .await
+            .unwrap()
+            .unwrap();
+        let request = timeout(DEADLINE, request).await.unwrap().unwrap();
+        let (_, body) = request.split_once("\r\n\r\n").unwrap();
+        assert_eq!(serde_json::from_str::<Value>(body).unwrap(), expected);
+        resume.send(()).unwrap();
+        assert!(timeout(DEADLINE, stream.next()).await.unwrap().is_none());
+        server.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn endpoint_option_rejections_are_reported_as_http_errors() {
+    let (url, request, resume, server) = http1_server(400, b"", b"").await;
+    let mut operation = Lister::new(
+        Executor::new(url, "token").unwrap(),
+        "example:",
+        ListerOptions::builder()
+            .limit(0)
+            .output("turtle")
+            .other("--custom")
+            .build(),
+    );
+    let error = timeout(DEADLINE, operation.execute())
+        .await
+        .unwrap()
+        .err()
+        .unwrap();
+    assert!(matches!(error, Error::Http(ref error)
+        if error.status() == Some(reqwest::StatusCode::BAD_REQUEST)));
+    let request = timeout(DEADLINE, request).await.unwrap().unwrap();
+    let (_, body) = request.split_once("\r\n\r\n").unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(body).unwrap(),
+        json!({
+            "url": "example:",
+            "options": {"limit": 0, "output": "turtle", "other": ["--custom"]},
+        })
+    );
+    drop(resume);
+    server.await.unwrap();
 }
 
 #[tokio::test]

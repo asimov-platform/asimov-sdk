@@ -13,6 +13,8 @@ use std::{
 };
 use tokio::io::{AsyncReadExt, AsyncWrite};
 
+type Lister = asimov_runner::Lister;
+
 const RECORD: &[u8] = b"{\"@id\":\"urn:example:record\"}\n";
 
 fn main() {

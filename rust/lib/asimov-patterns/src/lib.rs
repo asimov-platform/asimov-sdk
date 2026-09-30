@@ -33,15 +33,15 @@
 //! # Configuring an operation
 //!
 //! ```
-//! use asimov_patterns::ListerOptions;
+//! use asimov_patterns::{ListerOptions, OutputFormat};
 //!
-//! let options = ListerOptions::builder()
+//! let options: ListerOptions = ListerOptions::builder()
 //!     .limit(25)
 //!     .output("jsonl")
 //!     .build();
 //!
 //! assert_eq!(options.limit, Some(25));
-//! assert_eq!(options.output.as_deref(), Some("jsonl"));
+//! assert_eq!(options.output, Some(OutputFormat::Jsonl));
 //! assert!(options.other.is_empty());
 //! ```
 //!
@@ -101,6 +101,9 @@ pub use capabilities::*;
 
 pub mod options;
 pub use options::*;
+
+pub mod output_format;
+pub use output_format::*;
 
 pub mod programs;
 pub use programs::*;

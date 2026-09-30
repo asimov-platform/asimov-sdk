@@ -3,8 +3,11 @@
 //! HTTP(S) execution of the JSON POST fetch/list protocol.
 //!
 //! Fetching maps one resource URL to `{"urls":[URL]}` at `fetch`. Listing maps
-//! a collection URL to `{"url":URL,"options":{"offset":N,"limit":N}}` at
-//! `list`, omitting absent options. An endpoint implementing this protocol must
+//! a collection URL to `{"url":URL,"options":{...}}` at `list`, forwarding
+//! every configured [`ListerOptions`] field. Sort and output-format values use
+//! their command-line spellings; `other` is an array of literal arguments.
+//! Absent options and an empty `other` array are omitted, as is the entire
+//! `options` object when empty. An endpoint implementing this protocol must
 //! supply the RDF mapping profile expected by its graph consumers; JSONL framing
 //! alone does not establish that mapping.
 //!
@@ -25,7 +28,12 @@
 //! # }
 //! ```
 
-use alloc::{boxed::Box, format, string::String};
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
 use asimov_flow::{BatchStream, jsonl_batches_from_chunks};
 use async_trait::async_trait;
 use core::fmt;
@@ -33,7 +41,9 @@ use reqwest::{Client, Url, header::ACCEPT};
 use serde::Serialize;
 
 pub use asimov_flow::{BatchOptions, JsonlBatch, JsonlLine, StreamExt};
-pub use asimov_patterns::{FetcherOptions, ListerCapabilities, ListerOptions, OptionSupport};
+pub use asimov_patterns::{
+    FetcherOptions, ListerCapabilities, ListerOptions, OptionSupport, OutputFormat,
+};
 
 /// A raw JSONL batch stream with HTTP-specific failures.
 pub type JsonlStream = BatchStream<Error>;
@@ -163,7 +173,7 @@ impl asimov_patterns::Execute<JsonlStream> for Fetcher {
     type Error = Error;
 
     async fn execute(&mut self) -> Result<JsonlStream, Error> {
-        validate_common(self.options.output.as_deref(), &self.options.other)?;
+        validate_fetcher_options(self.options.output.as_deref(), &self.options.other)?;
         #[derive(Serialize)]
         struct Request<'a> {
             urls: [&'a str; 1],
@@ -183,17 +193,34 @@ impl asimov_patterns::Fetcher<JsonlStream> for Fetcher {}
 
 /// One configured listing. Offset and limit are native entry counts, delegated
 /// to the endpoint. This implementation does not equate JSONL lines with entries
-/// or impose a separate line cap. Each execution sends a fresh request; a zero
-/// limit returns an empty stream after validation without issuing a request.
+/// or impose a separate line cap. Every execution sends a fresh request,
+/// including when the limit is zero. The endpoint validates and applies options.
+///
+/// All [`ListerOptions`] fields are forwarded in the request's `options` object:
+/// `sort`, `before`, `after`, `offset`, `limit`, `output`, and `other`. Sort keys
+/// are comma-separated with a `-` prefix for descending order. Formats use
+/// `jsonl`, `url`, or the custom format's name. Cursors and literal `other`
+/// arguments retain their spelling and argument boundaries. Unset fields and
+/// an empty `other` array are omitted; explicit zero values are preserved.
+///
+/// `T` is the sort-key type and `F` the custom output-format type from
+/// [`ListerOptions<T, F>`], both defaulting to [`String`]. Execution uses
+/// [`fmt::Display`] for both key and custom format names. No parsing or Serde
+/// traits are required on either type. Responses retain their original bytes
+/// in line-delimited batches; their format is not validated or transcoded.
+/// Both types must be [`Send`] for the execution trait's sendable future.
+/// Use a `Lister` type annotation or `Lister::<String>::new` when the options
+/// do not otherwise determine the generic types.
 #[derive(Clone, Debug)]
-pub struct Lister {
+pub struct Lister<T: Clone = String, F = String> {
     executor: Executor,
     input: String,
-    options: ListerOptions,
+    options: ListerOptions<T, F>,
 }
 
-impl Lister {
-    pub fn new(executor: Executor, input: impl Into<String>, options: ListerOptions) -> Self {
+impl<T: Clone, F> Lister<T, F> {
+    /// Configures a listing with typed options without sending a request.
+    pub fn new(executor: Executor, input: impl Into<String>, options: ListerOptions<T, F>) -> Self {
         Self {
             executor,
             input: input.into(),
@@ -201,12 +228,15 @@ impl Lister {
         }
     }
 
-    /// Capabilities of this HTTP request schema, not dynamically discovered metadata.
+    /// Operations this HTTP request schema can forward.
+    ///
+    /// These describe transport support, not dynamically discovered endpoint
+    /// capabilities. The endpoint determines which requests it can execute.
     pub fn capabilities(&self) -> ListerCapabilities {
         ListerCapabilities {
-            sort: OptionSupport::Unsupported,
-            before: OptionSupport::Unsupported,
-            after: OptionSupport::Unsupported,
+            sort: OptionSupport::Supported,
+            before: OptionSupport::Supported,
+            after: OptionSupport::Supported,
             offset: OptionSupport::Supported,
             limit: OptionSupport::Supported,
         }
@@ -214,41 +244,72 @@ impl Lister {
 }
 
 #[async_trait]
-impl asimov_patterns::Execute<JsonlStream> for Lister {
+impl<T: Clone + fmt::Display + Send, F: fmt::Display + Send> asimov_patterns::Execute<JsonlStream>
+    for Lister<T, F>
+{
     type Error = Error;
 
     async fn execute(&mut self) -> Result<JsonlStream, Error> {
-        validate_common(self.options.output.as_deref(), &self.options.other)?;
-        for (option, requested) in [
-            ("sort", self.options.sort.is_some()),
-            ("before", self.options.before.is_some()),
-            ("after", self.options.after.is_some()),
-        ] {
-            if requested {
-                return Err(Error::UnsupportedOption(option));
-            }
-        }
-        if self.options.limit == Some(0) {
-            return Ok(Box::pin(asimov_flow::stream::empty()));
-        }
         #[derive(Serialize)]
-        struct Options {
+        struct Options<'a> {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            sort: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            before: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            after: Option<&'a str>,
             #[serde(skip_serializing_if = "Option::is_none")]
             offset: Option<usize>,
             #[serde(skip_serializing_if = "Option::is_none")]
             limit: Option<usize>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            output: Option<String>,
+            #[serde(skip_serializing_if = "<[String]>::is_empty")]
+            other: &'a [String],
         }
         #[derive(Serialize)]
         struct Request<'a> {
             url: &'a str,
             #[serde(skip_serializing_if = "Option::is_none")]
-            options: Option<Options>,
+            options: Option<Options<'a>>,
         }
-        let options =
-            (self.options.offset.is_some() || self.options.limit.is_some()).then_some(Options {
-                offset: self.options.offset,
-                limit: self.options.limit,
-            });
+        let options = {
+            // Exhaustive destructuring makes newly added option fields a
+            // compile error here until their wire representation is supplied.
+            let ListerOptions {
+                sort,
+                before,
+                after,
+                offset,
+                limit,
+                output,
+                other,
+            } = &self.options;
+            let empty = sort.is_none()
+                && before.is_none()
+                && after.is_none()
+                && offset.is_none()
+                && limit.is_none()
+                && output.is_none()
+                && other.is_empty();
+            (!empty).then(|| Options {
+                sort: sort.as_ref().map(|keys| {
+                    keys.keys()
+                        .iter()
+                        .map(|key| {
+                            format!("{}{}", if key.descending() { "-" } else { "" }, key.key())
+                        })
+                        .collect::<Vec<_>>()
+                        .join(",")
+                }),
+                before: before.as_deref(),
+                after: after.as_deref(),
+                offset: *offset,
+                limit: *limit,
+                output: output.as_ref().map(ToString::to_string),
+                other,
+            })
+        };
         self.executor
             .post_jsonl(
                 "list",
@@ -261,9 +322,12 @@ impl asimov_patterns::Execute<JsonlStream> for Lister {
     }
 }
 
-impl asimov_patterns::Lister<JsonlStream> for Lister {}
+impl<T: Clone + fmt::Display + Send, F: fmt::Display + Send> asimov_patterns::Lister<JsonlStream>
+    for Lister<T, F>
+{
+}
 
-fn validate_common(output: Option<&str>, other: &[String]) -> Result<(), Error> {
+fn validate_fetcher_options(output: Option<&str>, other: &[String]) -> Result<(), Error> {
     if output.is_some_and(|format| format != "jsonl") {
         return Err(Error::UnsupportedOption("output"));
     }

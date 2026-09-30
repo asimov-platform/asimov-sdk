@@ -4,16 +4,13 @@
 
 #![allow(unused)]
 
-use crate::{Execute, OptionSupport};
+use crate::{Execute, OptionSupport, OutputFormat};
 use alloc::{string::String, vec::Vec};
 use bon::Builder;
 use clientele::options::sort::SortKeys;
 
-const HELP_SORT: &str =
-    r#"Sort resources by the specified keys (prefix a key with `-` for descending order)"#;
-const HELP_OFFSET: &str = r#"The index offset of the first output"#;
-const HELP_LIMIT: &str = r#"The maximum count of outputs [default: none]"#;
-const HELP_OUTPUT: &str = r#"The output format."#;
+#[cfg(feature = "clap")]
+mod cli;
 
 /// A directory or collection iterator that describes its entries as RDF.
 ///
@@ -105,6 +102,14 @@ pub struct ListerCapabilities {
 
 /// Output-format and pagination requests for a [`Lister`].
 ///
+/// `T` is the sort-key type in [`SortKeys<T>`]; `F` is the custom-format type in
+/// [`OutputFormat<F>`]. Both default to [`String`]. Enum keys only need
+/// [`Clone`] for storage. Clap parsing requires both types to be
+/// `Clone + Send + Sync + 'static` and implement [`core::str::FromStr`], with
+/// parse errors implementing [`core::fmt::Display`]. These parsing bounds do
+/// not constrain programmatically constructed options. Parsing uses the
+/// sort-key grammar from [`SortKeys`].
+///
 /// `Default` leaves all optional fields unset and `other` empty: no caller
 /// limit, no skipped entries or cursor bounds, and the program's default order
 /// and output format. The collection URL is supplied separately by the runner.
@@ -112,6 +117,7 @@ pub struct ListerCapabilities {
 /// and the builder leave it unset. A host can flatten [`crate::CachingOptions`],
 /// [`crate::FilteringOptions`], and [`crate::TimingOptions`] alongside this type
 /// for shared caching, output filtering, and execution timing arguments.
+/// The `other`, `before`, and `after` fields are programmatic-only.
 ///
 /// These fields express requested behavior, not program capabilities; supply
 /// known native support separately using [`ListerCapabilities`].
@@ -126,52 +132,55 @@ pub struct ListerCapabilities {
 /// ```rust
 /// use asimov_patterns::ListerOptions;
 ///
-/// let options = ListerOptions::builder()
+/// let options: ListerOptions = ListerOptions::builder()
 ///     .offset(20)
 ///     .limit(100)
 ///     .output("jsonl")
 ///     .build();
 ///
-/// let cursor_page = ListerOptions::builder()
+/// let cursor_page: ListerOptions = ListerOptions::builder()
 ///     .after("urn:example:entry:123")
 ///     .limit(25)
 ///     .build();
 /// assert_eq!(cursor_page.after.as_deref(), Some("urn:example:entry:123"));
 /// assert!(cursor_page.offset.is_none());
 /// ```
-#[derive(Clone, Debug, Default, Eq, Hash, /*Ord,*/ PartialEq, /*PartialOrd,*/ Builder)]
+///
+/// ```
+/// use asimov_patterns::{ListerOptions, OutputFormat};
+/// use clientele::options::sort::{SortKey, SortKeys};
+///
+/// #[derive(Clone)]
+/// enum MyProps { FirstName, LastName }
+///
+/// let options = ListerOptions::<MyProps>::builder()
+///     .sort(SortKeys::new(&[
+///         SortKey::new(MyProps::LastName, false),
+///         SortKey::new(MyProps::FirstName, false),
+///     ]))
+///     .output(OutputFormat::Jsonl)
+///     .build();
+/// ```
+#[derive(Clone, Debug, Eq, Hash, /*Ord,*/ PartialEq, /*PartialOrd,*/ Builder)]
 #[builder(derive(Debug), on(String, into))]
-#[cfg_attr(feature = "clap", derive(clap::Args))]
-#[cfg_attr(feature = "clap", command(about = None, long_about = None))]
-pub struct ListerOptions {
+pub struct ListerOptions<T: Clone = String, F = String> {
     /// Additional arguments placed after generated options and before the URL.
     ///
     /// Each string is one literal argument, without shell expansion. The runner
     /// supplies the URL separately; do not duplicate it here. See [`crate::programs`].
     #[builder(field)]
-    #[cfg_attr(feature = "clap", clap(skip))]
     pub other: Vec<String>,
 
     /// Sort resources by the specified keys. (Prefix a key with `-` for descending order.)
     ///
-    /// Ordering request passed as `--sort=SORT` using [`SortKeys`]' display syntax.
+    /// Ordering request passed as `--sort=SORT`. The default string-keyed
+    /// [`SortKeys`] implements display; typed keys retain their enum values.
     ///
     /// `SortKeys` uses a `-` prefix for descending keys. This is the SDK's
     /// representation, not a universally supported PPS grammar; the program
     /// must support both the option and the resulting expression. `None` omits
     /// the request and uses the program's documented default order.
-    #[cfg_attr(
-        feature = "clap",
-        clap(
-            aliases = ["sort-by", "order", "order-by"],
-            value_name = "[+|-]KEY,...",
-            long,
-            help = HELP_SORT,
-            long_help = HELP_SORT,
-            allow_hyphen_values = true,
-        )
-    )]
-    pub sort: Option<SortKeys>,
+    pub sort: Option<SortKeys<T>>,
 
     /// Exclusive upper cursor bound, passed as `--before=URI`.
     ///
@@ -180,8 +189,6 @@ pub struct ListerOptions {
     /// before that entry in the chosen sort order. May be combined with `after`
     /// to bound an interval, but not with numeric `offset`. `None` omits the bound.
     /// The options value stores this string without validation or normalization.
-    #[cfg_attr(feature = "clap", clap(skip))]
-    // TODO: #[cfg_attr(feature = "clap", clap(value_name = "URI", long))]
     pub before: Option<String>,
 
     /// Exclusive lower cursor bound, passed as `--after=URI`.
@@ -190,8 +197,6 @@ pub struct ListerOptions {
     /// that entry in the chosen sort order. May be combined with `before`, but
     /// not with numeric `offset`. `None` omits the bound. As with `before`, the
     /// options value stores the absolute URI string without validating it.
-    #[cfg_attr(feature = "clap", clap(skip))]
-    // TODO: #[cfg_attr(feature = "clap", clap(value_name = "URI", long))]
     pub after: Option<String>,
 
     /// The index offset of the first output.
@@ -202,16 +207,6 @@ pub struct ListerOptions {
     /// Offset is applied after sorting and before the limit. Programs may omit
     /// native support. Do not combine an offset, even `Some(0)`, with `before`
     /// or `after`; these are alternative pagination modes.
-    #[cfg_attr(
-        feature = "clap",
-        clap(
-            value_name = "INDEX",
-            default_value = "0",
-            long,
-            help = HELP_OFFSET,
-            long_help = HELP_OFFSET
-        )
-    )]
     pub offset: Option<usize>,
 
     /// The maximum count of outputs [default: none].
@@ -228,38 +223,36 @@ pub struct ListerOptions {
     /// does not validate entry boundaries.
     ///
     /// [implementation]: https://docs.rs/asimov-runner/latest/asimov_runner/struct.Lister.html
-    #[cfg_attr(
-        feature = "clap",
-        clap(
-            value_name = "COUNT",
-            short = 'n',
-            long,
-            help = HELP_LIMIT,
-            long_help = HELP_LIMIT
-        )
-    )]
     pub limit: Option<usize>,
 
     /// The output format.
     ///
-    /// RDF serialization passed as `--output=FORMAT` (`-o` in the CLI).
+    /// Passed as `--output=FORMAT` (`-o` in the CLI). Standard choices are
+    /// [`OutputFormat::Jsonl`] and [`OutputFormat::Url`]; [`OutputFormat::Other`]
+    /// stores an application-defined format.
     ///
     /// `None` omits the option; the specified program default is `jsonl`.
-    /// The option does not define how an entry maps to RDF or select a file.
-    #[cfg_attr(
-        feature = "clap",
-        clap(
-            value_name = "FORMAT",
-            short = 'o',
-            long,
-            help = HELP_OUTPUT,
-            long_help = HELP_OUTPUT
-        )
-    )]
-    pub output: Option<String>,
+    /// The option selects a representation, not a file. Executors may support
+    /// only a subset of formats; JSONL graph pipelines require `jsonl`.
+    #[builder(into)]
+    pub output: Option<OutputFormat<F>>,
 }
 
-impl<S: lister_options_builder::State> ListerOptionsBuilder<S> {
+impl<T: Clone, F> Default for ListerOptions<T, F> {
+    fn default() -> Self {
+        Self {
+            other: Vec::new(),
+            sort: None,
+            before: None,
+            after: None,
+            offset: None,
+            limit: None,
+            output: None,
+        }
+    }
+}
+
+impl<T: Clone, F, S: lister_options_builder::State> ListerOptionsBuilder<T, F, S> {
     /// Appends one literal argument to [`ListerOptions::other`], preserving order.
     pub fn other(mut self, flag: impl Into<String>) -> Self {
         self.other.push(flag.into());

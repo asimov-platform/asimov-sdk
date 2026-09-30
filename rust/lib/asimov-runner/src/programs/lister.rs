@@ -10,13 +10,16 @@ use alloc::{
     boxed::Box,
     format,
     string::{String, ToString},
+    vec::Vec,
 };
 use async_trait::async_trait;
+use clientele::options::sort::{SortKey, SortKeys};
+use core::fmt;
 use derive_more::Debug;
 use std::{ffi::OsStr, process::Stdio};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
-pub use asimov_patterns::{ListerCapabilities, ListerOptions};
+pub use asimov_patterns::{ListerCapabilities, ListerOptions, OutputFormat};
 
 /// A live stream of JSONL batches from a [`Lister`].
 ///
@@ -49,18 +52,29 @@ pub type ListerResult = Result<ListerStream, ExecutorError>;
 /// numeric offset. The runner validates URI syntax but does not resolve IDs or
 /// inspect graphs; the child defines stable ordering and missing-ID behavior.
 ///
+/// `T` names sort keys and `F` names custom output formats, matching
+/// [`ListerOptions<T, F>`]. Both default to [`String`]. Construction requires
+/// [`fmt::Display`] on both types to produce command-line names; no parsing
+/// traits are required. Typed listers also support batching, capability
+/// overrides, and graph pipelines. Pipeline conversion owns string copies of
+/// these names, so stages do not retain application-defined key/format types.
+/// The pattern-trait implementations additionally require both types to be
+/// [`Send`] so execution can return a sendable future.
+/// If the options do not determine `T` and `F`, use a `Lister` type annotation
+/// or `Lister::<String>::new` to select the string defaults.
+///
 /// [lister]: https://asimov-specs.github.io/program-patterns/#lister
 #[allow(unused)]
 #[derive(Debug)]
-pub struct Lister {
+pub struct Lister<T: Clone = String, F = String> {
     executor: Executor,
-    options: ListerOptions,
+    options: ListerOptions<T, F>,
     capabilities: ListerCapabilities,
     input: String,
     output: GraphOutput,
 }
 
-impl Lister {
+impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
     /// Configures a lister for the directory URL `input` without starting it.
     ///
     /// Adds configured `--sort`, `--offset`, `--before`, `--after`, `--limit`, and
@@ -77,13 +91,14 @@ impl Lister {
     /// unsupported requests are rejected by [`execute`](Self::execute). Sorting
     /// precedes offset or cursor bounds, and limit applies last. The program
     /// contract counts complete entries, but this wrapper caps serialized lines without parsing
-    /// entry boundaries. The SDK formats sort keys using `SortKeys`; the
+    /// entry boundaries. Sort keys use their `Display` names, comma-separated
+    /// with a `-` prefix for descending order, matching `SortKeys<String>`; the
     /// resulting expression must be supported by the selected program's profile.
     pub fn new(
         program: impl AsRef<OsStr>,
         input: impl AsRef<str>,
         output: GraphOutput,
-        options: ListerOptions,
+        options: ListerOptions<T, F>,
     ) -> Self {
         Self::configured(
             program,
@@ -98,14 +113,14 @@ impl Lister {
         program: impl AsRef<OsStr>,
         input: impl AsRef<str>,
         output: GraphOutput,
-        options: ListerOptions,
+        options: ListerOptions<T, F>,
         capabilities: ListerCapabilities,
     ) -> Self {
         let input = input.as_ref().to_string();
         let mut executor = Executor::new(program);
         executor
             .command()
-            .option("sort", options.sort.as_ref())
+            .option("sort", options.sort.as_ref().map(DisplaySortKeys))
             .option("offset", options.offset)
             .option("before", options.before.as_ref())
             .option("after", options.after.as_ref())
@@ -154,7 +169,7 @@ impl Lister {
     /// use asimov_runner::{GraphOutput, Lister, ListerCapabilities, ListerOptions, OptionSupport, StreamExt};
     ///
     /// # async fn example() -> Result<(), asimov_runner::ExecutorError> {
-    /// let mut lister = Lister::new(
+    /// let mut lister: Lister = Lister::new(
     ///     "asimov-example-lister",
     ///     "https://example.com/collection",
     ///     GraphOutput::Captured,
@@ -184,6 +199,48 @@ impl Lister {
             .to_os_string();
         Self::configured(program, self.input, self.output, self.options, capabilities)
             .with_batching(batching)
+    }
+
+    // Pipeline stages are heterogeneous and store the string-specialized
+    // lister. Preserve the configured executor (including arguments/batching)
+    // and all validation inputs while erasing application-defined types.
+    fn into_untyped(self) -> Lister {
+        Lister {
+            executor: self.executor,
+            options: ListerOptions {
+                sort: self.options.sort.map(|keys| {
+                    keys.keys()
+                        .iter()
+                        .map(|key| SortKey::new(key.key().to_string(), key.descending()))
+                        .collect::<Vec<_>>()
+                        .into()
+                }),
+                output: self.options.output.map(|format| match format {
+                    OutputFormat::Jsonl => OutputFormat::Jsonl,
+                    OutputFormat::Url => OutputFormat::Url,
+                    OutputFormat::Other(value) => OutputFormat::Other(value.to_string()),
+                }),
+                other: self.options.other,
+                before: self.options.before,
+                after: self.options.after,
+                offset: self.options.offset,
+                limit: self.options.limit,
+            },
+            capabilities: self.capabilities,
+            input: self.input,
+            output: self.output,
+        }
+    }
+}
+
+impl<T: Clone, F> Lister<T, F> {
+    /// Sets batching thresholds for captured JSONL output. This does not change
+    /// subprocess arguments, native pipeline edges, or listing limits.
+    /// The default policy is [`crate::BatchOptions::default`].
+    #[must_use]
+    pub fn with_batching(mut self, options: crate::BatchOptions) -> Self {
+        self.executor = self.executor.with_batching(options);
+        self
     }
 
     /// Starts a new lister process and returns its live listing stream, or returns
@@ -335,6 +392,25 @@ impl Lister {
     }
 }
 
+// Clientele implements Display only for string-keyed SortKeys. Format typed
+// keys using the same argument grammar without requiring parsing or AsRef<str>.
+struct DisplaySortKeys<'a, T: Clone>(&'a SortKeys<T>);
+
+impl<T: Clone + fmt::Display> fmt::Display for DisplaySortKeys<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (index, key) in self.0.keys().iter().enumerate() {
+            if index != 0 {
+                f.write_str(",")?;
+            }
+            if key.descending() {
+                f.write_str("-")?;
+            }
+            key.key().fmt(f)?;
+        }
+        Ok(())
+    }
+}
+
 /// Consumes a bounded listing without returning payload lines to the caller.
 fn forward_frames(
     mut stream: FrameStream,
@@ -359,16 +435,19 @@ fn forward_frames(
     })
 }
 
-impl asimov_patterns::Lister<ListerStream> for Lister {}
+impl<T: Clone + Send, F: Send> asimov_patterns::Lister<ListerStream> for Lister<T, F> {}
 
-crate::batch::with_batching!(Lister);
-
-impl From<Lister> for crate::pipeline::PipelineStage {
-    fn from(mut value: Lister) -> Self {
-        let error = value
-            .validate()
-            .err()
-            .or_else(|| crate::pipeline::graph_formats(None, value.options.output.as_deref()));
+impl<T: Clone + fmt::Display, F: fmt::Display> From<Lister<T, F>>
+    for crate::pipeline::PipelineStage
+{
+    fn from(value: Lister<T, F>) -> Self {
+        let mut value = value.into_untyped();
+        let error = value.validate().err().or_else(|| {
+            crate::pipeline::graph_formats(
+                None,
+                value.options.output.as_ref().map(OutputFormat::as_str),
+            )
+        });
         if value.options.limit.is_some() {
             let program = value
                 .executor
@@ -386,7 +465,7 @@ impl From<Lister> for crate::pipeline::PipelineStage {
 }
 
 #[async_trait]
-impl asimov_patterns::Execute<ListerStream> for Lister {
+impl<T: Clone + Send, F: Send> asimov_patterns::Execute<ListerStream> for Lister<T, F> {
     type Error = ExecutorError;
 
     async fn execute(&mut self) -> ListerResult {
@@ -395,12 +474,18 @@ impl asimov_patterns::Execute<ListerStream> for Lister {
 }
 
 #[cfg(all(test, unix))]
+mod typed_tests;
+
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use crate::StreamExt;
     use alloc::vec;
     use std::time::Duration;
     use tokio::time::timeout;
+
+    // Existing behavior tests exercise the string-specialized executor.
+    type Lister = super::Lister;
 
     fn cursor_lister(options: ListerOptions) -> Lister {
         Lister::new(
@@ -867,28 +952,29 @@ mod tests {
 
     #[test]
     fn forwards_limit_between_offset_and_output() {
-        let mut lister = Lister::new(
-            "asimov-test-lister",
-            "example:",
-            GraphOutput::Captured,
-            ListerOptions::builder()
-                .offset(2)
-                .limit(3)
-                .output("jsonl")
-                .other("--custom")
-                .build(),
-        );
-        let arguments: alloc::vec::Vec<_> = lister.executor.command().as_std().get_args().collect();
-        assert_eq!(
-            arguments,
-            [
-                "--offset=2",
-                "--limit=3",
-                "--output=jsonl",
-                "--custom",
-                "example:"
-            ]
-        );
+        for (format, expected) in [
+            (OutputFormat::Jsonl, "--output=jsonl"),
+            (OutputFormat::Url, "--output=url"),
+            (OutputFormat::Other("turtle".into()), "--output=turtle"),
+        ] {
+            let mut lister = Lister::new(
+                "asimov-test-lister",
+                "example:",
+                GraphOutput::Captured,
+                ListerOptions::builder()
+                    .offset(2)
+                    .limit(3)
+                    .output(format)
+                    .other("--custom")
+                    .build(),
+            );
+            let arguments: alloc::vec::Vec<_> =
+                lister.executor.command().as_std().get_args().collect();
+            assert_eq!(
+                arguments,
+                ["--offset=2", "--limit=3", expected, "--custom", "example:"]
+            );
+        }
 
         for (limit, expected) in [(None, None), (Some(0), Some("--limit=0"))] {
             let mut lister = limited_shell("exit 0", GraphOutput::Captured, limit);
@@ -897,6 +983,32 @@ mod tests {
             assert_eq!(arguments.len(), if limit.is_some() { 3 } else { 2 });
             if let Some(expected) = expected {
                 assert_eq!(arguments[0], expected);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn pipelines_reject_non_jsonl_formats_before_spawning() {
+        for limit in [None, Some(0)] {
+            for format in [OutputFormat::Url, OutputFormat::Other("turtle".into())] {
+                let lister = Lister::new(
+                    "/this-lister-does-not-exist",
+                    "example:",
+                    GraphOutput::Captured,
+                    ListerOptions::builder()
+                        .maybe_limit(limit)
+                        .output(format)
+                        .build(),
+                );
+                let result = crate::Pipeline::new(lister).execute().await;
+                assert!(matches!(
+                    result,
+                    Err(crate::PipelineError {
+                        stage: 0,
+                        error: ExecutorError::UnexpectedOther(ref error),
+                        ..
+                    }) if error.kind() == std::io::ErrorKind::InvalidInput
+                ));
             }
         }
     }
