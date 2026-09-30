@@ -1634,7 +1634,7 @@ dependencies = [
 
 [[package]]
 name = "asimov-telemetry"
-version = "25.5.0"
+version = "25.6.0"
 dependencies = [
  "agent-detector",
  "reqwest 0.12.28",
