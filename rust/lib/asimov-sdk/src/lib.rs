@@ -53,3 +53,6 @@ pub use asimov_remote as remote;
 
 #[cfg(feature = "snapshot")]
 pub use asimov_snapshot as snapshot;
+
+#[cfg(feature = "telemetry")]
+pub use asimov_telemetry as telemetry;
