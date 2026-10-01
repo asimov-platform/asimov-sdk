@@ -251,24 +251,31 @@ impl Caller {
     }
 
     fn agent_name(name: &str) -> &'static str {
-        match name {
-            "pi" => "pi",
-            "hermes" => "hermes",
-            "claude-code" => "claude-code",
-            "codex" => "codex",
-            "openclaw" => "openclaw",
-            "opencode" => "opencode",
-            "cursor" => "cursor",
-            "cursor-cli" => "cursor-cli",
-            "gemini" => "gemini",
-            "cowork" => "cowork",
-            "aider" => "aider",
-            "github-copilot" => "github-copilot",
-            "goose" => "goose",
-            "cline" => "cline",
-            "oh-my-pi" => "oh-my-pi",
-            _ => "other",
-        }
+        // `AI_AGENT` may carry a suffix, e.g. Claude Code sets `claude-code_2-1-286_agent`.
+        [
+            "pi",
+            "hermes",
+            "claude-code",
+            "codex",
+            "openclaw",
+            "opencode",
+            "cursor",
+            "cursor-cli",
+            "gemini",
+            "cowork",
+            "aider",
+            "github-copilot",
+            "goose",
+            "cline",
+            "oh-my-pi",
+        ]
+        .into_iter()
+        .find(|known| {
+            name.strip_prefix(known).is_some_and(|suffix| {
+                !suffix.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '-')
+            })
+        })
+        .unwrap_or("other")
     }
 }
 
