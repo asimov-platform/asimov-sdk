@@ -8,7 +8,8 @@
 //! [`SocialLink`] recognizes URLs for profiles, relationships, and other social
 //! resources, with fallible conversions to and from supported account handles.
 //! [`SocialPlatform::handle`] parses an identifier on a selected platform.
-//! URL parsers accept an optional `www.` hostname prefix; formatted URLs omit it.
+//! URL parsers accept HTTP(S), an optional `www.` hostname prefix, and known host
+//! aliases; formatted URLs use HTTPS without `www.`.
 //!
 //! Platform modules re-export their platform-specific handle types. Each module
 //! and its corresponding `SocialHandle` variant require the matching platform

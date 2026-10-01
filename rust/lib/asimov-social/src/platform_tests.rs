@@ -45,6 +45,7 @@ fn every_platform_has_round_tripping_profiles() {
         let link = constructor(identifier.into());
         let canonical = link.to_string();
         let www = canonical.replacen("https://", "https://www.", 1);
+        let http = canonical.replacen("https://", "http://www.", 1);
         let authority = format!(
             "{}:443",
             platform
@@ -59,6 +60,7 @@ fn every_platform_has_round_tripping_profiles() {
         );
         assert_eq!(canonical.parse::<SocialLink>().unwrap(), link);
         assert_eq!(www.parse::<SocialLink>().unwrap(), link);
+        assert_eq!(http.parse::<SocialLink>().unwrap(), link);
         assert_eq!(authority.parse::<SocialPlatform>().unwrap(), platform);
         assert_eq!(normalized_input.parse::<SocialLink>().unwrap(), link);
         assert!(!canonical.contains("www."));
@@ -83,6 +85,7 @@ fn every_platform_has_round_tripping_profiles() {
                     assert_eq!(SocialHandle::decode_cursor(&www).unwrap(), handle);
                 }
                 assert_eq!(www.parse::<SocialHandle>().unwrap(), handle);
+                assert_eq!(http.parse::<SocialHandle>().unwrap(), handle);
                 assert_eq!(normalized_input.parse::<SocialHandle>().unwrap(), handle);
                 assert_eq!(canonical.parse::<SocialHandle>().unwrap(), handle);
                 assert_eq!(SocialLink::try_from(&handle).unwrap(), link);
@@ -114,7 +117,7 @@ fn every_platform_has_round_tripping_profiles() {
 #[test]
 fn url_authority_validation_is_shared() {
     for base in [
-        "http://www.reddit.com",
+        "ftp://www.reddit.com",
         "https://www.reddit.com:8443",
         "https://www.reddit.com:not-a-port",
         "https://www.reddit.com.evil.example",
@@ -192,6 +195,44 @@ fn profile_aliases_canonicalize() {
             .unwrap(),
         SocialPlatform::Threads
     );
+}
+
+#[test]
+fn legacy_mobile_and_country_hosts_canonicalize() {
+    use SocialPlatform::*;
+    for (platform, host, identifier) in [
+        (Discord, "discordapp.com", "123456789012345678"),
+        (Facebook, "m.facebook.com", "alice"),
+        (Facebook, "mbasic.facebook.com", "alice"),
+        (Linkedin, "ae.linkedin.com", "arto"),
+        (Luma, "lu.ma", "alice"),
+        (Reddit, "old.reddit.com", "alice"),
+        (Reddit, "new.reddit.com", "alice"),
+        (Reddit, "m.reddit.com", "alice"),
+        (Telegram, "telegram.me", "alice"),
+        (Telegram, "telegram.dog", "alice"),
+        (Twitch, "m.twitch.tv", "alice"),
+        (X, "twitter.com", "alice"),
+        (X, "mobile.twitter.com", "alice"),
+        (X, "mobile.x.com", "alice"),
+        (Youtube, "m.youtube.com", "alice"),
+    ] {
+        let prefix = platform.handle_prefix().unwrap_or("");
+        let slash = if platform == Linkedin { "/" } else { "" };
+        let canonical = format!("{platform}/{prefix}{identifier}{slash}");
+        for www in ["", "www."] {
+            let base = format!("http://{www}{host}");
+            assert_eq!(base.parse::<SocialPlatform>().unwrap(), platform, "{base}");
+            let input = format!("{base}/{prefix}{identifier}/");
+            let link: SocialLink = input.parse().unwrap();
+            assert_eq!(link.to_string(), canonical, "{input}");
+            assert_eq!(canonical.parse::<SocialLink>().unwrap(), link, "{input}");
+            if let Ok(handle) = platform.handle(identifier) {
+                assert_eq!(input.parse::<SocialHandle>().unwrap(), handle, "{input}");
+                assert_eq!(handle.to_string(), canonical, "{input}");
+            }
+        }
+    }
 }
 
 #[cfg(feature = "discord")]

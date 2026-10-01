@@ -11,7 +11,10 @@
 //! involving [`SocialHandle`] require the corresponding platform feature.
 
 use crate::{FollowRelationship, SocialHandle};
-use alloc::string::{String, ToString};
+use alloc::{
+    borrow::Cow,
+    string::{String, ToString},
+};
 use derive_more::Display;
 use known_types::handle::ParseHandleError;
 use percent_encoding::{AsciiSet, CONTROLS, percent_decode_str, utf8_percent_encode};
@@ -33,27 +36,27 @@ pub enum SocialLinkError {
     #[error("spurious URL credentials")]
     SpuriousCredentials,
 
-    /// An unsupported fragment, excluding the leading `#` (possibly empty).
+    /// An unsupported nonempty fragment, excluding the leading `#`.
     #[error("spurious URL fragment: {0}")]
     SpuriousFragment(String),
 
-    /// The URL specifies a non-default port. Explicit HTTPS port 443 is accepted.
+    /// A non-default port. Explicit HTTP port 80 and HTTPS port 443 are accepted.
     #[error("spurious URL port: {0}")]
     SpuriousPort(u16),
 
-    /// An unsupported query, excluding the leading `?` (possibly empty).
+    /// An unsupported query, excluding `?` and recognized tracking parameters.
     #[error("spurious URL query: {0}")]
     SpuriousQuery(String),
 
-    /// The hostname is unsupported, after removing one leading `www.`.
+    /// An unsupported hostname after `www.` and host-alias normalization.
     #[error("unknown URL hostname: {0}")]
     UnknownHost(String),
 
-    /// An unsupported path, excluding its first `/`.
+    /// An unsupported normalized path, excluding its first `/`.
     #[error("unknown URL path: /{0}")]
     UnknownPath(String),
 
-    /// The URL uses a scheme other than HTTPS. Contains the scheme without `:`.
+    /// A scheme other than HTTP or HTTPS. Contains the scheme without `:`.
     #[error("unsupported URL scheme: {0}")]
     UnsupportedScheme(String),
 }
@@ -82,12 +85,18 @@ pub enum SocialLinkConversionError {
 ///
 /// # Parsing and formatting
 ///
-/// [`core::str::FromStr`] accepts absolute HTTPS URLs on the hosts shown below,
-/// with an optional `www.` prefix. URL parsing normalizes host casing, default
-/// ports, and dot segments according to [`Url`]. Non-default ports, credentials,
-/// and unrecognized queries or fragments are rejected. Paths are case-sensitive;
-/// trailing slashes must match the documented forms. An empty `?` or `#` is not
-/// treated as absent.
+/// [`core::str::FromStr`] accepts absolute HTTP and HTTPS URLs on the hosts shown
+/// below, with an optional `www.` prefix and trailing slash. URL parsing
+/// normalizes host casing, default ports, and dot segments according to [`Url`].
+/// Known legacy/mobile hosts (such as `twitter.com`, `lu.ma`, `telegram.me`, and
+/// `old.reddit.com`) and two-letter LinkedIn country subdomains (such as
+/// `ae.linkedin.com`) are accepted. Paths are case-sensitive.
+///
+/// Common UTM, click, and platform-specific share tracking parameters are
+/// discarded. Resource selectors, such as GitHub's `tab` and Luma's `e` or
+/// `period`, select the corresponding variants. Non-default ports, credentials,
+/// and unrecognized queries or nonempty fragments are rejected. Empty `?` and
+/// `#` delimiters are treated as absent.
 ///
 /// String payloads contain decoded UTF-8 from nonempty URL path segments (or a
 /// Luma event query value). Parsing decodes each component exactly once, after
@@ -97,12 +106,13 @@ pub enum SocialLinkConversionError {
 /// must be positive decimal integers fitting in `i64`.
 ///
 /// [`Display`] and conversion into [`String`] produce the canonical URL shown
-/// on each variant, omitting `www.` and normalizing aliases. Public variants can
-/// also be constructed directly from decoded strings. Formatting escapes each
-/// payload as one URL path segment without validating it, so providing already
-/// percent-encoded text (for example, `"%61lice"`) will escape `%` again.
-/// Equality compares
-/// variants and decoded payloads, not the original URL spelling.
+/// on each variant: HTTPS, without `www.`, and without a trailing slash except
+/// for LinkedIn and IMDb, which always have one. Host and path aliases are
+/// normalized. Public variants can also be constructed directly from decoded
+/// strings. Formatting escapes each payload as one URL path segment without
+/// validating it, so providing already percent-encoded text (for example,
+/// `"%61lice"`) will escape `%` again. Equality compares variants and decoded
+/// payloads, not the original URL spelling.
 /// In particular, ambiguous Luma slugs can format identically while representing
 /// different variants; see [`LumaPage`](Self::LumaPage).
 ///
@@ -125,7 +135,7 @@ pub enum SocialLinkConversionError {
 /// ```
 /// use asimov_social::{FollowRelationship, SocialLink};
 ///
-/// let link: SocialLink = "https://www.x.com/alice/followers".parse()?;
+/// let link: SocialLink = "http://www.twitter.com/alice/followers/".parse()?;
 /// assert_eq!(link.to_string(), "https://x.com/alice/followers");
 /// assert_eq!(link.follow_relationship(), Some(FollowRelationship::Follower));
 /// assert!(SocialLink::XProfile("alice".into()).follow_relationship().is_none());
@@ -195,12 +205,14 @@ pub enum SocialLink {
     GravatarProfile(String),
 
     /// An IMDb person, storing the name ID: `https://imdb.com/name/:id/`.
-    /// The trailing slash is required; the ID's `nm` prefix is not validated.
+    /// Accepts an optional trailing slash on input, always including it on output.
+    /// The ID's `nm` prefix is not validated.
     #[display("https://imdb.com/name/{}/", encoded_component(_0))]
     ImdbName(String),
 
     /// An IMDb title, storing the title ID: `https://imdb.com/title/:id/`.
-    /// The trailing slash is required; the ID's `tt` prefix is not validated.
+    /// Accepts an optional trailing slash on input, always including it on output.
+    /// The ID's `tt` prefix is not validated.
     #[display("https://imdb.com/title/{}/", encoded_component(_0))]
     ImdbTitle(String),
 
@@ -227,11 +239,13 @@ pub enum SocialLink {
 
     /// A LinkedIn company page: `https://linkedin.com/company/:handle/`.
     /// Stores the company handle; this is not a personal account handle.
+    /// Accepts country subdomains and an optional trailing slash on input.
     #[display("https://linkedin.com/company/{}/", encoded_component(_0))]
     LinkedinCompanyPage(String),
 
     /// A LinkedIn personal profile: `https://linkedin.com/in/:handle/`.
-    /// Stores the handle; the trailing slash is required.
+    /// Stores the handle; accepts country subdomains and an optional trailing
+    /// slash on input, always including the trailing slash on output.
     #[display("https://linkedin.com/in/{}/", encoded_component(_0))]
     LinkedinProfile(String),
 
@@ -400,6 +414,51 @@ const COMPONENT_ESCAPE: &AsciiSet = &CONTROLS
 
 fn encoded_component(input: &str) -> impl core::fmt::Display + '_ {
     utf8_percent_encode(input, COMPONENT_ESCAPE)
+}
+
+/// Removes tracking parameters without decoding resource selector values.
+fn resource_query<'a>(host: &str, query: &'a str) -> Option<Cow<'a, str>> {
+    let mut parameters = query.split('&').filter(|parameter| {
+        if parameter.is_empty() {
+            return false;
+        }
+        let name = parameter
+            .split_once('=')
+            .map_or(*parameter, |(name, _)| name);
+        let name = percent_decode_str(name).decode_utf8_lossy();
+        let tracking = name.starts_with("utm_")
+            || matches!(&*name, "fbclid" | "gclid" | "dclid" | "msclkid")
+            || match host {
+                "facebook.com" => matches!(&*name, "mibextid" | "ref" | "refid"),
+                "imdb.com" => name == "ref_",
+                "instagram.com" => matches!(&*name, "igsh" | "igshid"),
+                "linkedin.com" => {
+                    matches!(
+                        &*name,
+                        "trk" | "trkInfo" | "trackingId" | "originalSubdomain"
+                    )
+                },
+                "reddit.com" => matches!(&*name, "share_id" | "rdt" | "rdt_cid"),
+                "snapchat.com" => name == "share_id",
+                "substack.com" => name == "r",
+                "threads.com" | "threads.net" => matches!(&*name, "igsh" | "igshid" | "xmt"),
+                "tiktok.com" => matches!(
+                    &*name,
+                    "_t" | "_r" | "is_from_webapp" | "sender_device" | "sender_web_id"
+                ),
+                "x.com" => matches!(&*name, "s" | "t" | "ref_src" | "ref_url"),
+                "youtube.com" => matches!(&*name, "si" | "feature"),
+                _ => false,
+            };
+        !tracking
+    });
+    let mut query = Cow::Borrowed(parameters.next()?);
+    for parameter in parameters {
+        let query = query.to_mut();
+        query.push('&');
+        query.push_str(parameter);
+    }
+    Some(query)
 }
 
 /// Formats the link as its canonical URL, escaping its decoded payload.
@@ -648,8 +707,12 @@ impl core::str::FromStr for SocialLink {
         let url = crate::social_url::parse(input)?;
         let host = url.host_str().ok_or(ParseError::EmptyHost)?;
         let path = url.path().strip_prefix('/').unwrap_or_default();
-        let query = url.query();
-        let fragment = url.fragment();
+        // Remove only the structural slash, before decoding any payload. Extra
+        // slashes and empty resource identifiers still fail path matching.
+        let path = path.strip_suffix('/').unwrap_or(path);
+        let query = url.query().and_then(|query| resource_query(host, query));
+        let query = query.as_deref();
+        let fragment = url.fragment().filter(|fragment| !fragment.is_empty());
 
         match host {
             "bsky.app" | "discord.com" | "facebook.com" | "gitlab.com" | "local.ai"
@@ -736,18 +799,10 @@ impl core::str::FromStr for SocialLink {
                         fragment.unwrap().to_string(),
                     ));
                 }
-                if let Some(id) = path
-                    .strip_prefix("name/")
-                    .and_then(|path| path.strip_suffix('/'))
-                    .and_then(handle)
-                {
+                if let Some(id) = path.strip_prefix("name/").and_then(handle) {
                     return Ok(Self::ImdbName(id));
                 }
-                if let Some(id) = path
-                    .strip_prefix("title/")
-                    .and_then(|path| path.strip_suffix('/'))
-                    .and_then(handle)
-                {
+                if let Some(id) = path.strip_prefix("title/").and_then(handle) {
                     return Ok(Self::ImdbTitle(id));
                 }
                 Err(SocialLinkError::UnknownPath(path.to_string()))
@@ -796,18 +851,10 @@ impl core::str::FromStr for SocialLink {
                         fragment.unwrap().to_string(),
                     ));
                 }
-                if let Some(handle) = path
-                    .strip_prefix("in/")
-                    .and_then(|path| path.strip_suffix('/'))
-                    .and_then(handle)
-                {
+                if let Some(handle) = path.strip_prefix("in/").and_then(handle) {
                     return Ok(Self::LinkedinProfile(handle));
                 }
-                if let Some(handle) = path
-                    .strip_prefix("company/")
-                    .and_then(|path| path.strip_suffix('/'))
-                    .and_then(handle)
-                {
+                if let Some(handle) = path.strip_prefix("company/").and_then(handle) {
                     return Ok(Self::LinkedinCompanyPage(handle));
                 }
                 Err(SocialLinkError::UnknownPath(path.to_string()))
@@ -817,6 +864,11 @@ impl core::str::FromStr for SocialLink {
                     return Err(SocialLinkError::SpuriousFragment(
                         fragment.unwrap().to_string(),
                     ));
+                }
+                // `/user/` selects the profile route but lacks an identifier.
+                // Do not reinterpret it as a bare event/calendar slug.
+                if path == "user" {
+                    return Err(SocialLinkError::UnknownPath(path.to_string()));
                 }
                 if let Some(value) = query.and_then(|q| q.strip_prefix("e=")) {
                     if handle(path).is_none() {
@@ -1055,39 +1107,84 @@ mod tests {
     }
 
     #[test]
-    fn canonical_urls_round_trip() {
-        for input in [
+    fn canonical_urls_and_input_spellings_round_trip() {
+        for canonical in [
+            "https://bsky.app/profile/alice.bsky.social",
+            "https://discord.com/users/123456789012345678",
+            "https://facebook.com/alice",
             "https://github.com/alice",
             "https://github.com/alice?tab=followers",
             "https://github.com/alice?tab=following",
+            "https://github.com/alice?tab=mutuals",
+            "https://gitlab.com/alice",
             "https://gravatar.com/alice",
             "https://imdb.com/name/nm123/",
             "https://imdb.com/title/tt123/",
             "https://instagram.com/alice",
             "https://instagram.com/alice#followers",
             "https://instagram.com/alice#following",
+            "https://instagram.com/alice#mutuals",
             "https://intro.co/alice",
             "https://linkedin.com/in/alice/",
             "https://linkedin.com/company/acme/",
+            "https://local.ai/alice",
             "https://luma.com/cal-abc",
             "https://luma.com/claw?period=future",
             "https://luma.com/claw?period=past",
             "https://luma.com/evt-abc",
             "https://luma.com/claw",
             "https://luma.com/user/alice",
+            "https://medium.com/@alice",
+            "https://pinterest.com/alice",
+            "https://reddit.com/user/alice",
+            "https://snapchat.com/add/alice",
+            "https://substack.com/@alice",
+            "https://t.me/alice",
+            "https://threads.net/@alice",
+            "https://tiktok.com/@alice",
+            "https://twitch.tv/alice",
+            "https://wa.me/alice",
+            "https://wa.me/14155552671",
             "https://x.com/i/lists/9223372036854775807",
             "https://x.com/alice",
             "https://x.com/alice/followers",
             "https://x.com/alice/following",
             "https://x.com/alice/highlights",
+            "https://x.com/alice/mutuals",
             "https://x.com/alice/all",
+            #[cfg(feature = "unstable")]
+            "https://x.com/alice/lists/friends",
+            "https://youtube.com/@alice",
         ] {
-            let link: SocialLink = input.parse().unwrap();
-            assert_eq!(link.to_string(), input);
+            let link: SocialLink = canonical.parse().unwrap();
+            assert_eq!(link.to_string(), canonical);
             assert_eq!(
                 SocialLink::try_from(String::from(link.clone())).unwrap(),
                 link
             );
+
+            let (host, resource) = canonical
+                .strip_prefix("https://")
+                .unwrap()
+                .split_once('/')
+                .unwrap();
+            let (path, selector) =
+                resource.split_at(resource.find(['?', '#']).unwrap_or(resource.len()));
+            let path = path.strip_suffix('/').unwrap_or(path);
+            for (scheme, default_port) in [("http", ":80"), ("https", ":443")] {
+                for www in ["", "www."] {
+                    for port in ["", default_port] {
+                        for slash in ["", "/"] {
+                            let input =
+                                format!("{scheme}://{www}{host}{port}/{path}{slash}{selector}");
+                            let parsed: SocialLink = input.parse().unwrap();
+                            assert_eq!(parsed, link, "{input}");
+                            assert_eq!(parsed.to_string(), canonical, "{input}");
+                            assert_eq!(SocialLink::try_from(input).unwrap(), link);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1097,6 +1194,19 @@ mod tests {
             (
                 "https://WWW.GITHUB.COM:443/alice",
                 "https://github.com/alice",
+            ),
+            (
+                "HTTP://WWW.GITHUB.COM:80/unused/../alice/",
+                "https://github.com/alice",
+            ),
+            ("https://github.com/alice/?#", "https://github.com/alice"),
+            (
+                "http://www.github.com/alice%2F/",
+                "https://github.com/alice%2F",
+            ),
+            (
+                "http://ae.linkedin.com/in/alice%2F",
+                "https://linkedin.com/in/alice%2F/",
             ),
             ("https://x.com/alice/posts", "https://x.com/alice/all"),
             ("https://x.com/alice#posts", "https://x.com/alice/all"),
@@ -1108,13 +1218,146 @@ mod tests {
             assert_eq!(canonical.parse::<SocialLink>().unwrap(), link);
         }
 
-        let event: SocialLink = "https://luma.com/claw?e=custom-event".parse().unwrap();
+        let event: SocialLink = "http://www.lu.ma/claw/?e=custom-event".parse().unwrap();
         assert_eq!(event, SocialLink::LumaEvent("custom-event".into()));
         assert_eq!(event.to_string(), "https://luma.com/custom-event");
         assert_eq!(
             event.to_string().parse::<SocialLink>().unwrap(),
             SocialLink::LumaPage("custom-event".into())
         );
+    }
+
+    #[test]
+    fn linkedin_country_hosts_normalize_profiles_and_companies() {
+        for country in ["ae", "uk", "de", "fi", "us", "in", "br", "cn", "jp", "za"] {
+            for (path, expected) in [
+                ("in/arto", SocialLink::LinkedinProfile("arto".into())),
+                (
+                    "company/acme",
+                    SocialLink::LinkedinCompanyPage("acme".into()),
+                ),
+            ] {
+                for www in ["", "www."] {
+                    for slash in ["", "/"] {
+                        let input = format!("http://{www}{country}.linkedin.com/{path}{slash}");
+                        let link: SocialLink = input.parse().unwrap();
+                        assert_eq!(link, expected, "{input}");
+                        assert_eq!(link.to_string(), format!("https://linkedin.com/{path}/"));
+                    }
+                }
+            }
+        }
+        for input in [
+            "https://ae.linkedin.com/in/arto/",
+            "HTTPS://WWW.AE.LINKEDIN.COM:443/in/arto/",
+        ] {
+            assert_eq!(
+                input.parse::<SocialLink>().unwrap().to_string(),
+                "https://linkedin.com/in/arto/"
+            );
+        }
+        for host in [
+            "notlinkedin.com",
+            "ae.linkedin.com.example.org",
+            "ae.linkedin.example.org",
+            "foo.linkedin.com",
+            "a.linkedin.com",
+            "a1.linkedin.com",
+            "ae.www.linkedin.com",
+            "www.www.linkedin.com",
+            "evil.ae.linkedin.com",
+        ] {
+            assert!(
+                matches!(
+                    format!("https://{host}/in/arto/").parse::<SocialLink>(),
+                    Err(SocialLinkError::UnknownHost(_))
+                ),
+                "{host}"
+            );
+        }
+    }
+
+    #[test]
+    fn share_tracking_normalizes_without_losing_resource_selectors() {
+        for (input, canonical) in [
+            (
+                "https://www.facebook.com/alice/?mibextid=abc&fbclid=def",
+                "https://facebook.com/alice",
+            ),
+            (
+                "https://www.imdb.com/name/nm123?ref_=nv_sr_srsg_0",
+                "https://imdb.com/name/nm123/",
+            ),
+            (
+                "https://www.instagram.com/alice/?igsh=abc&igshid=def#followers",
+                "https://instagram.com/alice#followers",
+            ),
+            (
+                "https://ae.linkedin.com/in/arto?utm_source=share&utm_campaign=share_via&trk=public_profile",
+                "https://linkedin.com/in/arto/",
+            ),
+            (
+                "https://www.reddit.com/u/alice/?share_id=abc&utm_medium=web",
+                "https://reddit.com/user/alice",
+            ),
+            (
+                "https://www.snapchat.com/add/alice/?share_id=abc",
+                "https://snapchat.com/add/alice",
+            ),
+            (
+                "https://substack.com/@alice/?r=abc&utm_campaign=profile",
+                "https://substack.com/@alice",
+            ),
+            (
+                "https://www.threads.com/@alice/?xmt=abc",
+                "https://threads.net/@alice",
+            ),
+            (
+                "https://www.tiktok.com/@alice/?_t=abc&_r=1&is_from_webapp=1&sender_device=pc",
+                "https://tiktok.com/@alice",
+            ),
+            (
+                "http://mobile.twitter.com/alice/followers/?s=21&t=abc",
+                "https://x.com/alice/followers",
+            ),
+            (
+                "https://m.youtube.com/@alice/?si=abc&feature=shared",
+                "https://youtube.com/@alice",
+            ),
+            (
+                "https://github.com/alice/?utm_source=share&tab=followers&utm_medium=web",
+                "https://github.com/alice?tab=followers",
+            ),
+            (
+                "https://github.com/alice/?%75tm_source=share&tab=following&",
+                "https://github.com/alice?tab=following",
+            ),
+            (
+                "https://lu.ma/calendar/?utm_source=share&e=evt-a%26b%3Dc+%252F",
+                "https://luma.com/evt-a&b=c+%252F",
+            ),
+            (
+                "https://lu.ma/calendar/?period=past&utm_source=share",
+                "https://luma.com/calendar?period=past",
+            ),
+        ] {
+            let link: SocialLink = input.parse().unwrap();
+            assert_eq!(link.to_string(), canonical, "{input}");
+            assert_eq!(canonical.parse::<SocialLink>().unwrap(), link, "{input}");
+        }
+        for input in [
+            "https://github.com/alice?utm_source=share&tab=unknown",
+            "https://github.com/alice?tab=followers&utm_source=share&tab=following",
+            "https://luma.com/calendar?e=evt-1&utm_source=share&e=evt-2",
+            "https://luma.com/calendar?e=&utm_source=share",
+            "https://luma.com/calendar?e=evt-1&utm_source=share&period=past",
+            "https://instagram.com/alice?igsh=abc&unexpected=1",
+            "https://github.com/alice?si=abc",
+            "https://x.com/alice?s=21#unknown",
+            "https://wa.me/14155552671?text=hello",
+        ] {
+            assert!(input.parse::<SocialLink>().is_err(), "{input}");
+        }
     }
 
     #[test]
@@ -1140,23 +1383,28 @@ mod tests {
     }
 
     #[test]
-    fn rejects_credentials_ports_and_empty_selectors() {
-        assert_eq!(
-            "https://github.com:8443/alice".parse::<SocialLink>(),
-            Err(SocialLinkError::SpuriousPort(8443))
-        );
-        assert_eq!(
-            "https://:secret@github.com/alice".parse::<SocialLink>(),
-            Err(SocialLinkError::SpuriousCredentials)
-        );
-        assert_eq!(
-            "https://github.com/alice?".parse::<SocialLink>(),
-            Err(SocialLinkError::SpuriousQuery("".into()))
-        );
-        assert_eq!(
-            "https://github.com/alice#".parse::<SocialLink>(),
-            Err(SocialLinkError::SpuriousFragment("".into()))
-        );
+    fn rejects_credentials_and_non_default_ports() {
+        for (input, port) in [
+            ("https://github.com:8443/alice", 8443),
+            ("http://github.com:8080/alice", 8080),
+            ("http://github.com:443/alice", 443),
+            ("https://github.com:80/alice", 80),
+        ] {
+            assert_eq!(
+                input.parse::<SocialLink>(),
+                Err(SocialLinkError::SpuriousPort(port))
+            );
+        }
+        for input in [
+            "https://:secret@github.com/alice",
+            "http://:secret@github.com/alice",
+            "http://user@github.com/alice",
+        ] {
+            assert_eq!(
+                input.parse::<SocialLink>(),
+                Err(SocialLinkError::SpuriousCredentials)
+            );
+        }
     }
 
     #[test]
@@ -1470,19 +1718,28 @@ mod tests {
     fn rejects_unsupported_or_malformed_links() {
         for input in [
             "",
-            "http://github.com/alice",
+            "ftp://github.com/alice",
+            "javascript:alice",
+            "//github.com/alice",
+            "github.com/alice",
             "https://github.com/",
             "https://github.com/alice/extra",
+            "https://github.com/alice//",
             "https://github.com/alice?tab=unknown",
             "https://gravatar.com/",
-            "https://imdb.com/name/nm1234567",
+            "https://imdb.com/name/",
+            "https://imdb.com/title/",
             "https://imdb.com/name/nm1234567//",
             "https://instagram.com/alice#unknown",
             "https://intro.co/alice/extra",
-            "https://linkedin.com/in/alice",
-            "https://linkedin.com/company/acme",
+            "https://linkedin.com/in/",
+            "https://linkedin.com/company/",
+            "https://linkedin.com/in/alice//",
+            "https://linkedin.com/company/acme//",
             "https://luma.com/",
+            "https://luma.com/user",
             "https://luma.com/user/",
+            "https://luma.com/user//",
             "https://luma.com/alice/extra",
             "https://luma.com/alice?k=c",
             "https://luma.com/alice?period=now",
@@ -1490,6 +1747,8 @@ mod tests {
             "https://luma.com/alice#guests",
             "https://x.com/",
             "https://x.com/alice/unknown",
+            "https://x.com/alice/followers//",
+            "https://x.com/i/lists/1//",
         ] {
             assert!(input.parse::<SocialLink>().is_err(), "accepted {}", input);
         }
@@ -1502,7 +1761,7 @@ mod tests {
             Err(SocialLinkError::FailedParse(_))
         ));
         assert!(matches!(
-            "http://github.com/alice".parse::<SocialLink>(),
+            "ftp://github.com/alice".parse::<SocialLink>(),
             Err(SocialLinkError::UnsupportedScheme(_))
         ));
         assert!(matches!(

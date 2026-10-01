@@ -13,12 +13,13 @@ use known_types::handle::ParseHandleError;
 /// formats it as an HTTPS profile or contact URL.
 ///
 /// Parsing with [`FromStr`] (or converting from a [`String`] with `TryFrom`)
-/// uses [`url::Url`] to normalize scheme/host casing, default ports, and dot
-/// segments. An optional `www.` hostname prefix is discarded. Trailing `/` and
-/// `#` characters are removed before parsing. Credentials, non-default ports,
-/// queries, and nonempty fragments are rejected. Reddit's `/u/` and Threads'
-/// `threads.com` aliases are accepted. Bare handles, other domains, and URLs for
-/// disabled platforms are rejected. Formatting always omits `www.`.
+/// accepts HTTP(S) URLs, using [`url::Url`] to normalize scheme/host casing,
+/// default ports, and dot segments. An optional `www.` hostname prefix is
+/// discarded; host aliases are normalized as in [`crate::SocialLink`]. Trailing
+/// `/` and `#` characters are removed before parsing. Credentials, non-default
+/// ports, queries, and nonempty fragments are rejected. Reddit's `/u/` and
+/// Threads' `threads.com` aliases are accepted. Bare handles, other domains, and
+/// URLs for disabled platforms are rejected. Formatting uses HTTPS without `www.`.
 ///
 /// Fallible conversions to and from [`crate::SocialLink`] support plain profiles
 /// on platforms shared by the two types. See its conversion documentation for

@@ -6,10 +6,11 @@ use derive_more::{Display, From, FromStrError};
 /// A social platform, identified by its canonical HTTPS base URL.
 ///
 /// [`Display`] formats the platform's HTTPS base URL without a trailing slash;
-/// [`FromStr`] accepts those base URLs, optionally with one trailing
+/// [`FromStr`] accepts HTTP(S) base URLs, optionally with one trailing
 /// slash and an optional `www.` hostname prefix, discarded on output.
 /// It does not infer a platform from a profile URL, bare domain, or name.
-/// Threads' `threads.com` alias is also accepted.
+/// Host aliases are normalized as in [`crate::SocialLink`]; Threads' `threads.com`
+/// alias is also accepted.
 /// Parsing normalizes scheme/host casing, default ports, and dot segments using
 /// [`url::Url`]; the resulting path must be `/`, without a query or fragment.
 /// Use [`crate::SocialLink`] to recognize supported social resource URLs.
@@ -248,11 +249,12 @@ pub enum SocialPlatformHandleError {
 impl FromStr for SocialPlatform {
     type Err = FromStrError;
 
-    /// Parses an HTTPS base URL using [`url::Url`] normalization.
+    /// Parses an HTTP(S) base URL using [`url::Url`] normalization.
     ///
-    /// Accepts an optional `www.` hostname prefix and default port 443. Rejects
-    /// surrounding whitespace, credentials, non-default ports, non-root paths,
-    /// queries, and fragments with [`FromStrError`].
+    /// Accepts an optional `www.` hostname prefix, known host aliases, and the
+    /// scheme's default port. Rejects surrounding whitespace, credentials,
+    /// non-default ports, non-root paths, queries, and fragments with
+    /// [`FromStrError`].
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         if input.trim() != input {
             return Err(FromStrError::new("SocialPlatform"));
@@ -319,6 +321,13 @@ mod tests {
             assert_eq!(www.parse::<SocialPlatform>(), Ok(platform));
             assert_eq!(format!("{www}/").parse::<SocialPlatform>(), Ok(platform));
             assert_eq!(www.parse::<SocialPlatform>().unwrap().to_string(), url);
+            let http = www.replacen("https://", "http://", 1);
+            assert_eq!(http.parse::<SocialPlatform>(), Ok(platform));
+            assert_eq!(
+                format!("{http}:80/").parse::<SocialPlatform>(),
+                Ok(platform)
+            );
+            assert_eq!(http.parse::<SocialPlatform>().unwrap().to_string(), url);
             assert!(format!("{url}//").parse::<SocialPlatform>().is_err());
             assert!(format!("{url}/someone").parse::<SocialPlatform>().is_err());
         }
@@ -330,7 +339,7 @@ mod tests {
             "",
             "X",
             "x.com",
-            "http://x.com",
+            "ftp://x.com",
             " https://x.com",
             "https://x.com ",
             "https://x.com?query",
@@ -338,7 +347,7 @@ mod tests {
             "https://x.com#fragment",
             "https://x.com#",
             "https://x.com.example.org",
-            "https://twitter.com",
+            "https://twitter.com.example.org",
             "https://example.org",
             "https://www.www.x.com",
             "https://www.x.com.example.org",
@@ -352,6 +361,7 @@ mod tests {
     fn normalizes_base_url_components() {
         for input in [
             "HTTPS://WWW.X.COM:443/",
+            "HTTP://WWW.TWITTER.COM:80/",
             "https://www.%78.com",
             "https://www.x.com/unused/..",
         ] {
