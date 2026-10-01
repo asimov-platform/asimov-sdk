@@ -13,7 +13,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
     fs::{self, File},
-    io::{BufRead, BufReader, Write},
+    io::{self, BufRead, BufReader, Write},
     path::Path,
     sync::{Mutex, mpsc},
     time::{SystemTime, UNIX_EPOCH},
@@ -43,6 +43,9 @@ impl Telemetry {
         app_version: &str,
         directory: &Path,
     ) -> Option<Self> {
+        if is_disabled(directory) {
+            return None;
+        }
         Self::start(client_key, user_id, app_version, directory, ENDPOINT)
     }
 
@@ -126,6 +129,32 @@ impl Telemetry {
             let _ = flush.recv_timeout(STALE_SHUTDOWN_WAIT);
         }
     }
+}
+
+/// Whether `ASIMOV_TELEMETRY` is `0` or `false`, or [`disable`] was called for `directory`.
+pub fn is_disabled(directory: &Path) -> bool {
+    std::env::var("ASIMOV_TELEMETRY")
+        .is_ok_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "0" | "false"))
+        || directory.join("disabled").exists()
+}
+
+pub fn enable(directory: &Path) -> io::Result<()> {
+    match fs::remove_file(directory.join("disabled")) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        result => result,
+    }
+}
+
+/// Also discards any unsent events.
+pub fn disable(directory: &Path) -> io::Result<()> {
+    fs::create_dir_all(directory)?;
+    File::create(directory.join("disabled"))?;
+    for entry in fs::read_dir(directory)?.flatten() {
+        if entry.file_name().to_string_lossy().starts_with("events-") {
+            fs::remove_file(entry.path())?;
+        }
+    }
+    Ok(())
 }
 
 fn flush(directory: &Path, key: HeaderValue, endpoint: &str) -> Option<()> {

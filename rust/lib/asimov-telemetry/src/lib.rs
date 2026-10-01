@@ -14,7 +14,7 @@ use serde::Serialize;
 #[cfg(feature = "std")]
 mod client;
 #[cfg(feature = "std")]
-pub use client::Telemetry;
+pub use client::{Telemetry, disable, enable, is_disabled};
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
