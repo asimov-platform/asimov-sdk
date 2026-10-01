@@ -37,21 +37,15 @@ pub struct Telemetry {
 impl Telemetry {
     /// Events are appended to a per-invocation log in `directory`, which stays locked while
     /// the process lives. Logs of exited processes are sent at most every [`FLUSH_INTERVAL`].
-    pub fn new(
-        client_key: &str,
-        user_id: String,
-        app_version: &str,
-        directory: &Path,
-    ) -> Option<Self> {
+    pub fn new(client_key: &str, app_version: &str, directory: &Path) -> Option<Self> {
         if is_disabled(directory) {
             return None;
         }
-        Self::start(client_key, user_id, app_version, directory, ENDPOINT)
+        Self::start(client_key, app_version, directory, ENDPOINT)
     }
 
     fn start(
         client_key: &str,
-        user_id: String,
         app_version: &str,
         directory: &Path,
         endpoint: &str,
@@ -62,10 +56,50 @@ impl Telemetry {
         let mut key = HeaderValue::from_str(client_key).ok()?;
         key.set_sensitive(true);
         fs::create_dir_all(directory).ok()?;
+        let id_path = directory.join("id");
+        let new_install = !id_path.exists();
+        if new_install {
+            let id = bs58::encode(uuid::Uuid::new_v4().as_bytes()).into_string();
+            fs::write(&id_path, id).ok()?;
+        }
+        let user_id = fs::read_to_string(id_path).ok()?;
+
         let invocation_id = uuid::Uuid::now_v7().to_string();
         let events =
             File::create_new(directory.join(format!("events-{invocation_id}.jsonl"))).ok()?;
         events.try_lock().ok()?;
+
+        let user = User {
+            user_id,
+            custom_ids: fs::read_to_string(directory.join("custom-ids.json"))
+                .ok()
+                .and_then(|ids| serde_json::from_str(&ids).ok())
+                .unwrap_or_default(),
+            app_version: app_version.to_string(),
+            custom: BTreeMap::from([
+                ("target_os", std::env::consts::OS),
+                ("target_arch", std::env::consts::ARCH),
+            ]),
+        };
+        let caller = Caller::detect();
+        if new_install {
+            let event = wire_event(
+                Event::Installed,
+                timestamp(),
+                &user,
+                &invocation_id,
+                &caller,
+            );
+            // On its own thread, as the caller may be inside an async runtime.
+            let sent = std::thread::scope(|scope| {
+                scope
+                    .spawn(|| send(key.clone(), endpoint, core::slice::from_ref(&event)))
+                    .join()
+            });
+            if !matches!(sent, Ok(Some(()))) {
+                let _ = writeln!(&events, "{event}");
+            }
+        }
 
         let age = |name: &str| {
             fs::metadata(directory.join(name))
@@ -91,16 +125,9 @@ impl Telemetry {
 
         Some(Self {
             events: Mutex::new(events),
-            user: User {
-                user_id,
-                app_version: app_version.to_string(),
-                custom: BTreeMap::from([
-                    ("target_os", std::env::consts::OS),
-                    ("target_arch", std::env::consts::ARCH),
-                ]),
-            },
+            user,
             invocation_id,
-            caller: Caller::detect(),
+            caller,
             stale_flush: Mutex::new(flush.filter(|_| age("flushed") >= STALE_AFTER)),
         })
     }
@@ -205,37 +232,7 @@ fn flush(directory: &Path, key: HeaderValue, endpoint: &str) -> Option<()> {
         .filter_map(|line| serde_json::from_str(&line).ok())
         .collect();
     if !events.is_empty() {
-        let mut headers = HeaderMap::new();
-        headers.insert("statsig-api-key", key);
-        headers.insert("statsig-sdk-type", HeaderValue::from_static("asimov-rust"));
-        headers.insert(
-            "statsig-sdk-version",
-            HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
-        );
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(10))
-            .build()
-            .ok()?;
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .ok()?;
-        runtime.block_on(async {
-            for batch in events.chunks(BATCH_SIZE) {
-                client
-                    .post(endpoint)
-                    .header("statsig-client-time", timestamp().to_string())
-                    .json(&json!({"events": batch}))
-                    .send()
-                    .await
-                    .ok()?
-                    .error_for_status()
-                    .ok()?;
-            }
-            Some(())
-        })?;
+        send(key, endpoint, &events)?;
     }
 
     for (path, file) in logs {
@@ -243,6 +240,40 @@ fn flush(directory: &Path, key: HeaderValue, endpoint: &str) -> Option<()> {
         let _ = fs::remove_file(path);
     }
     touch("flushed")
+}
+
+fn send(key: HeaderValue, endpoint: &str, events: &[Value]) -> Option<()> {
+    let mut headers = HeaderMap::new();
+    headers.insert("statsig-api-key", key);
+    headers.insert("statsig-sdk-type", HeaderValue::from_static("asimov-rust"));
+    headers.insert(
+        "statsig-sdk-version",
+        HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
+    );
+    let client = reqwest::Client::builder()
+        .default_headers(headers)
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(10))
+        .build()
+        .ok()?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .ok()?;
+    runtime.block_on(async {
+        for batch in events.chunks(BATCH_SIZE) {
+            client
+                .post(endpoint)
+                .header("statsig-client-time", timestamp().to_string())
+                .json(&json!({"events": batch}))
+                .send()
+                .await
+                .ok()?
+                .error_for_status()
+                .ok()?;
+        }
+        Some(())
+    })
 }
 
 fn timestamp() -> u128 {
@@ -313,6 +344,8 @@ impl Caller {
 struct User {
     #[serde(rename = "userID")]
     user_id: String,
+    #[serde(rename = "customIDs", skip_serializing_if = "BTreeMap::is_empty")]
+    custom_ids: BTreeMap<String, String>,
     app_version: String,
     custom: BTreeMap<&'static str, &'static str>,
 }
@@ -397,31 +430,46 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[tokio::test]
-    async fn sends_logs_of_exited_invocations() {
+    async fn sends_installation_at_once_and_logs_of_exited_invocations() {
         let directory = std::env::temp_dir().join(uuid::Uuid::now_v7().to_string());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let endpoint = format!("http://{}", listener.local_addr().unwrap());
-        let start = || Telemetry::start("client-test", "user".into(), "1", &directory, &endpoint);
+        let start = {
+            let directory = directory.clone();
+            move || Telemetry::start("client-test", "1", &directory, &endpoint)
+        };
+        let receive = async |event: &str| {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            while !String::from_utf8_lossy(&request).contains(event) {
+                let mut buffer = [0; 4096];
+                let read = stream.read(&mut buffer).await.unwrap();
+                request.extend_from_slice(&buffer[..read]);
+            }
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n")
+                .await
+                .unwrap();
+            String::from_utf8_lossy(&request).into_owned()
+        };
+        let command = || Event::CommandStarted {
+            command: "test".into(),
+            modules: Vec::new(),
+        };
 
-        let previous = start().unwrap();
-        previous.log(Event::Installed);
+        let previous = tokio::task::spawn_blocking(start.clone());
+        let request = receive("cli_installed").await;
+        let id = fs::read_to_string(directory.join("id")).unwrap();
+        assert!(request.contains(&id));
+        let previous = previous.await.unwrap().unwrap();
+        previous.log(command());
         previous.shutdown();
         drop(previous);
         fs::remove_file(directory.join("attempted")).unwrap();
 
         let current = start().unwrap();
-        current.log(Event::Installed);
-        let (mut stream, _) = listener.accept().await.unwrap();
-        let mut request = Vec::new();
-        while !String::from_utf8_lossy(&request).contains("cli_installed") {
-            let mut buffer = [0; 4096];
-            let read = stream.read(&mut buffer).await.unwrap();
-            request.extend_from_slice(&buffer[..read]);
-        }
-        stream
-            .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n")
-            .await
-            .unwrap();
+        current.log(command());
+        let request = receive("cli_command_started").await;
         tokio::time::timeout(Duration::from_secs(3), async {
             let logs = || {
                 fs::read_dir(&directory)
@@ -437,8 +485,9 @@ mod tests {
         .await
         .unwrap();
 
-        let request = String::from_utf8_lossy(&request);
-        assert_eq!(request.matches("cli_installed").count(), 1);
+        assert!(request.contains(&id));
+        assert!(!request.contains("cli_installed"));
+        assert_eq!(request.matches("cli_command_started").count(), 1);
         assert!(directory.join("flushed").exists());
         drop(current);
         fs::remove_dir_all(directory).unwrap();
