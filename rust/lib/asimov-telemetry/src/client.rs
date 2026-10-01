@@ -59,7 +59,7 @@ impl Telemetry {
         let mut key = HeaderValue::from_str(client_key).ok()?;
         key.set_sensitive(true);
         fs::create_dir_all(directory).ok()?;
-        let invocation_id = uuid::Uuid::new_v4().to_string();
+        let invocation_id = uuid::Uuid::now_v7().to_string();
         let events =
             File::create_new(directory.join(format!("events-{invocation_id}.jsonl"))).ok()?;
         events.try_lock().ok()?;
@@ -176,24 +176,24 @@ fn flush(directory: &Path, key: HeaderValue, endpoint: &str) -> Option<()> {
         .filter_map(|line| serde_json::from_str(&line).ok())
         .collect();
     if !events.is_empty() {
+        let mut headers = HeaderMap::new();
+        headers.insert("statsig-api-key", key);
+        headers.insert("statsig-sdk-type", HeaderValue::from_static("asimov-rust"));
+        headers.insert(
+            "statsig-sdk-version",
+            HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
+        );
+        let client = reqwest::Client::builder()
+            .default_headers(headers)
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(10))
+            .build()
+            .ok()?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .ok()?;
         runtime.block_on(async {
-            let mut headers = HeaderMap::new();
-            headers.insert("statsig-api-key", key);
-            headers.insert("statsig-sdk-type", HeaderValue::from_static("asimov-rust"));
-            headers.insert(
-                "statsig-sdk-version",
-                HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
-            );
-            let client = reqwest::Client::builder()
-                .default_headers(headers)
-                .redirect(reqwest::redirect::Policy::none())
-                .timeout(Duration::from_secs(3))
-                .build()
-                .ok()?;
             for batch in events.chunks(BATCH_SIZE) {
                 client
                     .post(endpoint)
@@ -362,7 +362,7 @@ mod tests {
 
     #[tokio::test]
     async fn sends_logs_of_exited_invocations() {
-        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        let directory = std::env::temp_dir().join(uuid::Uuid::now_v7().to_string());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let endpoint = format!("http://{}", listener.local_addr().unwrap());
         let start = || Telemetry::start("client-test", "user".into(), "1", &directory, &endpoint);
