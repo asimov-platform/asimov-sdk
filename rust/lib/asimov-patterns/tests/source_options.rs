@@ -30,8 +30,6 @@ fn builders_preserve_unset_defaults() {
     let timing = TimingOptions::builder().deadline(Duration::ZERO).build();
     assert_eq!(timing.deadline, Some(Duration::ZERO));
 
-    let fetch = FetcherOptions::builder().jq(".name").build();
-    assert_eq!(fetch.jq.as_deref(), Some(".name"));
     let filtering = FilteringOptions::builder()
         .jev("The name is Ukrainian")
         .jq("select(.name)")
@@ -55,6 +53,8 @@ mod cli {
     struct FetchCommand {
         #[command(flatten)]
         options: FetcherOptions,
+        #[command(flatten)]
+        filtering: FilteringOptions,
         #[command(flatten)]
         cache: CachingOptions,
         #[command(flatten)]
@@ -119,10 +119,7 @@ mod cli {
 
     #[test]
     fn short_and_extended_help_are_cli_facing() {
-        for (command, jev_example) in [
-            (FetchCommand::command(), None),
-            (ListCommand::command(), Some("The name is Ukrainian")),
-        ] {
+        for command in [FetchCommand::command(), ListCommand::command()] {
             for flag in ["-h", "--help"] {
                 let error = command
                     .clone()
@@ -134,6 +131,7 @@ mod cli {
 
                 for option in [
                     "--output <FORMAT>",
+                    "--jev <NOUL>",
                     "--jq <EXPR>",
                     "--max-age <DURATION>",
                     "--deadline <DURATION>",
@@ -167,16 +165,13 @@ mod cli {
                     for example in ["positive duration", "relative duration", "select(.name)"] {
                         assert!(help.contains(example), "missing {example}: {help}");
                     }
-                    if let Some(example) = jev_example {
-                        assert!(help.contains("--jev <NOUL>"), "{help}");
-                        assert!(help.contains(example), "{help}");
-                        assert!(
-                            help.contains("an assertion evaluated as true or false"),
-                            "{help}"
-                        );
-                        assert!(help.contains("before --jq"), "{help}");
-                        assert!(help.contains("after Jev filtering"), "{help}");
-                    }
+                    assert!(help.contains("The name is Ukrainian"), "{help}");
+                    assert!(
+                        help.contains("an assertion evaluated as true or false"),
+                        "{help}"
+                    );
+                    assert!(help.contains("before --jq"), "{help}");
+                    assert!(help.contains("after Jev filtering"), "{help}");
                 }
             }
         }
@@ -189,6 +184,7 @@ mod cli {
 
         let fetch = FetchCommand::try_parse_from(["fetch"]).unwrap();
         assert_eq!(fetch.options, FetcherOptions::default());
+        assert_eq!(fetch.filtering, FilteringOptions::default());
         assert_eq!(fetch.cache, CachingOptions::default());
         assert_eq!(fetch.timing, TimingOptions::default());
         assert_eq!(fetch.cache.max_age_option(), None);
@@ -208,13 +204,15 @@ mod cli {
     }
 
     #[test]
-    fn fetch_accepts_cli_flags_and_forwards_durations() {
+    fn fetch_accepts_both_filters_and_forwards_durations() {
         let args = FetchCommand::try_parse_from([
             "fetch",
             "-M",
             "example",
             "-o",
             "jsonl",
+            "--jev",
+            "The name is Ukrainian",
             "--jq",
             ".name",
             "--max-age",
@@ -228,7 +226,8 @@ mod cli {
         assert_eq!(args.module.as_deref(), Some("example"));
         assert_eq!(args.urls.len(), 2);
         assert_eq!(args.options.output.as_deref(), Some("jsonl"));
-        assert_eq!(args.options.jq.as_deref(), Some(".name"));
+        assert_eq!(args.filtering.jev.as_deref(), Some("The name is Ukrainian"));
+        assert_eq!(args.filtering.jq.as_deref(), Some(".name"));
         assert!(args.options.other.is_empty());
         assert_eq!(args.cache.max_age, Some(Duration::from_secs(3600)));
         assert_eq!(args.timing.deadline, Some(Duration::from_secs(30)));

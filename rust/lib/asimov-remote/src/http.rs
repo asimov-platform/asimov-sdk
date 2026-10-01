@@ -2,22 +2,35 @@
 
 //! HTTP(S) execution of the JSON POST fetch/list protocol.
 //!
-//! Fetching maps one resource URL to `{"urls":[URL]}` at `fetch`. Listing maps
-//! a collection URL to `{"url":URL,"options":{...}}` at `list`, forwarding
-//! every configured [`ListerOptions`] field. Sort and output-format values use
-//! their command-line spellings; `other` is an array of literal arguments.
-//! Absent options and an empty `other` array are omitted, as is the entire
-//! `options` object when empty. An endpoint implementing this protocol must
-//! supply the RDF mapping profile expected by its graph consumers; JSONL framing
-//! alone does not establish that mapping.
+//! Fetching maps one resource URL to `{"urls":[URL],"options":{...}}` at `fetch`.
+//! Listing maps a collection URL to `{"url":URL,"options":{...}}` at `list`,
+//! forwarding every configured [`ListerOptions`] field. Shared caching, filtering,
+//! and timing fields are flattened into the same `options` object: `max_age`,
+//! `jev`, `jq`, and `deadline`. Both operations use [`FilteringOptions`] for
+//! filtering. Durations use human-readable strings such as `"1h"` or
+//! `"1m 30s"`, preserving subsecond precision. The endpoint applies cache policy,
+//! filters (Jev before jq), and relative deadlines.
+//!
+//! Sort and output-format values use their command-line spellings; `other` is an
+//! array of literal arguments. Absent options and an empty `other` array are
+//! omitted, as is the entire `options` object when empty. Explicit zero durations
+//! and empty filter expressions are forwarded for endpoint validation. An endpoint
+//! implementing this protocol must supply the RDF mapping profile expected by its
+//! graph consumers; JSONL framing alone does not establish that mapping.
 //!
 //! ```no_run
-//! use asimov_remote::{Execute, http::{Executor, Fetcher, Error}};
+//! use asimov_remote::{Execute, http::{CachingOptions, Executor, Fetcher, Error}};
 //! use asimov_flow::StreamExt;
+//! use core::time::Duration;
 //!
 //! # async fn example() -> Result<(), Error> {
 //! let executor = Executor::new("https://asimov.social", "api-token")?;
-//! let mut fetcher = Fetcher::new(executor, "https://example.com/profile", Default::default());
+//! let caching = CachingOptions::builder()
+//!     .max_age(Duration::from_secs(3600))
+//!     .build();
+//! let mut fetcher = Fetcher::new(
+//!     executor, "https://example.com/profile", Default::default(),
+//! ).with_caching(caching);
 //! let mut batches = fetcher.execute().await?;
 //! while let Some(batch) = batches.next().await {
 //!     for line in batch?.lines() {
@@ -42,7 +55,8 @@ use serde::Serialize;
 
 pub use asimov_flow::{BatchOptions, JsonlBatch, JsonlLine, StreamExt};
 pub use asimov_patterns::{
-    FetcherOptions, ListerCapabilities, ListerOptions, OptionSupport, OutputFormat,
+    CachingOptions, FetcherOptions, FilteringOptions, ListerCapabilities, ListerOptions,
+    OptionSupport, OutputFormat, TimingOptions,
 };
 
 /// A raw JSONL batch stream with HTTP-specific failures.
@@ -151,11 +165,21 @@ impl Executor {
 }
 
 /// One configured resource fetch. Each execution sends a fresh request.
+///
+/// [`CachingOptions`], [`FilteringOptions`], and [`TimingOptions`] are flattened
+/// into the request's `options` object as `max_age`, `jev`, `jq`, and `deadline`.
+/// Durations use human-readable strings. The endpoint applies these options,
+/// including Jev filtering before jq and relative execution deadlines. Unset
+/// fields are omitted. Only unset or `jsonl` output and an empty `other` array
+/// are supported.
 #[derive(Clone, Debug)]
 pub struct Fetcher {
     executor: Executor,
     input: String,
     options: FetcherOptions,
+    caching: CachingOptions,
+    filtering: FilteringOptions,
+    timing: TimingOptions,
 }
 
 impl Fetcher {
@@ -164,7 +188,31 @@ impl Fetcher {
             executor,
             input: input.into(),
             options,
+            caching: CachingOptions::default(),
+            filtering: FilteringOptions::default(),
+            timing: TimingOptions::default(),
         }
+    }
+
+    /// Sets cache freshness options to forward to the endpoint.
+    #[must_use]
+    pub fn with_caching(mut self, options: CachingOptions) -> Self {
+        self.caching = options;
+        self
+    }
+
+    /// Sets output filtering options to forward to the endpoint.
+    #[must_use]
+    pub fn with_filtering(mut self, options: FilteringOptions) -> Self {
+        self.filtering = options;
+        self
+    }
+
+    /// Sets execution timing options to forward to the endpoint.
+    #[must_use]
+    pub fn with_timing(mut self, options: TimingOptions) -> Self {
+        self.timing = options;
+        self
     }
 }
 
@@ -173,16 +221,20 @@ impl asimov_patterns::Execute<JsonlStream> for Fetcher {
     type Error = Error;
 
     async fn execute(&mut self) -> Result<JsonlStream, Error> {
-        validate_fetcher_options(self.options.output.as_deref(), &self.options.other)?;
+        let FetcherOptions { output, other } = &self.options;
+        validate_fetcher_options(output.as_deref(), other)?;
         #[derive(Serialize)]
         struct Request<'a> {
             urls: [&'a str; 1],
+            #[serde(skip_serializing_if = "SharedOptions::is_empty")]
+            options: SharedOptions<'a>,
         }
         self.executor
             .post_jsonl(
                 "fetch",
                 &Request {
                     urls: [&self.input],
+                    options: SharedOptions::new(&self.caching, &self.filtering, &self.timing),
                 },
             )
             .await
@@ -202,6 +254,10 @@ impl asimov_patterns::Fetcher<JsonlStream> for Fetcher {}
 /// `jsonl`, `url`, or the custom format's name. Cursors and literal `other`
 /// arguments retain their spelling and argument boundaries. Unset fields and
 /// an empty `other` array are omitted; explicit zero values are preserved.
+/// [`CachingOptions`], [`FilteringOptions`], and [`TimingOptions`] are flattened
+/// into this object as `max_age`, `jev`, `jq`, and `deadline`. Durations use
+/// human-readable strings. The endpoint applies these options, including Jev
+/// filtering before jq and relative execution deadlines.
 ///
 /// `T` is the sort-key type and `F` the custom output-format type from
 /// [`ListerOptions<T, F>`], both defaulting to [`String`]. Execution uses
@@ -216,6 +272,9 @@ pub struct Lister<T: Clone = String, F = String> {
     executor: Executor,
     input: String,
     options: ListerOptions<T, F>,
+    caching: CachingOptions,
+    filtering: FilteringOptions,
+    timing: TimingOptions,
 }
 
 impl<T: Clone, F> Lister<T, F> {
@@ -225,7 +284,31 @@ impl<T: Clone, F> Lister<T, F> {
             executor,
             input: input.into(),
             options,
+            caching: CachingOptions::default(),
+            filtering: FilteringOptions::default(),
+            timing: TimingOptions::default(),
         }
+    }
+
+    /// Sets cache freshness options to forward to the endpoint.
+    #[must_use]
+    pub fn with_caching(mut self, options: CachingOptions) -> Self {
+        self.caching = options;
+        self
+    }
+
+    /// Sets output filtering options to forward to the endpoint.
+    #[must_use]
+    pub fn with_filtering(mut self, options: FilteringOptions) -> Self {
+        self.filtering = options;
+        self
+    }
+
+    /// Sets execution timing options to forward to the endpoint.
+    #[must_use]
+    pub fn with_timing(mut self, options: TimingOptions) -> Self {
+        self.timing = options;
+        self
     }
 
     /// Operations this HTTP request schema can forward.
@@ -252,6 +335,8 @@ impl<T: Clone + fmt::Display + Send, F: fmt::Display + Send> asimov_patterns::Ex
     async fn execute(&mut self) -> Result<JsonlStream, Error> {
         #[derive(Serialize)]
         struct Options<'a> {
+            #[serde(flatten)]
+            shared: SharedOptions<'a>,
             #[serde(skip_serializing_if = "Option::is_none")]
             sort: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -285,14 +370,17 @@ impl<T: Clone + fmt::Display + Send, F: fmt::Display + Send> asimov_patterns::Ex
                 output,
                 other,
             } = &self.options;
+            let shared = SharedOptions::new(&self.caching, &self.filtering, &self.timing);
             let empty = sort.is_none()
                 && before.is_none()
                 && after.is_none()
                 && offset.is_none()
                 && limit.is_none()
                 && output.is_none()
-                && other.is_empty();
+                && other.is_empty()
+                && shared.is_empty();
             (!empty).then(|| Options {
+                shared,
                 sort: sort.as_ref().map(|keys| {
                     keys.keys()
                         .iter()
@@ -325,6 +413,40 @@ impl<T: Clone + fmt::Display + Send, F: fmt::Display + Send> asimov_patterns::Ex
 impl<T: Clone + fmt::Display + Send, F: fmt::Display + Send> asimov_patterns::Lister<JsonlStream>
     for Lister<T, F>
 {
+}
+
+#[derive(Serialize)]
+struct SharedOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_age: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deadline: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    jev: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    jq: Option<&'a str>,
+}
+
+impl<'a> SharedOptions<'a> {
+    fn new(
+        caching: &CachingOptions,
+        filtering: &'a FilteringOptions,
+        timing: &TimingOptions,
+    ) -> Self {
+        let CachingOptions { max_age } = caching;
+        let FilteringOptions { jev, jq } = filtering;
+        let TimingOptions { deadline } = timing;
+        Self {
+            max_age: max_age.map(|value| humantime::format_duration(value).to_string()),
+            deadline: deadline.map(|value| humantime::format_duration(value).to_string()),
+            jev: jev.as_deref(),
+            jq: jq.as_deref(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.max_age.is_none() && self.deadline.is_none() && self.jev.is_none() && self.jq.is_none()
+    }
 }
 
 fn validate_fetcher_options(output: Option<&str>, other: &[String]) -> Result<(), Error> {

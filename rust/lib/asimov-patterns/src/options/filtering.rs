@@ -19,10 +19,10 @@ Jev filtering."#;
 
 /// Output filtering requests for host commands.
 ///
-/// Flatten this alongside [`crate::ListerOptions`] in a host's Clap arguments.
-/// Both fields default to `None`, leaving output unfiltered. The host applies
-/// Jev before jq and supplies the evaluators and any required credentials.
-/// This type stores expressions without compiling or evaluating them;
+/// Flatten this alongside [`crate::FetcherOptions`] or [`crate::ListerOptions`]
+/// in a host's Clap arguments. Both fields default to `None`, leaving output
+/// unfiltered. The host applies Jev before jq and supplies the evaluators and any
+/// required credentials. This type stores expressions without evaluating them;
 /// `asimov-runner` does not perform this filtering.
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
 #[builder(derive(Debug), on(String, into))]

@@ -9,9 +9,6 @@ use alloc::{string::String, vec::Vec};
 use bon::Builder;
 
 const HELP_OUTPUT: &str = r#"The output format."#;
-const HELP_JQ: &str = r#"Filter JSON output using a jq expression.
-
-For example, "select(.name)"."#;
 
 /// A URL protocol client that retrieves one resource and represents it as RDF.
 ///
@@ -36,13 +33,14 @@ For example, "select(.name)"."#;
 /// [spec]: https://asimov-specs.github.io/program-patterns/#fetcher
 pub trait Fetcher<T>: Execute<T> {}
 
-/// Output-format selection, filtering, and additional arguments for a [`Fetcher`].
+/// Output-format selection and additional arguments for a [`Fetcher`].
 ///
 /// The URL is supplied separately by the implementation's invocation API.
 /// `Default` leaves optional fields unset and `other` empty; format support and
 /// URL validity are not checked by this configuration type. A host can flatten
-/// [`crate::CachingOptions`] and [`crate::TimingOptions`] alongside this type
-/// for shared caching and execution timing arguments.
+/// [`crate::CachingOptions`], [`crate::FilteringOptions`], and
+/// [`crate::TimingOptions`] alongside this type for shared caching, output
+/// filtering, and execution timing arguments.
 ///
 /// # Examples
 ///
@@ -83,22 +81,6 @@ pub struct FetcherOptions {
         )
     )]
     pub output: Option<String>,
-
-    /// Filter JSON output using a jq expression.
-    ///
-    /// Applied by the host to retrieved output, not forwarded to the external
-    /// fetcher by `asimov-runner`. This type stores the expression without
-    /// compiling or evaluating it.
-    #[cfg_attr(
-        feature = "clap",
-        clap(
-            long,
-            value_name = "EXPR",
-            help = "Filter JSON output using a jq expression",
-            long_help = HELP_JQ
-        )
-    )]
-    pub jq: Option<String>,
 }
 
 impl<S: fetcher_options_builder::State> FetcherOptionsBuilder<S> {

@@ -241,6 +241,82 @@ async fn unsupported_fetcher_options_do_not_start_requests() {
     }
 }
 
+#[tokio::test]
+async fn fetcher_forwards_flattened_options_and_omits_unset_fields() {
+    for (max_age, jev, jq, deadline, expected) in [
+        (None, None, None, None, json!({"urls": ["example:"]})),
+        (
+            Some(Duration::ZERO),
+            None,
+            None,
+            None,
+            json!({"urls": ["example:"], "options": {"max_age": "0s"}}),
+        ),
+        (
+            None,
+            Some(""),
+            None,
+            None,
+            json!({"urls": ["example:"], "options": {"jev": ""}}),
+        ),
+        (
+            None,
+            None,
+            Some(""),
+            None,
+            json!({"urls": ["example:"], "options": {"jq": ""}}),
+        ),
+        (
+            None,
+            None,
+            None,
+            Some(Duration::ZERO),
+            json!({"urls": ["example:"], "options": {"deadline": "0s"}}),
+        ),
+        (
+            Some(Duration::new(90, 123_456_789)),
+            Some("The name is \"Українське\""),
+            Some("select(.name == \"Ada Lovelace\")"),
+            Some(Duration::from_nanos(1)),
+            json!({
+                "urls": ["example:"],
+                "options": {
+                    "max_age": "1m 30s 123ms 456us 789ns",
+                    "jev": "The name is \"Українське\"",
+                    "jq": "select(.name == \"Ada Lovelace\")",
+                    "deadline": "1ns",
+                },
+            }),
+        ),
+    ] {
+        let (url, request, resume, server) = http1_server(200, b"", b"").await;
+        let mut operation = Fetcher::new(
+            Executor::new(url, "token").unwrap(),
+            "example:",
+            FetcherOptions::builder().output("jsonl").build(),
+        )
+        .with_caching(CachingOptions::builder().maybe_max_age(max_age).build())
+        .with_filtering(
+            FilteringOptions::builder()
+                .maybe_jev(jev)
+                .maybe_jq(jq)
+                .build(),
+        )
+        .with_timing(TimingOptions::builder().maybe_deadline(deadline).build());
+        let mut stream = timeout(DEADLINE, operation.execute())
+            .await
+            .unwrap()
+            .unwrap();
+        let request = timeout(DEADLINE, request).await.unwrap().unwrap();
+        let (headers, body) = request.split_once("\r\n\r\n").unwrap();
+        assert!(headers.starts_with("POST /api/fetch HTTP/1.1"));
+        assert_eq!(serde_json::from_str::<Value>(body).unwrap(), expected);
+        resume.send(()).unwrap();
+        assert!(timeout(DEADLINE, stream.next()).await.unwrap().is_none());
+        server.await.unwrap();
+    }
+}
+
 #[test]
 fn configuration_supports_prefixes_and_redacts_token() {
     let executor =
@@ -287,7 +363,19 @@ async fn typed_lister_forwards_all_options_and_preserves_response_bytes() {
                 .other("literal argument")
                 .other("")
                 .build(),
-        );
+        )
+        .with_caching(
+            CachingOptions::builder()
+                .max_age(Duration::from_secs(3600))
+                .build(),
+        )
+        .with_filtering(
+            FilteringOptions::builder()
+                .jev("The name is Ukrainian")
+                .jq("select(.name)")
+                .build(),
+        )
+        .with_timing(TimingOptions::builder().deadline(Duration::ZERO).build());
         assert_eq!(
             lister.capabilities(),
             ListerCapabilities {
@@ -314,6 +402,10 @@ async fn typed_lister_forwards_all_options_and_preserves_response_bytes() {
                     "limit": 0,
                     "output": name,
                     "other": ["--custom", "literal argument", ""],
+                    "max_age": "1h",
+                    "jev": "The name is Ukrainian",
+                    "jq": "select(.name)",
+                    "deadline": "0s",
                 },
             })
         );
@@ -391,6 +483,69 @@ async fn absent_options_are_omitted_but_explicit_values_are_forwarded() {
 }
 
 #[tokio::test]
+async fn lister_forwards_shared_options_without_pattern_options() {
+    for (max_age, jev, jq, deadline, expected) in [
+        (
+            Some(Duration::ZERO),
+            None,
+            None,
+            None,
+            json!({"max_age": "0s"}),
+        ),
+        (None, Some(""), None, None, json!({"jev": ""})),
+        (None, None, Some(""), None, json!({"jq": ""})),
+        (
+            None,
+            None,
+            None,
+            Some(Duration::ZERO),
+            json!({"deadline": "0s"}),
+        ),
+        (
+            Some(Duration::from_nanos(1)),
+            Some("The name is \"Українське\""),
+            Some("select(.name == \"Ada Lovelace\")"),
+            Some(Duration::new(90, 123_456_789)),
+            json!({
+                "max_age": "1ns",
+                "jev": "The name is \"Українське\"",
+                "jq": "select(.name == \"Ada Lovelace\")",
+                "deadline": "1m 30s 123ms 456us 789ns",
+            }),
+        ),
+    ] {
+        let (url, request, resume, server) = http1_server(200, b"", b"").await;
+        let mut operation = Lister::new(
+            Executor::new(url, "token").unwrap(),
+            "example:",
+            ListerOptions::default(),
+        )
+        .with_caching(CachingOptions::builder().maybe_max_age(max_age).build())
+        .with_filtering(
+            FilteringOptions::builder()
+                .maybe_jev(jev)
+                .maybe_jq(jq)
+                .build(),
+        )
+        .with_timing(TimingOptions::builder().maybe_deadline(deadline).build());
+        let mut stream = timeout(DEADLINE, operation.execute())
+            .await
+            .unwrap()
+            .unwrap();
+        let request = timeout(DEADLINE, request).await.unwrap().unwrap();
+        let (headers, body) = request.split_once("\r\n\r\n").unwrap();
+        assert!(headers.starts_with("POST /api/list HTTP/1.1"));
+        assert_eq!(
+            serde_json::from_str::<Value>(body).unwrap(),
+            json!({"url": "example:", "options": expected})
+        );
+        resume.send(()).unwrap();
+        assert!(timeout(DEADLINE, stream.next()).await.unwrap().is_none());
+        server.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn endpoint_option_rejections_are_reported_as_http_errors() {
     let (url, request, resume, server) = http1_server(400, b"", b"").await;
     let mut operation = Lister::new(
@@ -452,7 +607,10 @@ async fn http2_requests_can_reuse_the_same_operation() {
                         let bytes = request.into_body().collect().await.unwrap().to_bytes();
                         assert_eq!(
                             serde_json::from_slice::<Value>(&bytes).unwrap(),
-                            json!({"urls":["https://example.com"]})
+                            json!({
+                                "urls": ["https://example.com"],
+                                "options": {"max_age": "1h", "jq": ".", "deadline": "30s"},
+                            })
                         );
                         Ok::<_, Infallible>(
                             Response::builder()
@@ -466,7 +624,18 @@ async fn http2_requests_can_reuse_the_same_operation() {
             .await
             .unwrap();
     });
-    let mut operation = Fetcher::new(executor, "https://example.com", Default::default());
+    let mut operation = Fetcher::new(executor, "https://example.com", Default::default())
+        .with_caching(
+            CachingOptions::builder()
+                .max_age(Duration::from_secs(3600))
+                .build(),
+        )
+        .with_filtering(FilteringOptions::builder().jq(".").build())
+        .with_timing(
+            TimingOptions::builder()
+                .deadline(Duration::from_secs(30))
+                .build(),
+        );
     for _ in 0..2 {
         let mut stream = timeout(DEADLINE, operation.execute())
             .await
