@@ -250,7 +250,7 @@ fn flush(directory: &Path, key: HeaderValue, endpoint: &str) -> Option<()> {
 fn send(key: HeaderValue, endpoint: &str, events: &[Value]) -> Option<()> {
     let mut headers = HeaderMap::new();
     headers.insert("statsig-api-key", key);
-    headers.insert("statsig-sdk-type", HeaderValue::from_static("asimov-rust"));
+    headers.insert("statsig-sdk-type", HeaderValue::from_static("asimov.rs"));
     headers.insert(
         "statsig-sdk-version",
         HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
