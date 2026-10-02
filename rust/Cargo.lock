@@ -1475,6 +1475,7 @@ dependencies = [
  "asimov-patterns",
  "async-trait",
  "http-body-util",
+ "humantime",
  "hyper 1.11.1",
  "hyper-util",
  "reqwest 0.12.28",
