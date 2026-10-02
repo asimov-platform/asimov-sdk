@@ -450,6 +450,17 @@
   },
   {
     "package": {
+      "name": "asimov-telemetry",
+      "publish": true,
+      "metadata": {
+        "readme": {
+          "title": "ASIMOV.rs: Telemetry"
+        }
+      }
+    }
+  },
+  {
+    "package": {
       "name": "asimov-token",
       "readme": true,
       "metadata": {
