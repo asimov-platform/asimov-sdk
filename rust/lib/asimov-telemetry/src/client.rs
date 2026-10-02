@@ -158,10 +158,15 @@ impl Telemetry {
     }
 }
 
-/// Whether `ASIMOV_TELEMETRY` is `0` or `false`, or [`disable`] was called for `directory`.
+/// Whether `ASIMOV_TELEMETRY` is `0`, `false`, `no` or `off`, `DO_NOT_TRACK` is `1`, or
+/// [`disable`] was called for `directory`.
 pub fn is_disabled(directory: &Path) -> bool {
-    std::env::var("ASIMOV_TELEMETRY")
-        .is_ok_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "0" | "false"))
+    std::env::var("ASIMOV_TELEMETRY").is_ok_and(|value| {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "0" | "false" | "no" | "off"
+        )
+    }) || std::env::var("DO_NOT_TRACK").is_ok_and(|value| value.trim() == "1")
         || directory.join("disabled").exists()
 }
 
