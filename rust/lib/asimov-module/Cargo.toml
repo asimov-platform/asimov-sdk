@@ -51,7 +51,6 @@ yaml = ["dep:serde_yaml_ng"]
 
 [dependencies]
 asimov-core.workspace = true
-dogma.workspace = true
 secrecy.workspace = true
 slab.workspace = true
 thiserror.workspace = true

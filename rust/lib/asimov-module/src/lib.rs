@@ -10,7 +10,7 @@ extern crate alloc;
 extern crate std;
 
 #[deprecated(since = "25.1.1", note = "Use `extern alloc` instead.")]
-pub use dogma::prelude;
+pub mod prelude;
 
 #[cfg(feature = "cli")]
 pub use clientele::{SysexitsError, SysexitsResult, args_os, dotenv, exit};
