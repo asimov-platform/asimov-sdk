@@ -64,13 +64,13 @@ asimov-universe = { version = "25.6.1", default-features = false }
 asimov-vault = { version = "25.6.1", default-features = false }
 
 # Interoperability with RDF.rs:
-rdf-format = { version = "0.4.4", default-features = false, features = ["alloc"] }
-rdf-hash = { version = "0.4.4", default-features = false, features = ["alloc"] }
-rdf-id = { version = "0.4.4", default-features = false, features = ["alloc"] }
-rdf-message = { version = "0.4.4", default-features = false, features = ["alloc"] }
-rdf-model = { version = "0.4.4", default-features = false, features = ["alloc"] }
-rdf-vocab = { version = "0.4.4", default-features = false, features = ["alloc"] }
-xsd = { version = "0.4.4", default-features = false, features = ["alloc"] }
+rdf-format = { version = "0.5.0", default-features = false, features = ["alloc"] }
+rdf-hash = { version = "0.5.0", default-features = false, features = ["alloc"] }
+rdf-id = { version = "0.5.0", default-features = false, features = ["alloc"] }
+rdf-message = { version = "0.5.0", default-features = false, features = ["alloc"] }
+rdf-model = { version = "0.5.0", default-features = false, features = ["alloc"] }
+rdf-vocab = { version = "0.5.0", default-features = false, features = ["alloc"] }
+xsd = { version = "0.5.0", default-features = false, features = ["alloc"] }
 
 # Implementation with Valuand:
 valuand = { version = "0.1", default-features = false }
