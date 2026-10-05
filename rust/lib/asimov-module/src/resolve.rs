@@ -26,23 +26,24 @@ impl Resolver {
         Resolver::default()
     }
 
+    /// Resolve each matching module once, preferring longer URL matches.
+    /// File-extension matches follow URL matches, longest suffix first.
     pub fn resolve(&self, url: &str) -> Result<Vec<Rc<Module>>, UrlParseError> {
         let input = split_url(url)?;
 
-        // `results` is a set of `(path_length, Module)` items.
-        // `path_length` first so they get sorted by the length of matching path.
-        // We reverse iter this later so that longer paths are returned first.
-        let mut results: BTreeSet<(usize, Rc<Module>)> = BTreeSet::new();
+        // Reverse iteration prefers URL specificity, then suffix length.
+        let mut results: BTreeSet<(usize, usize, Rc<Module>)> = BTreeSet::new();
 
         if matches!(input.first(), Some(Sect::Protocol(proto)) if proto == "file") {
             if let Some(Sect::Path(filename)) = input.last() {
-                if let Some((_, ext)) = filename.split_once(".") {
+                for (dot, _) in filename.match_indices('.') {
+                    let ext = &filename[dot + 1..];
                     self.file_extensions
                         .get(ext)
                         .into_iter()
                         .flatten()
                         .for_each(|module| {
-                            results.insert((0, module.clone()));
+                            results.insert((0, ext.len(), module.clone()));
                         });
                 }
             }
@@ -80,7 +81,7 @@ impl Resolver {
         // Collect all modules from final states
         for node in final_states.iter().map(|&idx| &self.nodes[idx]) {
             for module in &node.modules {
-                results.insert((node.path_length, module.clone()));
+                results.insert((node.path_length, 0, module.clone()));
             }
         }
 
@@ -90,7 +91,7 @@ impl Resolver {
              // The `results` set is sorted by path_length.
              // Reverse to prefer longer matches.
             .rev()
-            .map(|(_, module)| module)
+            .map(|(_, _, module)| module)
             .filter(|module| seen.insert(module.clone()))
             .collect())
     }
@@ -441,6 +442,26 @@ mod test {
 
     extern crate std;
     use std::{eprintln, vec};
+
+    #[test]
+    fn file_suffixes_prefer_the_longest_match() {
+        let mut resolver = Resolver::new();
+        resolver.insert_file_extension("text", "txt").unwrap();
+        resolver.insert_file_extension("gzip", "gz").unwrap();
+        resolver.insert_file_extension("tar", ".tar.gz").unwrap();
+        resolver.insert_file_extension("tar", "gz").unwrap();
+        for (url, expected) in [
+            ("file:///report.v1.txt", vec!["text"]),
+            ("file:///archive.v1.tar.gz", vec!["tar", "gzip"]),
+            ("file:///archive.gz", vec!["tar", "gzip"]),
+            ("file:///archive", vec![]),
+            ("https://example.org/archive.tar.gz", vec![]),
+        ] {
+            let results = resolver.resolve(url).unwrap();
+            let names: Vec<_> = results.iter().map(|module| module.name.as_str()).collect();
+            assert_eq!(names, expected, "{url}");
+        }
+    }
 
     #[test]
     fn overlapping_matches_return_each_module_at_its_best_rank() {
