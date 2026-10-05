@@ -52,10 +52,9 @@ reproductions and build results are distinguished from source-review findings.
   values and exact serialization round trips.
 
 - [ ] **Return protocol errors for peer-controlled input instead of panicking.**
-  `lib/asimov-protocol/src/peer_connection.rs` asserts the ping response, and
-  `peer_protocol.rs` has an `unimplemented!` message arm. Introduce typed
-  state/unsupported-message errors and test unexpected messages using
-  in-memory transports.
+  `lib/asimov-protocol/src/peer_protocol.rs` has an `unimplemented!` message
+  arm. Introduce typed state/unsupported-message errors and test unexpected
+  messages using in-memory transports.
 
 - [ ] **Preserve snapshot identity and subsecond timestamps.**
   `lib/asimov-snapshot/src/storage/fs.rs` stores timestamps only to seconds.

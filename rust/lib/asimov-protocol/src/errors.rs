@@ -75,6 +75,9 @@ impl From<ConnectError> for SysexitsError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum PingError {
+    #[error("unexpected message in response to a ping: {0:?}")]
+    UnexpectedResponse(Message),
+
     #[error(transparent)]
     ConnectPeer(#[from] ConnectError),
 
