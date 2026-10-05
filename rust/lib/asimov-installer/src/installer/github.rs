@@ -14,7 +14,31 @@ use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 #[derive(Debug, Deserialize)]
 pub struct GitHubRelease {
-    pub name: String,
+    pub tag_name: String,
+}
+
+async fn fetch_release_tag(client: &reqwest::Client, url: &str) -> Result<String, FetchError> {
+    let response = client.get(url).send().await.inspect_err(|_err| {
+        #[cfg(feature = "tracing")]
+        tracing::debug!(err = ?_err);
+    })?;
+
+    if !response.status().is_success() {
+        return Err(HttpError::NotSuccess(response.status()).into());
+    }
+
+    let content = response.text().await.inspect_err(|_err| {
+        #[cfg(feature = "tracing")]
+        tracing::debug!(err = ?_err);
+    })?;
+
+    serde_json::from_str::<GitHubRelease>(&content)
+        .inspect_err(|_err| {
+            #[cfg(feature = "tracing")]
+            tracing::debug!(err = ?_err, ?content);
+        })
+        .map_err(|e| FetchError::Deserialize(e.into()))
+        .map(|release| release.tag_name)
 }
 
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
@@ -31,27 +55,7 @@ pub async fn fetch_latest_release(
             module_name.as_ref()
         );
 
-        let response = client.get(url).send().await.inspect_err(|_err| {
-            #[cfg(feature = "tracing")]
-            tracing::debug!(err = ?_err);
-        })?;
-
-        if !response.status().is_success() {
-            Err(HttpError::NotSuccess(response.status()))?;
-        }
-
-        let content = response.text().await.inspect_err(|_err| {
-            #[cfg(feature = "tracing")]
-            tracing::debug!(err = ?_err);
-        })?;
-
-        serde_json::from_str::<GitHubRelease>(&content)
-            .inspect_err(|_err| {
-                #[cfg(feature = "tracing")]
-                tracing::debug!(err = ?_err, ?content);
-            })
-            .map_err(|e| FetchError::Deserialize(e.into()))
-            .map(|release| release.name)
+        fetch_release_tag(client, &url).await
     }
 
     async fn by_redirect(
@@ -339,4 +343,67 @@ pub async fn extract_files(
     .await??;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::AsyncBufReadExt as _;
+
+    async fn release_fixture(status: &str, body: &str) -> Result<String, FetchError> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/releases/latest", listener.local_addr().unwrap());
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut stream = tokio::io::BufReader::new(stream);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                assert!(stream.read_line(&mut line).await.unwrap() > 0);
+                if line == "\r\n" {
+                    break;
+                }
+            }
+            stream
+                .get_mut()
+                .write_all(response.as_bytes())
+                .await
+                .unwrap();
+        });
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .unwrap();
+        let result = fetch_release_tag(&client, &url).await;
+        server.await.unwrap();
+        result
+    }
+
+    #[tokio::test]
+    async fn release_api_uses_tags_instead_of_display_titles() {
+        for body in [
+            r#"{"name":"A friendly release title","tag_name":"v1.2.3"}"#,
+            r#"{"name":null,"tag_name":"v1.2.3"}"#,
+            r#"{"tag_name":"v1.2.3"}"#,
+        ] {
+            assert_eq!(release_fixture("200 OK", body).await.unwrap(), "v1.2.3");
+        }
+        assert!(matches!(
+            release_fixture("200 OK", r#"{"name":"v1.2.3"}"#).await,
+            Err(FetchError::Deserialize(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn release_api_preserves_http_errors() {
+        assert!(matches!(
+            release_fixture("403 Forbidden", r#"{"message":"rate limit exceeded"}"#).await,
+            Err(FetchError::Http(HttpError::NotSuccess(status))) if status.as_u16() == 403
+        ));
+    }
 }

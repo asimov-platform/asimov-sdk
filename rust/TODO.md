@@ -130,12 +130,10 @@ reproductions and build results are distinguished from source-review findings.
   release through the operation; test cycles, diamond dependencies, and a
   changing latest-release response.
 
-- [ ] **Use GitHub tag identity and validate redirect responses.**
-  In `lib/asimov-installer/src/installer/github.rs`, the API fallback returns
-  release `name`, not `tag_name`; release titles need not be usable revisions.
-  Redirect lookup also accepts the final path segment without validating status
-  or tag-route shape. Test arbitrary release titles, failed redirects, rate
-  limits, and asset fallback using an injectable local release endpoint.
+- [ ] **Validate GitHub release redirects and cover asset fallback.**
+  In `lib/asimov-installer/src/installer/github.rs`, redirect lookup accepts the
+  final path segment without validating status or tag-route shape. Test failed
+  redirects and asset fallback using injectable local release endpoints.
 
 - [ ] **Make executable registration ownership-aware and recoverable.**
   `Registry::add_module` in `lib/asimov-registry/src/registry.rs` commits the
