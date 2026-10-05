@@ -50,9 +50,20 @@ impl From<[u8; 16]> for EventId {
     }
 }
 
-impl From<&Vec<u8>> for EventId {
-    fn from(bytes: &Vec<u8>) -> Self {
-        Self(Id::from((IdClass::Event, bytes)))
+/// Requires exactly 16 payload bytes.
+impl TryFrom<&[u8]> for EventId {
+    type Error = IdError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        Id::try_from((IdClass::Event, bytes)).map(Self)
+    }
+}
+
+impl TryFrom<&Vec<u8>> for EventId {
+    type Error = IdError;
+
+    fn try_from(bytes: &Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(bytes.as_slice())
     }
 }
 

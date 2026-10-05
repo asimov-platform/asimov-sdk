@@ -321,13 +321,6 @@ reproductions and build results are distinguished from source-review findings.
   map the wire option types, preserve explicit values, and add request parity
   tests for SocialClient and remote fetch/list operations.
 
-- [ ] **Make remaining identifier/key conversions validate their invariants.**
-  `lib/asimov-id/src/public_key.rs` pads/truncates `Vec<u8>` inputs and unwraps
-  conversion to Iroh keys. Generic KB IDs also pad/truncate vectors.
-  `lib/asimov-keyring/src/keyring.rs` panics on non-32-byte secrets before
-  zeroizing the source buffer. Add checked byte/key conversions and typed
-  corruption errors, keeping temporary secrets zeroized on every exit path.
-
 - [ ] **Correct KB GraphQL scalar registration and validation.**
   Replace GraphQL names such as `PERSON ID`/`ID<16>` in `lib/asimov-kb/src/`
   with valid, consistently registered scalars whose validation checks the
@@ -395,6 +388,8 @@ reproductions and build results are distinguished from source-review findings.
   that feature, and describes workspace capabilities on empty scaffold crates.
   Generate accurate per-crate examples from metadata, use the actual Rust
   1.97.1 minimum, and refresh package tables/READMEs through their generators.
+  `lib/asimov-keyring/README.md` still identifies itself as `asimov-social`;
+  regenerating it also refreshes stale package tables in the ID/KB READMEs.
 
 - [ ] **Enforce warning-free rustdoc and document public failure contracts.**
   Make warning-free documentation builds a CI check. Prioritize missing

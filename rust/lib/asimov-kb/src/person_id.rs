@@ -50,9 +50,20 @@ impl From<[u8; 16]> for PersonId {
     }
 }
 
-impl From<&Vec<u8>> for PersonId {
-    fn from(bytes: &Vec<u8>) -> Self {
-        Self(Id::from((IdClass::Person, bytes)))
+/// Requires exactly 16 payload bytes.
+impl TryFrom<&[u8]> for PersonId {
+    type Error = IdError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        Id::try_from((IdClass::Person, bytes)).map(Self)
+    }
+}
+
+impl TryFrom<&Vec<u8>> for PersonId {
+    type Error = IdError;
+
+    fn try_from(bytes: &Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(bytes.as_slice())
     }
 }
 

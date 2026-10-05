@@ -86,12 +86,21 @@ impl<const N: usize> From<(IdClass, [u8; N])> for Id<N> {
     }
 }
 
-impl<const N: usize> From<(IdClass, &Vec<u8>)> for Id<N> {
-    fn from((class, bytes_vec): (IdClass, &Vec<u8>)) -> Self {
-        let mut bytes = [0u8; N];
-        let len = N.min(bytes_vec.len());
-        bytes[..len].copy_from_slice(&bytes_vec[..len]);
-        Self { class, bytes }
+/// Requires exactly `N` payload bytes, without padding or truncation.
+impl<const N: usize> TryFrom<(IdClass, &[u8])> for Id<N> {
+    type Error = IdError;
+
+    fn try_from((class, bytes): (IdClass, &[u8])) -> Result<Self, Self::Error> {
+        let bytes = bytes.try_into().map_err(|_| IdError::InvalidLength)?;
+        Ok(Self { class, bytes })
+    }
+}
+
+impl<const N: usize> TryFrom<(IdClass, &Vec<u8>)> for Id<N> {
+    type Error = IdError;
+
+    fn try_from((class, bytes): (IdClass, &Vec<u8>)) -> Result<Self, Self::Error> {
+        Self::try_from((class, bytes.as_slice()))
     }
 }
 

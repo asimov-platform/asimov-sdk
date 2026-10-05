@@ -13,6 +13,13 @@ pub enum KeyringError {
     #[error("user not found")]
     UserNotFound,
 
+    /// A stored secret has an invalid length; its contents are never included.
+    #[error("corrupt secret key: expected 32 bytes, got {length}")]
+    CorruptSecret {
+        /// Number of bytes in the stored secret.
+        length: usize,
+    },
+
     /// A filesystem or other I/O operation failed.
     ///
     /// Available with the `std` feature.

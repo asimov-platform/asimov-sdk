@@ -7,7 +7,7 @@ use alloc::string::ToString;
 use asimov_directory::fs::StateDirectory;
 use asimov_id::PublicKey;
 use iroh_base::SecretKey;
-use secrecy::zeroize::{Zeroize, Zeroizing};
+use secrecy::zeroize::Zeroizing;
 use std::path::PathBuf;
 
 /// Service name used to identify ASIMOV secret-key entries in the keyring store.
@@ -29,6 +29,61 @@ pub const KEYRING_SERVICE: &str = "sh.asimov";
 pub struct Keyring {
     /// Directory containing the per-user, text-encoded public keys.
     path: PathBuf,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stored_secrets_require_exact_length() {
+        // Keep all default-store access in one test; never open the OS keyring.
+        struct MockStore;
+        impl Drop for MockStore {
+            fn drop(&mut self) {
+                keyring_core::unset_default_store();
+            }
+        }
+        keyring_core::set_default_store(keyring_core::mock::Store::new().unwrap());
+        let _store = MockStore;
+        let mut keyring = Keyring {
+            path: PathBuf::new(),
+        };
+        let user = "secret-length-test";
+        let entry = keyring_core::Entry::new(KEYRING_SERVICE, user).unwrap();
+        assert!(keyring.get_secret_key(user).unwrap().is_none());
+
+        for length in [0, 1, 31, 33, 64] {
+            let secret = Zeroizing::new(alloc::vec![42; length]);
+            entry.set_secret(secret.as_slice()).unwrap();
+            assert!(matches!(
+                keyring.get_secret_key(user),
+                Err(KeyringError::CorruptSecret { length: actual }) if actual == length
+            ));
+            assert!(matches!(
+                keyring.ensure_secret_key(user),
+                Err(KeyringError::CorruptSecret { length: actual }) if actual == length
+            ));
+            // Corruption must not be treated as absence and replaced by rekeying.
+            let stored = Zeroizing::new(entry.get_secret().unwrap());
+            assert_eq!(stored.as_slice(), secret.as_slice());
+        }
+
+        for byte in [0, 42, 255] {
+            let secret = Zeroizing::new([byte; 32]);
+            entry.set_secret(secret.as_slice()).unwrap();
+            let key = keyring.get_secret_key(user).unwrap().unwrap();
+            let actual = Zeroizing::new(key.to_bytes());
+            assert_eq!(*actual, *secret);
+            assert_eq!(
+                keyring.ensure_secret_key(user).unwrap().public(),
+                key.public()
+            );
+        }
+
+        entry.delete_credential().unwrap();
+        assert!(keyring.get_secret_key(user).unwrap().is_none());
+    }
 }
 
 impl Keyring {
@@ -117,25 +172,24 @@ impl Keyring {
     /// Retrieves a user's secret key from the default keyring store.
     ///
     /// Returns `Ok(None)` when no entry exists for [`KEYRING_SERVICE`] and
-    /// `user`. Temporary secret-byte buffers are zeroized after conversion.
+    /// `user`. Temporary secret-byte buffers are zeroized on success and error.
     ///
     /// # Errors
     ///
-    /// Returns an error if the keyring entry cannot be accessed or read.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the stored secret is not exactly 32 bytes long.
+    /// Returns an error if the keyring entry cannot be accessed or read, or
+    /// [`KeyringError::CorruptSecret`] if it is not exactly 32 bytes long.
     pub fn get_secret_key(&self, user: &str) -> Result<Option<SecretKey>, KeyringError> {
         match keyring_core::Entry::new(KEYRING_SERVICE, &user)?.get_secret() {
-            Ok(mut secret) => {
-                let secret_key = {
-                    let mut secret_bytes = Zeroizing::new([0u8; 32]);
-                    secret_bytes.copy_from_slice(&secret);
-                    secret.zeroize();
-                    SecretKey::from_bytes(&secret_bytes)
-                };
-                Ok(Some(secret_key))
+            Ok(secret) => {
+                let secret = Zeroizing::new(secret);
+                let secret_bytes: &[u8; 32] =
+                    secret
+                        .as_slice()
+                        .try_into()
+                        .map_err(|_| KeyringError::CorruptSecret {
+                            length: secret.len(),
+                        })?;
+                Ok(Some(SecretKey::from_bytes(secret_bytes)))
             },
             Err(keyring_core::Error::NoEntry) => Ok(None),
             Err(error) => Err(error.into()),
@@ -150,11 +204,8 @@ impl Keyring {
     /// # Errors
     ///
     /// Returns an error if retrieving the secret key or storing a new key pair
-    /// fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if an existing stored secret is not exactly 32 bytes long.
+    /// fails, including [`KeyringError::CorruptSecret`] for a stored secret
+    /// that is not exactly 32 bytes long.
     pub fn ensure_secret_key(&mut self, user: &str) -> Result<SecretKey, KeyringError> {
         match self.get_secret_key(user)? {
             Some(secret_key) => Ok(secret_key),

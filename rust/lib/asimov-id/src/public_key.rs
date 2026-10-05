@@ -96,12 +96,20 @@ impl From<[u8; 32]> for PublicKey {
     }
 }
 
-impl From<&Vec<u8>> for PublicKey {
-    fn from(input: &Vec<u8>) -> Self {
-        let mut bytes = [0u8; 32];
-        let len = bytes.len().min(input.len());
-        bytes[..len].copy_from_slice(&input[..len]);
-        Self(bytes)
+/// Requires exactly 32 bytes; curve validity is checked on conversion to Iroh.
+impl TryFrom<&[u8]> for PublicKey {
+    type Error = KeyError;
+
+    fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
+        Ok(Self(input.try_into().map_err(|_| KeyError::InvalidLength)?))
+    }
+}
+
+impl TryFrom<&Vec<u8>> for PublicKey {
+    type Error = KeyError;
+
+    fn try_from(input: &Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(input.as_slice())
     }
 }
 
@@ -120,9 +128,12 @@ impl From<iroh::PublicKey> for PublicKey {
 }
 
 #[cfg(feature = "iroh")]
-impl From<PublicKey> for iroh::PublicKey {
-    fn from(input: PublicKey) -> Self {
-        iroh::PublicKey::from_bytes(&input.into_bytes()).unwrap() // TODO
+/// Rejects bytes that do not represent a valid Ed25519 curve point.
+impl TryFrom<PublicKey> for iroh::PublicKey {
+    type Error = iroh::KeyParsingError;
+
+    fn try_from(input: PublicKey) -> Result<Self, Self::Error> {
+        iroh::PublicKey::from_bytes(&input.into_bytes())
     }
 }
 
@@ -134,10 +145,13 @@ impl From<iroh::EndpointAddr> for PublicKey {
 }
 
 #[cfg(feature = "iroh")]
-impl From<PublicKey> for iroh::EndpointAddr {
-    fn from(input: PublicKey) -> Self {
-        let endpoint_id = iroh::EndpointId::from(input);
-        iroh::EndpointAddr::from(endpoint_id)
+/// Validates the endpoint's public key before constructing its address.
+impl TryFrom<PublicKey> for iroh::EndpointAddr {
+    type Error = iroh::KeyParsingError;
+
+    fn try_from(input: PublicKey) -> Result<Self, Self::Error> {
+        let endpoint_id = iroh::EndpointId::try_from(input)?;
+        Ok(iroh::EndpointAddr::from(endpoint_id))
     }
 }
 
@@ -200,5 +214,43 @@ impl<'r> rocket::request::FromParam<'r> for PublicKey {
 impl turso::IntoValue for PublicKey {
     fn into_value(self) -> turso::Result<turso::Value> {
         Ok(turso::Value::Blob(self.0.to_vec()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn byte_conversions_require_exact_length() {
+        for length in [0, 1, 31, 33, 64] {
+            let bytes = alloc::vec![42; length];
+            assert_eq!(PublicKey::try_from(&bytes), Err(KeyError::InvalidLength));
+            assert_eq!(
+                PublicKey::try_from(bytes.as_slice()),
+                Err(KeyError::InvalidLength)
+            );
+        }
+
+        for bytes in [[0; 32], [255; 32], core::array::from_fn(|i| i as u8)] {
+            let expected = PublicKey::from(bytes);
+            assert_eq!(PublicKey::try_from(&bytes.to_vec()), Ok(expected));
+            assert_eq!(PublicKey::try_from(bytes.as_slice()), Ok(expected));
+            assert_eq!(expected.to_string().parse::<PublicKey>(), Ok(expected));
+        }
+    }
+
+    #[cfg(feature = "iroh")]
+    #[test]
+    fn iroh_conversions_validate_curve_points() {
+        let key = iroh::SecretKey::from_bytes(&[42; 32]).public();
+        let public_key = PublicKey::from(key);
+        assert_eq!(iroh::PublicKey::try_from(public_key).unwrap(), key);
+        assert_eq!(iroh::EndpointAddr::try_from(public_key).unwrap().id, key);
+
+        // This compressed Edwards encoding does not decompress to a point.
+        let invalid = PublicKey::from([2; 32]);
+        assert!(iroh::PublicKey::try_from(invalid).is_err());
+        assert!(iroh::EndpointAddr::try_from(invalid).is_err());
     }
 }
