@@ -79,7 +79,9 @@ valuand = { version = "0.1", default-features = false }
 edky = { version = "0.1.1", default-features = false }
 iroh = { version = "1.2", default-features = false }
 iroh-base = { version = "1.2", default-features = false }
-iroh-blobs = { version = "0.103", default-features = false }
+# Align with irpc/rpc enabled by iroh-services in protocol tests; without this,
+# iroh-blobs 0.103 omits the irpc::Error::Write match arm in workspace builds.
+iroh-blobs = { version = "0.103", default-features = false, features = ["rpc"] }
 iroh-gossip = { version = "0.101", default-features = false }
 iroh-metrics = { version = "1.0", default-features = false }
 iroh-services = { version = "1.0", default-features = false }

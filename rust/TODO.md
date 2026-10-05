@@ -77,12 +77,10 @@ reproductions and build results are distinguished from source-review findings.
   a hardcoded minimum of 128, and reject non-finite vector/score values. Test
   alternate dimensions, wrong lengths, score bounds, and NaN/infinity.
 
-- [ ] **Resolve the workspace-wide Iroh integration feature conflict.**
-  `cargo check --workspace --all-features --all-targets --locked` fails in
-  `iroh-blobs 0.103.0`: its match omits `irpc::Error::Write` with `irpc 0.17.0`.
-  The isolated `asimov-kb --all-features` library check passes, so retain a
-  whole-workspace integration check when selecting an upstream fix or compatible
-  dependency versions in `Cargo.toml`.
+- [ ] **Handle non-exhaustive mDNS service events in the server example.**
+  `lib/asimov-server/examples/mdns-client.rs:9` fails the workspace all-targets
+  check with `mdns-sd 0.20.3` because `ServiceEvent` is non-exhaustive. Handle
+  unknown events in the example (reproduced on 2026-10-05).
 
 - [ ] **Make the no-std contract hold on a target without std.**
   Host `--no-default-features` checks pass, but `asimov-core` fails for
@@ -108,9 +106,12 @@ reproductions and build results are distinguished from source-review findings.
   `../.github/workflows/ci.yaml` currently passes
   `build_whole_workspace: false`. Add explicit coverage for all members,
   independent default/no-default/std builds, and optional integrations,
-  including the failures above. Preserve the synchronized Rust 1.97.1 MSRV and
-  add Windows and applicable WebAssembly/no-std smoke checks; host feature
-  unification is insufficient to validate these contracts.
+  including the failures above. Retain
+  `cargo check --workspace --all-features --all-targets --locked` to catch
+  cross-crate feature conflicts, including KB Iroh support with protocol test
+  dependencies. Preserve the synchronized Rust 1.97.1 MSRV and add Windows and
+  applicable WebAssembly/no-std smoke checks; host feature unification is
+  insufficient to validate these contracts.
 
 ## P2: Modules, environment, and persistent state
 
@@ -437,8 +438,13 @@ limit disk use. Findings above remain open despite passing default tests.
   `cargo test -p asimov-patterns --all-features --locked` also passed.
 - Isolated all-features library checks passed for credit, id, kb, keyring,
   module-kit, server, and social; cloud and nexus failed in validator
-  derivation. The workspace all-features/all-targets check stopped at the Iroh
-  conflict.
+  derivation. On 2026-10-05, the workspace all-features/all-targets check with
+  `--keep-going` failed in Nexus validator derivation and the server mDNS
+  example. The combined integration check passed:
+
+  ```sh
+  cargo check -p asimov-kb -p asimov-protocol --all-features --all-targets --locked
+  ```
 - The genuine no-std check failed through `know`'s std features:
 
   ```sh
