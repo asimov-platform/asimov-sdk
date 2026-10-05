@@ -237,11 +237,6 @@ reproductions and build results are distinguished from source-review findings.
 
 ## P2: Protocols, execution, and service APIs
 
-- [ ] **Compare peer feature sets independently of storage representation.**
-  `NodeFeatureSet` derives equality across its borrowed/owned enum variants,
-  so serializing and deserializing `PeerHello::default()` changes equality.
-  Compare feature contents and test borrowed/owned hello round trips.
-
 - [ ] **Bound proxy connection, upload, and shutdown lifetimes.**
   `lib/asimov-proxy/src/openai.rs` needs upload deadlines and bounded concurrency;
   stalled response streams can indefinitely delay graceful shutdown. Add

@@ -37,11 +37,7 @@ async fn framing_round_trips_every_message_and_the_size_limit() {
     for message in [
         Message::Ping,
         Message::Bye,
-        Message::Hello(PeerHello {
-            required_features: crate::NodeFeatureSet::Owned(vec![]),
-            supported_features: crate::NodeFeatureSet::Owned(vec![]),
-            ..Default::default()
-        }),
+        Message::Hello(PeerHello::default()),
         Message::Blob(asimov_kb::BlobId::from([42; 32])),
         Message::List(vec!["x".repeat(MAX_MESSAGE_BODY_LEN - 4)]),
     ] {
