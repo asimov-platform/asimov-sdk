@@ -264,3 +264,56 @@ pub async fn test_migrate_legacy_version() {
             .is_file()
     );
 }
+
+#[tokio::test]
+async fn migration_preserves_dependencies_and_model_choice_order() {
+    let yaml = r#"
+name: sample
+version: '1.2.3'
+requires:
+  modules: [other]
+  platforms: [linux]
+  programs: [python3]
+  libraries: [libssl]
+  models:
+    hf:example/direct: model.bin
+    hf:example/choices:
+      small: small.bin
+      medium: medium.bin
+      large: large.bin
+  datasets: [dataset]
+  ontologies: [ontology]
+  classes: [class]
+  datatypes: [datatype]
+"#;
+    let expected: InstalledModuleManifest = serde_yaml_ng::from_str(yaml).unwrap();
+    assert_eq!(
+        expected.manifest.requires.models["hf:example/choices"],
+        asimov_module::RequiredModel::Choices(vec![
+            ("small".into(), "small.bin".into()),
+            ("medium".into(), "medium.bin".into()),
+            ("large".into(), "large.bin".into()),
+        ])
+    );
+
+    for extension in ["yaml", "yml"] {
+        let base_dir = tempdir().unwrap();
+        let registry = Registry::new(base_dir.path(), Default::default());
+        registry.create_file_tree().await.unwrap();
+        let sample = "sample".parse().unwrap();
+        let legacy = registry.install_dir().join(format!("sample.{extension}"));
+        tokio::fs::write(&legacy, yaml).await.unwrap();
+
+        let migrated = registry.read_manifest(&sample).await.unwrap();
+        assert_eq!(migrated.manifest, expected.manifest);
+        assert_eq!(migrated.version, expected.version);
+        assert!(!legacy.exists());
+
+        let json = tokio::fs::read(registry.module_dir(&sample).join("manifest.json"))
+            .await
+            .unwrap();
+        let installed: InstalledModuleManifest = serde_json::from_slice(&json).unwrap();
+        assert_eq!(installed.manifest, expected.manifest);
+        assert_eq!(installed.version, expected.version);
+    }
+}

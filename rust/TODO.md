@@ -19,10 +19,6 @@ reproductions and build results are distinguished from source-review findings.
   must also require the manifest's name to equal the requested `ModuleName`.
   Cover malformed manifests and symlinked binaries with local fixtures.
 
-- [ ] **Cover dependency preservation through installed-manifest migration.**
-  Add a registry migration fixture with every dependency field and ordered
-  model choices, checking the installed JSON against the source YAML.
-
 - [ ] **Align manifest readers with the installed directory layout.**
   `ModuleManifest::read_manifest` in
   `lib/asimov-module/src/models/module_manifest.rs` searches legacy flat files,
