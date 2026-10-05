@@ -386,7 +386,7 @@ reproductions and build results are distinguished from source-review findings.
   on multicast availability.
 
 - [ ] **Describe scaffold maturity and give integrations bounded next steps.**
-  The `src/lib.rs` files for platform, repository, runtime, token, universe, and
+  The `src/lib.rs` files for repository, runtime, token, universe, and
   vault contain only crate setup. Add concise crate-level status/scope docs before
   defining each first API. Ledger currently exposes a hidden ERC-20 binding,
   and credit's database integration features only enable dependencies; specify
