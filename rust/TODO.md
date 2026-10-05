@@ -304,13 +304,6 @@ reproductions and build results are distinguished from source-review findings.
   emits a bare error object; map server/client errors separately and use the
   expected error envelope. Add failure-path interoperability fixtures.
 
-- [ ] **Redact inbound credentials from server trace spans.**
-  `lib/asimov-server/src/http.rs` enables `include_headers(true)` for request
-  spans, including inbound authorization/cookie headers that are not necessarily
-  marked sensitive. Log an allowlist of diagnostic headers or mark/redact
-  sensitive fields before tracing. Assert that a captured trace omits supplied
-  bearer tokens and cookies.
-
 - [ ] **Make server persistence durable, configurable, and recoverable.**
   `lib/asimov-server/src/persistence.rs` writes beside the executable, truncates
   the live file, and does not explicitly flush its `BufWriter`. It suppresses

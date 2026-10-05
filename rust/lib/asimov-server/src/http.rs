@@ -34,7 +34,8 @@ pub fn routes() -> Router {
     #[cfg(feature = "tracing")]
     let router = router.layer(
         tower_http::trace::TraceLayer::new_for_http()
-            .make_span_with(tower_http::trace::DefaultMakeSpan::new().include_headers(true))
+            // Inbound headers can contain credentials even when not marked sensitive.
+            .make_span_with(tower_http::trace::DefaultMakeSpan::new().include_headers(false))
             .on_request(
                 |request: &http::Request<axum::body::Body>, _span: &tracing::Span| {
                     tracing::info!(
@@ -67,4 +68,67 @@ pub async fn start(addr: impl ToSocketAddrs, cancel: CancellationToken) -> std::
 
 async fn http_handler() -> Json<&'static str> {
     Json("Hello, world!") // TODO
+}
+
+#[cfg(all(test, feature = "tracing"))]
+mod tests {
+    use super::*;
+    use alloc::{string::String, sync::Arc};
+    use core::fmt::{Debug, Write as _};
+    use std::sync::Mutex;
+    use tracing::{
+        Subscriber,
+        field::{Field, Visit},
+        instrument::WithSubscriber,
+    };
+    use tracing_subscriber::{Layer, layer::Context, prelude::*};
+
+    #[derive(Clone, Default)]
+    struct Capture(Arc<Mutex<String>>);
+
+    impl Visit for Capture {
+        fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+            writeln!(self.0.lock().unwrap(), "{field}={value:?}").unwrap();
+        }
+    }
+
+    impl<S: Subscriber> Layer<S> for Capture {
+        fn on_new_span(
+            &self,
+            attrs: &tracing::span::Attributes<'_>,
+            _: &tracing::span::Id,
+            _: Context<'_, S>,
+        ) {
+            attrs.record(&mut self.clone());
+        }
+    }
+
+    #[tokio::test]
+    async fn request_spans_omit_unmarked_credentials() {
+        let capture = Capture::default();
+        let subscriber = tracing_subscriber::registry().with(capture.clone());
+        async {
+            let server = axum_test::TestServer::new(routes()).unwrap();
+            server
+                .post("/graphql")
+                .add_header(http::header::AUTHORIZATION, "Bearer private-test-token")
+                .add_header(http::header::COOKIE, "session=private-test-cookie")
+                .add_header("x-api-key", "private-test-api-key")
+                .await
+                .assert_status_ok();
+        }
+        .with_subscriber(subscriber)
+        .await;
+
+        let spans = capture.0.lock().unwrap();
+        assert!(spans.contains("POST"), "no request span captured: {spans}");
+        assert!(spans.contains("/graphql"));
+        for secret in [
+            "private-test-token",
+            "private-test-cookie",
+            "private-test-api-key",
+        ] {
+            assert!(!spans.contains(secret), "request span leaked a credential");
+        }
+    }
 }
