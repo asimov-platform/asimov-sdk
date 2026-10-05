@@ -49,6 +49,7 @@ std = [
     "asimov-core?/std",
     "asimov-credit?/std",
     "asimov-directory?/std",
+    "asimov-directory?/fs",
     "asimov-env?/std",
     "asimov-flow?/std",
     "asimov-id?/std",
@@ -116,6 +117,10 @@ asimov-telemetry = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio.workspace = true
+
+[[example]]
+name = "directory"
+required-features = ["directory", "std"]
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]

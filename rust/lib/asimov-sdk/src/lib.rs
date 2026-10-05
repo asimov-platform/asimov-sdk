@@ -18,6 +18,18 @@ pub use asimov_core as core;
 #[cfg(feature = "credit")]
 pub use asimov_credit as credit;
 
+/// State-directory traits, plus filesystem implementations with `std` enabled.
+///
+/// ```
+/// use asimov_sdk::directory::StateDirectory;
+///
+/// fn has_modules(directory: &impl StateDirectory) -> bool {
+///     directory.has_modules()
+/// }
+/// ```
+#[cfg(feature = "directory")]
+pub use asimov_directory as directory;
+
 #[cfg(feature = "env")]
 pub use asimov_env as env;
 

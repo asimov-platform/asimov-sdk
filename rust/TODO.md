@@ -107,11 +107,10 @@ reproductions and build results are distinguished from source-review findings.
   dependencies consistently to make each crate's build surface predictable.
 
 - [ ] **Complete and test SDK facade wiring.**
-  `lib/asimov-sdk/Cargo.toml` exposes `directory`, but `src/lib.rs` has no
-  corresponding re-export. The facade's `serde` flag reaches only core, and
-  selecting directory does not enable its filesystem API. Define the intended
-  facade-level integration bundles, wire their optional dependencies explicitly,
-  and compile consumer examples for each advertised feature independently.
+  The `serde` flag in `lib/asimov-sdk/Cargo.toml` reaches only core. Define the
+  intended facade-level integration bundles, wire optional dependencies
+  explicitly, and compile consumer examples for each advertised feature
+  independently.
 
 - [ ] **Exercise workspace members and optional integrations in CI.**
   `../.github/workflows/ci.yaml` currently passes
