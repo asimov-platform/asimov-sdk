@@ -385,13 +385,11 @@ reproductions and build results are distinguished from source-review findings.
   expose a managed daemon lifetime. Test advertisement data without depending
   on multicast availability.
 
-- [ ] **Describe scaffold maturity and give integrations bounded next steps.**
-  The `src/lib.rs` files for token, universe, and vault contain only crate
-  setup. Add concise crate-level status/scope documentation before
-  defining each first API. Ledger currently exposes a hidden ERC-20 binding,
-  and credit's database integration features only enable dependencies; specify
-  useful, testable integration contracts for those surfaces rather than implying
-  completed implementations.
+- [ ] **Implement the first ledger and credit database integration contracts.**
+  Follow the scope in each crate's `src/lib.rs`: ledger needs explicit provider
+  and contract selection, token-unit conversions, and local failed-call tests.
+  Credit database adapters need exact encodings, checked decoding errors, and
+  boundary round trips after the credit range/precision contract is fixed.
 
 - [ ] **Repair README generation dependencies and failure handling.**
   `Makefile` references the missing
