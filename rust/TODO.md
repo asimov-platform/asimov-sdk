@@ -406,10 +406,8 @@ reproductions and build results are distinguished from source-review findings.
   Generate accurate per-crate examples from metadata, use the actual Rust
   1.97.1 minimum, and refresh package tables/READMEs through their generators.
 
-- [ ] **Clear rustdoc warnings and document public failure contracts.**
-  `cargo doc --workspace --no-deps --locked` reports bare URL links in server
-  and ledger, plus telemetry's link to private `FLUSH_INTERVAL`.
-  Fix these at source and make warning-free docs a check. Prioritize missing
+- [ ] **Enforce warning-free rustdoc and document public failure contracts.**
+  Make warning-free documentation builds a CI check. Prioritize missing
   error, persistence, and feature-availability documentation on the public
   registry, installer, protocol, credit, and snapshot APIs.
 

@@ -35,8 +35,9 @@ pub struct Telemetry {
 }
 
 impl Telemetry {
-    /// Events are appended to a per-invocation log in `directory`, which stays locked while
-    /// the process lives. Logs of exited processes are sent at most every [`FLUSH_INTERVAL`].
+    /// Events are appended to a per-invocation log in `directory`, which stays
+    /// locked while the process lives. Logs of exited processes are sent at most
+    /// once every five minutes.
     pub fn new(client_key: &str, app_version: &str, directory: &Path) -> Option<Self> {
         if is_disabled(directory) {
             return None;

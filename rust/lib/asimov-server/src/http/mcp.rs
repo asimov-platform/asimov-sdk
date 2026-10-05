@@ -24,7 +24,7 @@ pub use server::*;
 mod tool;
 pub use tool::*;
 
-/// See: https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http
+/// See: <https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http>
 pub fn routes<P>() -> Router<P>
 where
     P: Provider + Clone + Send + Sync + 'static,

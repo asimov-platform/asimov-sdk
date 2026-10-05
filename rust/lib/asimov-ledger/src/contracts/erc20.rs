@@ -3,7 +3,7 @@
 use alloy::sol;
 
 sol! {
-    /// See: https://docs.openzeppelin.com/contracts/5.x/api/token/erc20
+    /// See: <https://docs.openzeppelin.com/contracts/5.x/api/token/erc20>
     #[derive(Debug, PartialEq)]
     #[sol(rpc)]
     interface Erc20 {
