@@ -1447,6 +1447,7 @@ dependencies = [
  "rdf-hash",
  "rdf-model",
  "serde",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tracing-subscriber",

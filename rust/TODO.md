@@ -262,11 +262,6 @@ reproductions and build results are distinguished from source-review findings.
   Use a bounded writer queue with explicit failure/backpressure behavior and
   shutdown flushing. Test slow/full sinks while preserving streaming.
 
-- [ ] **Preserve CSV peer-resolution source failures.**
-  In `lib/asimov-protocol/src/handle_resolvers/csv_handle_resolver.rs`, propagate
-  `read_record` errors rather than treating them as EOF. Test empty, malformed,
-  and duplicate result streams.
-
 - [ ] **Negotiate peer versions/features and bound connection lifecycle waits.**
   `lib/asimov-protocol/src/peer_accept.rs` echoes the remote hello instead of
   advertising local capabilities, and neither handshake validates compatible

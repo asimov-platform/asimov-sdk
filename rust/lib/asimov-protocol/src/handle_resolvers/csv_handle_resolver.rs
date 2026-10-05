@@ -54,7 +54,7 @@ impl CsvHandleResolver {
         async_stream::stream! {
             self.0.rewind().await?;
             let mut record = StringRecord::new();
-            while let Ok(true) = self.0.read_record(&mut record).await {
+            while self.0.read_record(&mut record).await.map_err(Error::other)? {
                 let Some(record_handle) = record.get(0) else {
                     continue; // skip invalid records
                 };
@@ -70,6 +70,68 @@ impl CsvHandleResolver {
                 yield Ok((handle, endpoint));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::{boxed::Box, format, vec::Vec};
+
+    async fn fixture(bytes: &[u8]) -> (tempfile::TempDir, CsvHandleResolver) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("peers.csv");
+        tokio::fs::write(&path, bytes).await.unwrap();
+        let resolver = CsvHandleResolver::open(path.to_str().unwrap())
+            .await
+            .unwrap();
+        (dir, resolver)
+    }
+
+    #[tokio::test]
+    async fn empty_csv_yields_no_records() {
+        let (_dir, mut resolver) = fixture(b"").await;
+        assert!(Box::pin(resolver.records()).next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn csv_errors_survive_record_and_handle_resolution() {
+        let peer: PeerId = crate::SecretKey::from_bytes(&[1; 32]).public().into();
+        for suffix in [b"example,extra,field\n".as_slice(), b"\xff,invalid\n"] {
+            let mut bytes = format!("example,{peer}\n").into_bytes();
+            bytes.extend_from_slice(suffix);
+            let (_dir, mut resolver) = fixture(&bytes).await;
+
+            let records: Vec<_> = Box::pin(resolver.records()).collect().await;
+            assert_eq!(records.len(), 2);
+            assert_eq!(records[0].as_ref().unwrap().1, peer);
+            let error = records[1].as_ref().unwrap_err();
+            assert!(error.get_ref().unwrap().is::<csv_async::Error>());
+
+            let handles: Vec<_> = Box::pin(resolver.handles()).collect().await;
+            assert_eq!(handles.len(), 2);
+            assert!(handles[1].is_err());
+
+            let handle: Handle = "example".parse().unwrap();
+            let peers: Vec<_> = Box::pin(resolver.resolve_handle(handle)).collect().await;
+            assert_eq!(peers.len(), 2);
+            assert_eq!(*peers[0].as_ref().unwrap(), peer);
+            assert!(peers[1].is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn duplicate_csv_records_are_deduplicated_during_resolution() {
+        let peer: PeerId = crate::SecretKey::from_bytes(&[1; 32]).public().into();
+        let bytes = format!("example,{peer}\nexample,{peer}\n");
+        let (_dir, mut resolver) = fixture(bytes.as_bytes()).await;
+        let handles: Vec<_> = Box::pin(resolver.handles()).collect().await;
+        assert_eq!(handles.len(), 1);
+        assert_eq!(handles[0].as_ref().unwrap().as_str(), "example");
+        let handle: Handle = "example".parse().unwrap();
+        let peers: Vec<_> = Box::pin(resolver.resolve_handle(handle)).collect().await;
+        assert_eq!(peers.len(), 1);
+        assert_eq!(*peers[0].as_ref().unwrap(), peer);
     }
 }
 
