@@ -18,6 +18,8 @@ pub enum Severity {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LintCode {
+    /// The module name cannot be installed as an ASIMOV module.
+    InvalidModuleName,
     /// No `.asimov/module.yaml` found.
     MissingManifest,
     /// `provides.programs` lists a program with no matching `[[bin]]`.
@@ -107,6 +109,15 @@ pub fn lint_module(options: LintOptions) -> Result<Vec<LintFinding>, LintError> 
     };
 
     if let Some(manifest) = &manifest {
+        if let Err(err) = super::validate_module_name(&manifest.name) {
+            findings.push(LintFinding {
+                severity: Severity::Error,
+                code: LintCode::InvalidModuleName,
+                message: format!("{err}"),
+                path: Some(manifest_path.clone()),
+            });
+        }
+
         for program in &manifest.provides.programs {
             if !cargo_toml.bin.iter().any(|bin| &bin.name == program) {
                 findings.push(LintFinding {

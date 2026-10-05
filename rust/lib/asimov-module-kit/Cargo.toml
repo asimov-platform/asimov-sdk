@@ -24,6 +24,7 @@ default = ["all", "std"]
 all = ["module", "tracing", "lint"]
 module = [
   "std",
+  "dep:asimov-core",
   "dep:anyhow",
   "dep:cargo-generate",
   "dep:git2",
@@ -32,7 +33,7 @@ module = [
   "dep:tempfile",
   "dep:toml_edit",
 ]
-std = ["thiserror/std", "tracing?/std"]
+std = ["asimov-core?/std", "thiserror/std", "tracing?/std"]
 unstable = []
 
 # Optional features:
@@ -52,6 +53,7 @@ thiserror.workspace = true
 
 # Optional dependencies:
 anyhow = { workspace = true, optional = true, features = ["std"] }
+asimov-core = { workspace = true, optional = true }
 asimov-module = { workspace = true, optional = true }
 cargo-generate = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true, features = ["vendored-libgit2"] }

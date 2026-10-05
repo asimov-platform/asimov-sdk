@@ -121,7 +121,9 @@ pub enum NewModuleError {
     #[error("module name must not be empty")]
     EmptyName,
 
-    #[error("module name `{0}` is not supported; use lowercase letters, digits, and hyphens")]
+    #[error(
+        "module name `{0}` is not supported; use at most 64 lowercase letters, digits, and hyphens, starting with a letter and ending without a hyphen"
+    )]
     InvalidName(String),
 
     #[error("target directory has no parent: {0}")]
@@ -372,22 +374,9 @@ fn validate_module_name(name: &str) -> Result<(), NewModuleError> {
         return Err(NewModuleError::EmptyName);
     }
 
-    if !name.as_bytes()[0].is_ascii_alphanumeric() {
-        return Err(NewModuleError::InvalidName(name.into()));
-    }
-
-    if name.ends_with('-') {
-        return Err(NewModuleError::InvalidName(name.into()));
-    }
-
-    let valid = name
-        .bytes()
-        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
-    if valid {
-        Ok(())
-    } else {
-        Err(NewModuleError::InvalidName(name.into()))
-    }
+    asimov_core::ModuleName::try_from(name)
+        .map(|_| ())
+        .map_err(|_| NewModuleError::InvalidName(name.into()))
 }
 
 fn validate_program_name(name: &str) -> Result<(), InvalidProgramName> {
@@ -445,6 +434,65 @@ mod tests {
     use super::*;
     use alloc::string::ToString;
     use tempfile::tempdir;
+
+    #[test]
+    fn creation_and_linting_share_module_name_boundaries() {
+        let workspace = tempdir().unwrap();
+        let target = workspace.path();
+        fs::write(target.join("Cargo.toml"), "[package]\nname = 'fixture'\n").unwrap();
+        fs::create_dir(target.join(".asimov")).unwrap();
+
+        for (name, valid) in [
+            ("x", true),
+            ("a1-b2", true),
+            (&"a".repeat(64), true),
+            (&"a".repeat(65), false),
+            ("", false),
+            ("0-leading-digit", false),
+            ("-sample", false),
+            ("sample-", false),
+            ("Sample", false),
+            ("sample_name", false),
+            ("sample name", false),
+            ("é", false),
+            ("../sample", false),
+        ] {
+            assert_eq!(asimov_core::ModuleName::try_from(name).is_ok(), valid);
+            let result = new_module(NewModuleOptions::new(target, name));
+            if valid {
+                // An existing target stops generation after name validation.
+                assert!(
+                    matches!(result, Err(NewModuleError::TargetExists(_))),
+                    "{name}"
+                );
+            } else {
+                assert!(
+                    matches!(
+                        result,
+                        Err(NewModuleError::EmptyName | NewModuleError::InvalidName(_))
+                    ),
+                    "{name}"
+                );
+            }
+
+            #[cfg(feature = "lint")]
+            {
+                fs::write(
+                    target.join(".asimov/module.yaml"),
+                    format!("name: '{name}'\n"),
+                )
+                .unwrap();
+                let findings = lint::lint_module(lint::LintOptions::new(target)).unwrap();
+                assert_eq!(
+                    findings
+                        .iter()
+                        .any(|finding| finding.code == lint::LintCode::InvalidModuleName),
+                    !valid,
+                    "{name}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn rejects_invalid_module_names() {

@@ -215,12 +215,6 @@ reproductions and build results are distinguished from source-review findings.
   without checking exit status. Retain/wait for the child and distinguish
   command failure from an empty inventory; test Ruby/system discovery too.
 
-- [ ] **Share module-name validation with the authoring toolkit.**
-  `validate_module_name` in `lib/asimov-module-kit/src/module.rs` accepts
-  digit-first names with no length bound, unlike `asimov_core::ModuleName`. Use
-  the validated name type so generated modules can be installed. Test the same
-  boundary cases in creation and linting, including the 64-character limit.
-
 - [ ] **Make multi-file authoring edits recoverable.**
   `lib/asimov-module-kit/src/module/program.rs::add_program` writes the source
   and Cargo manifest before updating `.asimov/module.yaml`; an error leaves a

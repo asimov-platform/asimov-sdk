@@ -1359,6 +1359,7 @@ name = "asimov-module-kit"
 version = "25.6.1"
 dependencies = [
  "anyhow",
+ "asimov-core",
  "asimov-module",
  "cargo-generate",
  "git2 0.21.0",
