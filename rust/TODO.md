@@ -265,12 +265,17 @@ reproductions and build results are distinguished from source-review findings.
   incompatible versions, missing required features, and a silent peer.
 
 - [ ] **Return explicit unsupported responses for unfinished HTTP endpoints.**
-  `lib/asimov-server/src/http/openai_v1/responses.rs` mounts handlers that call
-  `todo!`; audio/image/embedding/chat/model handlers return dummy success data.
+  Audio/image/embedding/chat/model handlers under
+  `lib/asimov-server/src/http/openai_v1/` return dummy success data.
   GraphQL, SPARQL, and well-known handlers also contain placeholders.
   Implement an endpoint or return a protocol-appropriate unsupported/not-found
   error. Add router-level tests that exercise every mounted route and reject
   successful-looking fabricated results.
+
+- [ ] **Make HTTP metrics router construction repeatable.**
+  Constructing `http::routes()` twice in one process panics because the
+  Prometheus router installs a global recorder each time (reproduced in tests).
+  Separate recorder initialization from routing and test multiple routers.
 
 - [ ] **Forward supported completion options and implement actual streaming.**
   Chat/completion handlers under `lib/asimov-server/src/http/openai_v1/` echo
