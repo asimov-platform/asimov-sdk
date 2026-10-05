@@ -102,12 +102,10 @@ reproductions and build results are distinguished from source-review findings.
   check alongside host checks.
 
 - [ ] **Normalize default bundles and optional feature forwarding.**
-  In `lib/asimov-social/Cargo.toml`, move `client` and `serde` defaults into
-  `all` so `default = ["all", "std"]` follows workspace policy. Use weak std
-  forwarding for optional dependencies such as KB's `uuid` and snapshot's
-  `hex`. Replace explicitly re-enabled dependency defaults in runner, installer,
-  snapshot, and server with required features, and inherit shared dependencies
-  consistently to make each crate's build surface predictable.
+  Use weak std forwarding for optional dependencies such as KB's `uuid` and
+  snapshot's `hex`. Replace explicitly re-enabled dependency defaults in runner,
+  installer, snapshot, and server with required features, and inherit shared
+  dependencies consistently to make each crate's build surface predictable.
 
 - [ ] **Complete and test SDK facade wiring.**
   `lib/asimov-sdk/Cargo.toml` exposes `directory`, but `src/lib.rs` has no

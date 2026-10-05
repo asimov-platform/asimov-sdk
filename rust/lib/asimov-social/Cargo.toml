@@ -20,12 +20,12 @@ publish.workspace = true
 title = "ASIMOV.rs: Social Media"
 
 [features]
-default = ["all", "std", "client", "serde"]
+default = ["all", "std"]
 std = ["asimov-core/std"]
 unstable = []
 
 # Features:
-all = ["bluesky", "discord", "facebook", "github", "gitlab", "gravatar", "instagram", "introco", "linkedin", "localai", "luma", "medium", "pinterest", "reddit", "snapchat", "substack", "telegram", "threads", "tiktok", "twitch", "whatsapp", "x", "youtube"]
+all = ["client", "serde", "bluesky", "discord", "facebook", "github", "gitlab", "gravatar", "instagram", "introco", "linkedin", "localai", "luma", "medium", "pinterest", "reddit", "snapchat", "substack", "telegram", "threads", "tiktok", "twitch", "whatsapp", "x", "youtube"]
 bluesky = []
 discord = []
 facebook = ["dep:known-types-facebook"]
