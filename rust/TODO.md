@@ -101,10 +101,9 @@ reproductions and build results are distinguished from source-review findings.
   dependencies, modules, and re-exports together. Add a genuine no-std target
   check alongside host checks.
 
-- [ ] **Normalize default bundles and optional feature forwarding.**
-  Use weak std forwarding for snapshot's optional `hex` dependency.
-  Replace explicitly re-enabled dependency defaults in runner,
-  installer, snapshot, and server with required features, and inherit shared
+- [ ] **Normalize dependency defaults and shared dependency inheritance.**
+  Replace explicitly re-enabled dependency defaults in runner, installer,
+  snapshot, and server with required features, and inherit shared
   dependencies consistently to make each crate's build surface predictable.
 
 - [ ] **Complete and test SDK facade wiring.**

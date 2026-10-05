@@ -22,7 +22,7 @@ title = "ASIMOV.rs: Snapshot Management"
 [features]
 default = ["all", "std"]
 all = ["tracing", "storage-fs"]
-std = ["asimov-core/std", "hex/std", "jiff/std", "tracing/std"]
+std = ["asimov-core/std", "hex?/std", "jiff/std", "tracing/std"]
 storage-fs = ["dep:cap-std", "dep:cap-tempfile", "dep:hex", "dep:sha2", "std"]
 tracing = []
 unstable = []
