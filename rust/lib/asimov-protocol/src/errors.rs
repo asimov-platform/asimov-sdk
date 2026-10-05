@@ -155,6 +155,9 @@ impl From<TerminateError> for SysexitsError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum SendError {
+    #[error("serialized message exceeds the {limit}-byte body limit")]
+    MessageTooLarge { limit: usize },
+
     #[error(transparent)]
     Serialize(#[from] postcard::Error),
 
@@ -171,6 +174,12 @@ impl From<SendError> for SysexitsError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum RecvError {
+    #[error("message body length {length} exceeds the {limit}-byte limit")]
+    MessageTooLarge {
+        length: crate::MessageLen,
+        limit: usize,
+    },
+
     #[error(transparent)]
     Transport(#[from] iroh::endpoint::ReadExactError),
 

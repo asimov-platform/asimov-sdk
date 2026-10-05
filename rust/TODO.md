@@ -52,12 +52,10 @@ reproductions and build results are distinguished from source-review findings.
   values and exact serialization round trips.
 
 - [ ] **Return protocol errors for peer-controlled input instead of panicking.**
-  `lib/asimov-protocol/src/message_recv.rs` asserts the received length is at
-  most 1024; a length of 1025 panics (reproduced). `peer_connection.rs` asserts
-  the ping response, and `peer_protocol.rs` has an `unimplemented!` message arm.
-  Introduce typed length/state/unsupported-message errors and a shared framing
-  limit for send/receive. Test oversized, truncated, malformed, and unexpected
-  messages using in-memory transports.
+  `lib/asimov-protocol/src/peer_connection.rs` asserts the ping response, and
+  `peer_protocol.rs` has an `unimplemented!` message arm. Introduce typed
+  state/unsupported-message errors and test unexpected messages using
+  in-memory transports.
 
 - [ ] **Preserve snapshot identity and subsecond timestamps.**
   `lib/asimov-snapshot/src/storage/fs.rs` stores timestamps only to seconds.
@@ -244,6 +242,11 @@ reproductions and build results are distinguished from source-review findings.
   during a slow download, storage operation, or tool callback.
 
 ## P2: Protocols, execution, and service APIs
+
+- [ ] **Compare peer feature sets independently of storage representation.**
+  `NodeFeatureSet` derives equality across its borrowed/owned enum variants,
+  so serializing and deserializing `PeerHello::default()` changes equality.
+  Compare feature contents and test borrowed/owned hello round trips.
 
 - [ ] **Bound proxy connection, upload, and shutdown lifetimes.**
   `lib/asimov-proxy/src/openai.rs` needs upload deadlines and bounded concurrency;

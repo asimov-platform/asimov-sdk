@@ -1,26 +1,26 @@
 // This is free and unencumbered software released into the public domain.
 
-use crate::{Message, RecvError};
-use heapless::Vec;
+use crate::{MAX_MESSAGE_BODY_LEN, MESSAGE_HEADER_LEN, Message, MessageLen, RecvError};
 
 pub trait MessageRecv {
     fn recv(&mut self) -> impl Future<Output = Result<Message, RecvError>> {
         async {
-            type Len = u32;
-            const HEAD_LEN: usize = size_of::<Len>();
-
-            let mut head_buffer = [0u8; HEAD_LEN];
+            let mut head_buffer = [0u8; MESSAGE_HEADER_LEN];
             self.read_exact(&mut head_buffer).await?;
 
-            let body_len = u32::from_be_bytes(head_buffer) as usize;
+            let body_len = MessageLen::from_be_bytes(head_buffer);
+            if body_len > MAX_MESSAGE_BODY_LEN as MessageLen {
+                return Err(RecvError::MessageTooLarge {
+                    length: body_len,
+                    limit: MAX_MESSAGE_BODY_LEN,
+                });
+            }
 
-            let mut buffer: Vec<u8, 1024> = Vec::new();
-            assert!(body_len <= buffer.capacity());
-            buffer.resize(body_len, 0)?;
+            let mut buffer = [0u8; MAX_MESSAGE_BODY_LEN];
+            let body = &mut buffer[..body_len as usize];
+            self.read_exact(body).await?;
 
-            self.read_exact(buffer.as_mut_slice()).await?;
-
-            let response: Message = postcard::from_bytes(buffer.as_slice())?;
+            let response: Message = postcard::from_bytes(body)?;
 
             Ok(response)
         }

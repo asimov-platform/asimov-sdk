@@ -7,6 +7,9 @@
 
 extern crate alloc;
 
+#[cfg(test)]
+mod test_transport;
+
 #[cfg(feature = "std")]
 extern crate std;
 
