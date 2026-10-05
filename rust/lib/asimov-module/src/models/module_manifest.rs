@@ -288,7 +288,15 @@ pub struct Requires {
 
 impl Requires {
     pub fn is_empty(&self) -> bool {
-        self.modules.is_empty() && self.models.is_empty()
+        self.modules.is_empty()
+            && self.platforms.is_empty()
+            && self.programs.is_empty()
+            && self.libraries.is_empty()
+            && self.models.is_empty()
+            && self.datasets.is_empty()
+            && self.ontologies.is_empty()
+            && self.classes.is_empty()
+            && self.datatypes.is_empty()
     }
 }
 
@@ -520,6 +528,31 @@ mod ordered {
 mod tests {
     use super::*;
     use alloc::vec;
+
+    #[test]
+    fn dependency_fields_round_trip_independently() {
+        for field in [
+            "modules",
+            "platforms",
+            "programs",
+            "libraries",
+            "datasets",
+            "ontologies",
+            "classes",
+            "datatypes",
+        ] {
+            let json = serde_json::json!({"name": "example", "requires": {field: ["dependency"]}});
+            let manifest: ModuleManifest = serde_json::from_value(json.clone()).unwrap();
+            assert!(!manifest.requires.is_empty(), "{field}");
+            assert_eq!(serde_json::to_value(&manifest).unwrap(), json);
+            let yaml = serde_yaml_ng::to_string(&manifest).unwrap();
+            assert_eq!(
+                serde_yaml_ng::from_str::<ModuleManifest>(&yaml).unwrap(),
+                manifest
+            );
+        }
+        assert!(Requires::default().is_empty());
+    }
 
     #[test]
     fn test_deser() {

@@ -20,11 +20,10 @@ reproductions and build results are distinguished from source-review findings.
   Cover malformed manifests and symlinked binaries with local fixtures.
 
 - [ ] **Make manifest serialization lossless and round-trippable.**
-  In `lib/asimov-module/src/models/module_manifest.rs`, `Requires::is_empty`
-  checks only modules/models, so a manifest requiring only `python3` serializes
-  without `requires` (reproduced). `RequiredModel::Choices` serializes as
+  In `lib/asimov-module/src/models/module_manifest.rs`, `RequiredModel::Choices`
+  serializes as
   an array of pairs but deserializes only from a map (reproduced). Preserve
-  every dependency field and ordered model choices through YAML, JSON, and
+  ordered model choices through YAML, JSON, and
   installed-manifest migration; test serialization and deserialization.
 
 - [ ] **Align manifest readers with the installed directory layout.**
