@@ -13,29 +13,28 @@ pub trait ResolveHandle {
     /// Resolves an ASIMOV ID and yields a random known peer ID.
     /// Ignores any erroneous results, sampling from only successful results.
     ///
-    /// The default implementation requires the `random` feature.
+    /// Returns `None` if no successful results are available.
+    /// Available only with the `random` feature.
+    #[cfg(feature = "random")]
     fn resolve_random(
         &mut self,
         id: impl Into<Id>,
     ) -> impl Future<Output = Result<Option<PeerId>, Self::Error>> {
-        #[cfg(not(feature = "random"))]
-        {
-            unimplemented!("resolve_random requires the `random` feature");
-            return async { Ok(None) };
-        }
-
-        #[cfg(feature = "random")]
         async move {
             let mut stream = Box::pin(self.resolve_all(id));
-            let mut results = alloc::vec::Vec::new();
+            let mut selected = None;
+            let mut count = 0;
             while let Some(result) = stream.next().await {
                 let Ok(result) = result else {
                     continue; // ignore errors silently
                 };
-                results.push(result);
+                count += 1;
+                // Reservoir sampling retains one peer regardless of stream size.
+                if fastrand::usize(..count) == 0 {
+                    selected = Some(result);
+                }
             }
-            let index = fastrand::usize(..results.len());
-            Ok(results.get(index).copied())
+            Ok(selected)
         }
     }
 
@@ -78,5 +77,53 @@ pub trait ResolveHandle {
         _handle: impl Into<Handle>,
     ) -> impl Stream<Item = Result<PeerId, Self::Error>> + Send {
         Box::pin(stream::empty())
+    }
+}
+
+#[cfg(all(test, feature = "random"))]
+mod tests {
+    use super::*;
+    use alloc::{vec, vec::Vec};
+
+    struct Fixture(Vec<Result<PeerId, ()>>);
+
+    impl ResolveHandle for Fixture {
+        type Error = ();
+
+        fn resolve_handle(
+            &mut self,
+            _: impl Into<Handle>,
+        ) -> impl Stream<Item = Result<PeerId, Self::Error>> + Send {
+            stream::iter(core::mem::take(&mut self.0))
+        }
+    }
+
+    #[tokio::test]
+    async fn random_resolution_handles_empty_and_error_only_streams() {
+        for results in [vec![], vec![Err(()), Err(())]] {
+            let handle = Id::Handle("example".parse().unwrap());
+            assert_eq!(Fixture(results).resolve_random(handle).await.unwrap(), None);
+        }
+    }
+
+    #[tokio::test]
+    async fn random_resolution_selects_only_successful_peers() {
+        let first: PeerId = crate::SecretKey::from_bytes(&[1; 32]).public().into();
+        let second: PeerId = crate::SecretKey::from_bytes(&[2; 32]).public().into();
+        let handle = Id::Handle("example".parse().unwrap());
+        assert_eq!(
+            Fixture(vec![Err(()), Ok(first), Err(())])
+                .resolve_random(handle.clone())
+                .await
+                .unwrap(),
+            Some(first)
+        );
+        for _ in 0..16 {
+            let selected = Fixture(vec![Err(()), Ok(first), Ok(first), Ok(second)])
+                .resolve_random(handle.clone())
+                .await
+                .unwrap();
+            assert!(selected == Some(first) || selected == Some(second));
+        }
     }
 }

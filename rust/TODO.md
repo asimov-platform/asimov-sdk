@@ -262,13 +262,10 @@ reproductions and build results are distinguished from source-review findings.
   Use a bounded writer queue with explicit failure/backpressure behavior and
   shutdown flushing. Test slow/full sinks while preserving streaming.
 
-- [ ] **Handle empty peer resolution and preserve source failures.**
-  `lib/asimov-protocol/src/resolve_handle.rs::resolve_random` samples `0..0`
-  for no matches (panic reproduced); without `random` its public method always
-  panics. Return `None` for an empty result and gate unsupported functionality.
-  In `handle_resolvers/csv_handle_resolver.rs`, propagate `read_record` errors
-  rather than treating them as EOF. Test empty, error-only, malformed, and
-  duplicate result streams; reservoir sampling can avoid collecting every peer.
+- [ ] **Preserve CSV peer-resolution source failures.**
+  In `lib/asimov-protocol/src/handle_resolvers/csv_handle_resolver.rs`, propagate
+  `read_record` errors rather than treating them as EOF. Test empty, malformed,
+  and duplicate result streams.
 
 - [ ] **Negotiate peer versions/features and bound connection lifecycle waits.**
   `lib/asimov-protocol/src/peer_accept.rs` echoes the remote hello instead of
