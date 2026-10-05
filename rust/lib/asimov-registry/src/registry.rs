@@ -445,6 +445,7 @@ impl Registry {
         for file in &files {
             let path = self.install_dir.join(file);
             if tokio::fs::try_exists(&path).await.unwrap_or(false) {
+                #[cfg(feature = "tracing")]
                 tracing::debug!(?path, "found a legacy manifest file, migrating...");
 
                 self.move_legacy_manifest(module_name, &path).await;
@@ -457,14 +458,16 @@ impl Registry {
         let dst = module_dir.join(MANIFEST_FILE_NAME);
 
         if tokio::fs::try_exists(&dst).await.unwrap_or(false) {
+            #[cfg(feature = "tracing")]
             tracing::debug!(
                 legacy = ?path,
                 current = ?dst,
                 "module has both a legacy and a current manifest, removing the legacy one"
             );
 
-            if let Err(err) = tokio::fs::remove_file(path).await {
-                tracing::warn!(?path, ?err, "failed to remove the legacy manifest file");
+            if let Err(_err) = tokio::fs::remove_file(path).await {
+                #[cfg(feature = "tracing")]
+                tracing::warn!(?path, err = ?_err, "failed to remove the legacy manifest file");
             }
 
             return;
@@ -488,11 +491,12 @@ impl Registry {
         }
         .await;
 
-        if let Err(err) = result {
+        if let Err(_err) = result {
+            #[cfg(feature = "tracing")]
             tracing::debug!(
                 from = ?path,
                 to = ?dst,
-                ?err,
+                err = ?_err,
                 "tried to move module manifest from legacy path but failed"
             );
             return;
