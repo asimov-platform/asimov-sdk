@@ -115,10 +115,27 @@ impl Resolver {
         modules.into_iter().collect()
     }
 
+    /// Register a manifest, leaving all indexes unchanged on validation errors.
     pub fn insert_manifest(
         &mut self,
         manifest: &ModuleManifest,
     ) -> Result<(), InsertManifestError> {
+        // Validate every fallible input before registering any handlers.
+        for url in manifest
+            .handles
+            .url_prefixes
+            .iter()
+            .chain(&manifest.handles.url_patterns)
+        {
+            split_url(url)?;
+        }
+        let content_types = manifest
+            .handles
+            .content_types
+            .iter()
+            .map(|value| value.parse::<mime::Mime>())
+            .collect::<Result<Vec<_>, _>>()?;
+
         for protocol in &manifest.handles.url_protocols {
             self.insert_protocol(&manifest.name, protocol).ok();
         }
@@ -132,8 +149,7 @@ impl Resolver {
             self.insert_file_extension(&manifest.name, file_extension)
                 .ok();
         }
-        for content_type in &manifest.handles.content_types {
-            let content_type = content_type.parse()?;
+        for content_type in content_types {
             self.insert_content_type(&manifest.name, content_type).ok();
         }
         Ok(())
@@ -442,6 +458,39 @@ mod test {
 
     extern crate std;
     use std::{eprintln, vec};
+
+    #[test]
+    fn invalid_manifests_leave_every_index_unchanged() {
+        let mut resolver = Resolver::new();
+        resolver.insert_prefix("existing", "file:///kept").unwrap();
+        resolver
+            .insert_content_type("existing", mime::TEXT_PLAIN)
+            .unwrap();
+        let before = alloc::format!("{resolver:?}");
+
+        for invalid_field in ["prefix", "pattern", "mime"] {
+            let mut manifest = ModuleManifest {
+                name: "rejected".into(),
+                handles: crate::Handles {
+                    url_protocols: vec!["file".into()],
+                    url_prefixes: vec!["file:///new".into()],
+                    url_patterns: vec!["file:///new/:name".into()],
+                    file_extensions: vec!["txt".into()],
+                    content_types: vec!["text/plain".into()],
+                },
+                ..Default::default()
+            };
+            match invalid_field {
+                "prefix" => manifest.handles.url_prefixes.push("".into()),
+                "pattern" => manifest.handles.url_patterns.push("http://[".into()),
+                _ => manifest.handles.content_types.push("invalid".into()),
+            }
+            assert!(resolver.insert_manifest(&manifest).is_err());
+            assert_eq!(alloc::format!("{resolver:?}"), before, "{invalid_field}");
+            assert!(resolver.resolve("file:///new/file.txt").unwrap().is_empty());
+            assert_eq!(resolver.resolve_content_type(&mime::TEXT_PLAIN).len(), 1);
+        }
+    }
 
     #[test]
     fn file_suffixes_prefer_the_longest_match() {

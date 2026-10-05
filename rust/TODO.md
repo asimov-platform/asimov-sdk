@@ -230,11 +230,6 @@ reproductions and build results are distinguished from source-review findings.
   without checking exit status. Retain/wait for the child and distinguish
   command failure from an empty inventory; test Ruby/system discovery too.
 
-- [ ] **Make resolver manifest insertion transactional.**
-  In `lib/asimov-module/src/resolve.rs`, validate a manifest before mutating
-  indexes so a later invalid pattern/MIME does not leave partial registration.
-  Add failed-insertion regressions.
-
 - [ ] **Share module-name validation with the authoring toolkit.**
   `validate_module_name` in `lib/asimov-module-kit/src/module.rs` accepts
   digit-first names with no length bound, unlike `asimov_core::ModuleName`. Use
