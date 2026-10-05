@@ -16,5 +16,8 @@ mod keyring;
 #[cfg(feature = "std")]
 pub use keyring::*;
 
+#[cfg(feature = "std")]
+mod store;
+
 mod keyring_error;
 pub use keyring_error::*;

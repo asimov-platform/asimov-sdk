@@ -139,13 +139,6 @@ reproductions and build results are distinguished from source-review findings.
   before reads/writes and test absolute paths, parent traversal, platform
   separators, and symlink escape behavior.
 
-- [ ] **Give keyring handles a coordinated store lifetime.**
-  `lib/asimov-keyring/src/keyring.rs::open` replaces the process-global default
-  store, and `close` unsets it for every handle. Introduce explicit backend
-  ownership/injection and a shared lifetime guard; coordinate same-user key
-  mutations and test overlapping handles, concurrent access, and cleanup after
-  errors without touching the operating system's real keyring.
-
 - [ ] **Honor optional configuration variables when reading a profile.**
   `read_variables` in `lib/asimov-module/src/models/module_manifest.rs` calls
   `variable` for every declaration, including optional variables with no value,

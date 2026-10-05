@@ -8,10 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Added
 - asimov-proxy: Streaming OpenRouter proxy with HTTP(S)/SOCKS5 upstream support
+- asimov-keyring: Add `with_store` for explicit backend and cache-directory use
 ### Changed
+- asimov-keyring: Make `close` consume only its handle; release stores on drop
 - asimov-id, asimov-kb: Require `TryFrom` for variable-length byte inputs and
   conversions from ASIMOV public keys to Iroh keys and endpoint addresses
 ### Fixed
+- asimov-keyring: Share backend lifetimes and serialize same-user operations
+  without changing the process-default keyring store
 - asimov-keyring: Preserve existing identities when repairing public-key caches
   and restore prior secrets after failed rekey publication
 - asimov-keyring: Report corrupt secret lengths without panicking and zeroize

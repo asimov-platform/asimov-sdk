@@ -13,6 +13,11 @@ pub enum KeyringError {
     #[error("user not found")]
     UserNotFound,
 
+    /// A panic poisoned an in-process keyring coordination lock.
+    #[cfg(feature = "std")]
+    #[error("keyring coordination lock poisoned")]
+    LockPoisoned,
+
     /// A stored secret has an invalid length; its contents are never included.
     #[error("corrupt secret key: expected 32 bytes, got {length}")]
     CorruptSecret {
