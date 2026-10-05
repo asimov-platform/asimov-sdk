@@ -82,12 +82,9 @@ reproductions and build results are distinguished from source-review findings.
 ## P2: Build, feature, and facade correctness
 
 - [ ] **Repair independently enabled features that require tracing.**
-  Reproduced failures: `asimov-installer` with
-  `--no-default-features --features std`, and `asimov-module-kit` with
-  `--no-default-features --features module` or `lint`. Ungated `tracing` calls
-  occur in installer `src/installer/github.rs` and module-kit `src/module.rs`.
-  Gate calls/attributes consistently or use the
-  existing no-op tracing facade; add isolated checks for these combinations.
+  `asimov-module-kit` fails with `--no-default-features --features module` or
+  `lint`. Gate the `tracing` calls in `src/module.rs` consistently or use the
+  existing no-op tracing facade; check these combinations independently.
 
 - [ ] **Repair the Nexus validator integration and dimensional contract.**
   `lib/asimov-nexus/src/search_request.rs` fails to compile with `validator`:

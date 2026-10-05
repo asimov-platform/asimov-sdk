@@ -17,7 +17,7 @@ pub struct GitHubRelease {
     pub name: String,
 }
 
-#[tracing::instrument(skip_all)]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 pub async fn fetch_latest_release(
     client: &reqwest::Client,
     module_name: impl AsRef<str>,
@@ -31,23 +31,25 @@ pub async fn fetch_latest_release(
             module_name.as_ref()
         );
 
-        let response = client
-            .get(url)
-            .send()
-            .await
-            .inspect_err(|err| tracing::debug!(?err))?;
+        let response = client.get(url).send().await.inspect_err(|_err| {
+            #[cfg(feature = "tracing")]
+            tracing::debug!(err = ?_err);
+        })?;
 
         if !response.status().is_success() {
             Err(HttpError::NotSuccess(response.status()))?;
         }
 
-        let content = response
-            .text()
-            .await
-            .inspect_err(|err| tracing::debug!(?err))?;
+        let content = response.text().await.inspect_err(|_err| {
+            #[cfg(feature = "tracing")]
+            tracing::debug!(err = ?_err);
+        })?;
 
         serde_json::from_str::<GitHubRelease>(&content)
-            .inspect_err(|err| tracing::debug!(?err, ?content))
+            .inspect_err(|_err| {
+                #[cfg(feature = "tracing")]
+                tracing::debug!(err = ?_err, ?content);
+            })
             .map_err(|e| FetchError::Deserialize(e.into()))
             .map(|release| release.name)
     }
@@ -61,17 +63,17 @@ pub async fn fetch_latest_release(
             module_name.as_ref()
         );
 
-        let response = client
-            .head(&url)
-            .send()
-            .await
-            .inspect_err(|err| tracing::debug!(?err))?;
+        let response = client.head(&url).send().await.inspect_err(|_err| {
+            #[cfg(feature = "tracing")]
+            tracing::debug!(err = ?_err);
+        })?;
 
         let final_url = response.url().as_str();
         if final_url == url {
             // fallback to trying through the API
             return by_api(client, &module_name).await;
         }
+        #[cfg(feature = "tracing")]
         tracing::debug!("got redirected to: {final_url}");
 
         let mut parts = final_url.split('/');
@@ -82,7 +84,7 @@ pub async fn fetch_latest_release(
     by_redirect(client, &module_name).await
 }
 
-#[tracing::instrument(skip_all)]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 pub async fn fetch_module_manifest(
     client: &reqwest::Client,
     module_name: &str,
@@ -92,27 +94,29 @@ pub async fn fetch_module_manifest(
         "https://raw.githubusercontent.com/asimov-modules/asimov-{module_name}-module/{version}/.asimov/module.yaml",
     );
 
-    let response = client
-        .get(&url)
-        .send()
-        .await
-        .inspect_err(|err| tracing::debug!(?err))?;
+    let response = client.get(&url).send().await.inspect_err(|_err| {
+        #[cfg(feature = "tracing")]
+        tracing::debug!(err = ?_err);
+    })?;
 
     if !response.status().is_success() {
         Err(HttpError::NotSuccess(response.status()))?;
     }
 
-    let content = response
-        .text()
-        .await
-        .inspect_err(|err| tracing::debug!(?err))?;
+    let content = response.text().await.inspect_err(|_err| {
+        #[cfg(feature = "tracing")]
+        tracing::debug!(err = ?_err);
+    })?;
 
     serde_yaml_ng::from_str(&content)
-        .inspect_err(|err| tracing::debug!(?err, ?content))
+        .inspect_err(|_err| {
+            #[cfg(feature = "tracing")]
+            tracing::debug!(err = ?_err, ?content);
+        })
         .map_err(|e| FetchError::Deserialize(e.into()))
 }
 
-#[tracing::instrument(skip_all)]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 pub async fn fetch_readme(
     client: &reqwest::Client,
     module_name: &str,
@@ -124,12 +128,14 @@ pub async fn fetch_readme(
             "https://raw.githubusercontent.com/asimov-modules/asimov-{module_name}-module/{revision}/README.md",
         );
 
+        #[cfg(feature = "tracing")]
         tracing::debug!("trying README URL {url}...");
 
         let response = match client.get(&url).send().await {
             Ok(response) => response,
-            Err(err) => {
-                tracing::debug!(?err);
+            Err(_err) => {
+                #[cfg(feature = "tracing")]
+                tracing::debug!(err = ?_err);
                 continue;
             },
         };
@@ -140,25 +146,27 @@ pub async fn fetch_readme(
 
         match response.text().await {
             Ok(content) => return Some(content),
-            Err(err) => tracing::debug!(?err),
+            Err(_err) => {
+                #[cfg(feature = "tracing")]
+                tracing::debug!(err = ?_err);
+            },
         }
     }
 
     None
 }
 
-#[tracing::instrument(skip_all)]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 pub async fn fetch_checksum(
     client: &reqwest::Client,
     asset_url: &str,
 ) -> Result<Option<String>, FetchChecksumError> {
     let checksum_url = format!("{asset_url}.sha256");
 
-    let response = client
-        .get(&checksum_url)
-        .send()
-        .await
-        .inspect_err(|err| tracing::debug!(?err))?;
+    let response = client.get(&checksum_url).send().await.inspect_err(|_err| {
+        #[cfg(feature = "tracing")]
+        tracing::debug!(err = ?_err);
+    })?;
 
     if response.status() == 404 {
         return Ok(None);
@@ -172,7 +180,10 @@ pub async fn fetch_checksum(
         response
             .text()
             .await
-            .inspect_err(|err| tracing::debug!(?err))?
+            .inspect_err(|_err| {
+                #[cfg(feature = "tracing")]
+                tracing::debug!(err = ?_err);
+            })?
             .trim()
             .to_string(),
     ))
@@ -216,7 +227,7 @@ pub async fn verify_checksum(
     Ok(())
 }
 
-#[tracing::instrument(skip_all)]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 pub async fn download_matching_asset(
     client: &reqwest::Client,
     module_name: &str,
@@ -261,13 +272,13 @@ pub async fn download_matching_asset(
             "https://github.com/asimov-modules/asimov-{module_name}-module/releases/download/{version}/{filename}"
         );
 
+        #[cfg(feature = "tracing")]
         tracing::debug!("trying asset URL {url}...");
 
-        let mut response = client
-            .get(&url)
-            .send()
-            .await
-            .inspect_err(|err| tracing::debug!(?err))?;
+        let mut response = client.get(&url).send().await.inspect_err(|_err| {
+            #[cfg(feature = "tracing")]
+            tracing::debug!(err = ?_err);
+        })?;
 
         if response.status() == 404 {
             // try another asset pattern
@@ -280,11 +291,10 @@ pub async fn download_matching_asset(
         let asset_path = dst_dir.join(&filename);
         let mut dst = tokio::fs::File::create(&asset_path).await?;
 
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .inspect_err(|err| tracing::debug!(?err))?
-        {
+        while let Some(chunk) = response.chunk().await.inspect_err(|_err| {
+            #[cfg(feature = "tracing")]
+            tracing::debug!(err = ?_err);
+        })? {
             dst.write_all(&chunk).await?;
         }
         dst.flush().await?;
