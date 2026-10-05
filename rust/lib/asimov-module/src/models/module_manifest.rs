@@ -2,35 +2,35 @@
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
-/// See: https://asimov-specs.github.io/module-manifest/
+/// See: <https://asimov-specs.github.io/module-manifest/>
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ModuleManifest {
-    /// See: https://asimov-specs.github.io/module-manifest/#name-field
+    /// See: <https://asimov-specs.github.io/module-manifest/#name-field>
     pub name: String,
 
-    /// See: https://asimov-specs.github.io/module-manifest/#label-field
+    /// See: <https://asimov-specs.github.io/module-manifest/#label-field>
     #[cfg_attr(
         feature = "serde",
         serde(default, skip_serializing_if = "Option::is_none")
     )]
     pub label: Option<String>,
 
-    /// See: https://asimov-specs.github.io/module-manifest/#title-field
+    /// See: <https://asimov-specs.github.io/module-manifest/#title-field>
     #[cfg_attr(
         feature = "serde",
         serde(default, skip_serializing_if = "Option::is_none")
     )]
     pub title: Option<String>,
 
-    /// See: https://asimov-specs.github.io/module-manifest/#summary-field
+    /// See: <https://asimov-specs.github.io/module-manifest/#summary-field>
     #[cfg_attr(
         feature = "serde",
         serde(default, skip_serializing_if = "Option::is_none")
     )]
     pub summary: Option<String>,
 
-    /// See: https://asimov-specs.github.io/module-manifest/#links-field
+    /// See: <https://asimov-specs.github.io/module-manifest/#links-field>
     #[cfg_attr(
         feature = "serde",
         serde(
@@ -41,7 +41,7 @@ pub struct ModuleManifest {
     )]
     pub links: Vec<String>,
 
-    /// See: https://asimov-specs.github.io/module-manifest/#tags-field
+    /// See: <https://asimov-specs.github.io/module-manifest/#tags-field>
     #[cfg_attr(
         feature = "serde",
         serde(
@@ -52,21 +52,21 @@ pub struct ModuleManifest {
     )]
     pub tags: Vec<String>,
 
-    /// See: https://asimov-specs.github.io/module-manifest/#requires-section
+    /// See: <https://asimov-specs.github.io/module-manifest/#requires-section>
     #[cfg_attr(
         feature = "serde",
         serde(default, skip_serializing_if = "Requires::is_empty")
     )]
     pub requires: Requires,
 
-    /// See: https://asimov-specs.github.io/module-manifest/#provides-section
+    /// See: <https://asimov-specs.github.io/module-manifest/#provides-section>
     #[cfg_attr(
         feature = "serde",
         serde(default, skip_serializing_if = "Provides::is_empty")
     )]
     pub provides: Provides,
 
-    /// See: https://asimov-specs.github.io/module-manifest/#handles-section
+    /// See: <https://asimov-specs.github.io/module-manifest/#handles-section>
     #[cfg_attr(
         feature = "serde",
         serde(default, skip_serializing_if = "Handles::is_empty")

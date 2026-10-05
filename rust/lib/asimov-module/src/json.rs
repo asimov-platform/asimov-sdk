@@ -2,7 +2,7 @@
 
 //! JSON Utilities
 //!
-//! See: https://github.com/serde-rs/json/issues/513
+//! See: <https://github.com/serde-rs/json/issues/513>
 //! ```rust
 //! use asimov_module::json::SkipNulls;
 //!
