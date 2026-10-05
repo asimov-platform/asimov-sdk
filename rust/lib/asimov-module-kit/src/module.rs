@@ -175,6 +175,7 @@ pub struct CreatedModule {
 }
 
 pub fn new_module(options: NewModuleOptions) -> Result<CreatedModule, NewModuleError> {
+    #[cfg(feature = "tracing")]
     tracing::info!(
         module = %options.name,
         target = ?options.target_dir,
@@ -212,6 +213,7 @@ pub fn new_module(options: NewModuleOptions) -> Result<CreatedModule, NewModuleE
     }
 
     if options.target_dir.exists() {
+        #[cfg(feature = "tracing")]
         tracing::error!(target = ?options.target_dir, "target directory already exists");
         return Err(NewModuleError::TargetExists(options.target_dir));
     }
@@ -296,6 +298,7 @@ pub fn new_module(options: NewModuleOptions) -> Result<CreatedModule, NewModuleE
     .collect();
 
     generate(args).map_err(|err| {
+        #[cfg(feature = "tracing")]
         tracing::error!(error = %err, "cargo-generate failed");
         NewModuleError::CargoGenerate(err)
     })?;
@@ -316,6 +319,7 @@ pub fn new_module(options: NewModuleOptions) -> Result<CreatedModule, NewModuleE
         program_names.push(program_name);
     }
 
+    #[cfg(feature = "tracing")]
     tracing::info!(
         module = %options.name,
         crate_name = %crate_name,
