@@ -6,22 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+
+## 25.7.0 - 2026-10-05
 ### Added
-- asimov-proxy: Streaming OpenRouter proxy with HTTP(S)/SOCKS5 upstream support
+- asimov-proxy: Streaming OpenAI-compatible OpenRouter proxy with HTTP(S)/SOCKS5
+  upstream support, configurable limits, optional body logging, and SDK export
+- asimov-sdk: Expose directory APIs, including filesystem support with `std`
+- asimov-core: Add portable filename-component validation
 - asimov-keyring: Add `with_store` for explicit backend and cache-directory use
 ### Changed
+- Bump RDF.rs to 0.5.0, Dogma.rs to 0.3.0, and Clientele.rs to 0.5.0
 - asimov-keyring: Make `close` consume only its handle; release stores on drop
 - asimov-id, asimov-kb: Require `TryFrom` for variable-length byte inputs and
   conversions from ASIMOV public keys to Iroh keys and endpoint addresses
+- asimov-protocol: Require the `random` feature for `resolve_random`
+- asimov-social: Include client and serialization support in the `all` feature
 ### Fixed
+- asimov-module: Preserve all manifest dependency fields and ordered model
+  choices when serializing, including during registry migration
+- asimov-module: Deduplicate resolver results at their best rank, match compound
+  file suffixes longest first, and leave indexes unchanged on invalid manifests
 - asimov-module, asimov-keyring: Reject unsafe filename components and confine
   configuration, manifest, and public-key file access against symlink escapes
+- asimov-module-kit: Apply consistent module-name validation in creation and
+  linting, rejecting leading digits and names longer than 64 characters
+- asimov-installer: Use GitHub release tags (`tag_name`) instead of display titles
+- asimov-registry, asimov-installer, asimov-module-kit: Build without tracing
+- asimov-kb, asimov-snapshot: Keep UUID and hex dependencies optional in
+  `std`-only builds
+- asimov-kb: Reject trailing text in ID classes and mismatched classes in typed
+  ID deserialization; correct blob ID length bounds and validation pattern
 - asimov-keyring: Share backend lifetimes and serialize same-user operations
   without changing the process-default keyring store
 - asimov-keyring: Preserve existing identities when repairing public-key caches
   and restore prior secrets after failed rekey publication
 - asimov-keyring: Report corrupt secret lengths without panicking and zeroize
   temporary secret buffers on every exit path
+- asimov-prompt: Preserve system roles when converting owned OpenAI messages
+- asimov-protocol: Enforce a shared 1 KiB message-body limit on send and receive,
+  returning errors for oversized messages instead of panicking
+- asimov-protocol: Return errors for unexpected ping responses and unsupported
+  or out-of-order peer messages instead of panicking or echoing them
+- asimov-protocol: Handle empty random peer selection safely, propagate CSV
+  read errors, and compare owned and borrowed feature sets by their contents
+- asimov-nexus: Validate exact search-vector dimensions, finite values, and
+  optional score and result-count bounds
+- asimov-server: Omit inbound headers from HTTP request spans to avoid leaking
+  credentials
+- asimov-server: Return HTTP 501 with structured errors for unsupported OpenAI
+  Responses endpoints
+- Fix Iroh RPC feature compatibility in workspace builds and mDNS example
+  compatibility with non-exhaustive events
 
 ## 25.6.1 - 2026-10-02
 ### Added
