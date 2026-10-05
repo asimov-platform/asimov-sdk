@@ -328,13 +328,13 @@ reproductions and build results are distinguished from source-review findings.
   output with cancellation/error reporting. Test model selection and first-byte
   delivery before process exit using a deterministic provider fixture.
 
-- [ ] **Preserve prompt roles and independent prompt boundaries.**
-  In `lib/asimov-prompt/src/prompt_message.rs`, the owned system-message/content
-  conversions produce `PromptRole::Developer` (reproduced), unlike the borrowed
-  generic conversion. In `src/prompt.rs`, OpenAI text-array prompts are joined
-  without boundaries. Fix role parity and explicitly support or reject batched
+- [ ] **Preserve independent prompt boundaries.**
+  In `lib/asimov-prompt/src/prompt.rs`, OpenAI text-array prompts are joined
+  without boundaries. Explicitly support or reject batched
   prompts. Define a structured chat input contract with runner rather than
   relying on unescaped `role: text` display strings for all input formats.
+  OpenAI system content supplied as text-part arrays currently returns `Err(())`
+  from the borrowed conversion; define and test multipart text handling too.
 
 - [ ] **Honor HTTP protocol feature gates and transport configuration.**
   `lib/asimov-server/src/http.rs` always mounts GraphQL/GSP/SPARQL/MCP routes

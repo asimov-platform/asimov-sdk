@@ -1418,6 +1418,7 @@ dependencies = [
  "bon",
  "derive_more",
  "known-types-openai",
+ "serde_json",
 ]
 
 [[package]]

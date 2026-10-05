@@ -124,7 +124,30 @@ impl TryFrom<openai::schemas::ChatCompletionRequestSystemMessage_Content> for Pr
         input: openai::schemas::ChatCompletionRequestSystemMessage_Content,
     ) -> Result<Self, Self::Error> {
         let text_content = input.text_content().ok_or(())?;
-        Ok(PromptMessage(PromptRole::Developer, text_content.into()))
+        Ok(PromptMessage(PromptRole::System, text_content.into()))
+    }
+}
+
+#[cfg(all(test, feature = "openai"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn system_conversions_preserve_their_role() {
+        for text in ["Follow these instructions", ""] {
+            let content = serde_json::json!(text);
+            let value = serde_json::json!({"role": "system", "content": content});
+            let generic: openai::schemas::ChatCompletionRequestMessage =
+                serde_json::from_value(value.clone()).unwrap();
+            let owned: openai::schemas::ChatCompletionRequestSystemMessage =
+                serde_json::from_value(value).unwrap();
+            let content: openai::schemas::ChatCompletionRequestSystemMessage_Content =
+                serde_json::from_value(content).unwrap();
+            let expected = PromptMessage(PromptRole::System, text.into());
+            assert_eq!(PromptMessage::try_from(&generic).unwrap(), expected);
+            assert_eq!(PromptMessage::try_from(owned).unwrap(), expected);
+            assert_eq!(PromptMessage::try_from(content).unwrap(), expected);
+        }
     }
 }
 

@@ -40,6 +40,10 @@ derive_more = { workspace = true, features = ["display", "from", "from_str"] }
 # Optional dependencies:
 openai = { workspace = true, optional = true }
 
+[dev-dependencies]
+openai = { workspace = true, features = ["serde"] }
+serde_json.workspace = true
+
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]
 all-features = true
