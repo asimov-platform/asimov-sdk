@@ -386,7 +386,7 @@ reproductions and build results are distinguished from source-review findings.
   on multicast availability.
 
 - [ ] **Describe scaffold maturity and give integrations bounded next steps.**
-  The `src/lib.rs` files for agent, cache, construct, dataset, graph,
+  The `src/lib.rs` files for cache, construct, dataset, graph,
   ontology, platform, repository, runtime, token, universe, and vault contain
   only crate setup. Add concise crate-level status/scope documentation before
   defining each first API. Ledger currently exposes a hidden ERC-20 binding,
