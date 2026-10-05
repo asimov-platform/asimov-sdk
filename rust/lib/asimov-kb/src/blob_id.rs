@@ -10,10 +10,13 @@ use derive_more::Display;
 pub struct BlobId(pub(crate) Id<32>);
 
 impl BlobId {
-    pub const ID_LEN_MIN: usize = 1 + 16; // TODO
-    pub const ID_LEN_MAX: usize = 1 + 22; // TODO
+    /// Class prefix plus 32 base58 zero digits for an all-zero hash.
+    pub const ID_LEN_MIN: usize = 1 + 32;
+    /// Class prefix plus ceil(log58(256^32)) base58 digits.
+    pub const ID_LEN_MAX: usize = 1 + 44;
     pub const ID_LEN: RangeInclusive<usize> = Self::ID_LEN_MIN..=Self::ID_LEN_MAX;
-    pub const PATTERN: &'static str = "^B[1-9A-HJ-NP-Za-km-z]{16,22}$";
+    /// Lexical bounds; use parsing to validate the decoded payload length.
+    pub const PATTERN: &'static str = "^B[1-9A-HJ-NP-Za-km-z]{32,44}$";
 
     pub fn as_id(&self) -> &Id<32> {
         &self.0
@@ -21,6 +24,36 @@ impl BlobId {
 
     pub fn into_id(self) -> Id<32> {
         self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::string::ToString;
+
+    #[test]
+    fn encoded_hashes_fit_advertised_bounds() {
+        assert_eq!(BlobId::from([0; 32]).to_string().len(), BlobId::ID_LEN_MIN);
+        assert_eq!(
+            BlobId::from([255; 32]).to_string().len(),
+            BlobId::ID_LEN_MAX
+        );
+
+        // A fixed seed makes varied payload coverage reproducible.
+        let mut state = 0x1234_5678_u32;
+        for _ in 0..256 {
+            let bytes = core::array::from_fn(|_| {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                state as u8
+            });
+            let id = BlobId::from(bytes);
+            let encoded = id.to_string();
+            assert!(BlobId::ID_LEN.contains(&encoded.len()));
+            assert_eq!(encoded.parse::<BlobId>().unwrap(), id);
+        }
     }
 }
 
