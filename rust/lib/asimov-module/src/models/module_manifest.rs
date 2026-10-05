@@ -322,7 +322,10 @@ pub enum RequiredModel {
     /// ```
     #[cfg_attr(
         feature = "serde",
-        serde(deserialize_with = "ordered::deserialize_ordered")
+        serde(
+            deserialize_with = "ordered::deserialize_ordered",
+            serialize_with = "ordered::serialize_ordered"
+        )
     )]
     Choices(Vec<(String, String)>),
 }
@@ -495,6 +498,16 @@ mod ordered {
         de::{MapAccess, Visitor},
     };
 
+    pub fn serialize_ordered<S>(
+        items: &[(String, String)],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_map(items.iter().map(|(key, value)| (key, value)))
+    }
+
     pub fn deserialize_ordered<'de, D>(deserializer: D) -> Result<Vec<(String, String)>, D::Error>
     where
         D: Deserializer<'de>,
@@ -528,6 +541,25 @@ mod ordered {
 mod tests {
     use super::*;
     use alloc::vec;
+
+    #[test]
+    fn model_choices_round_trip_in_order() {
+        let yaml = "name: example\nrequires:\n  models:\n    hf:example/model:\n      small: small.bin\n      medium: medium.bin\n      large: large.bin\n";
+        let manifest: ModuleManifest = serde_yaml_ng::from_str(yaml).unwrap();
+        let json = serde_json::to_string(&manifest).unwrap();
+        assert!(json.contains(
+            r#""hf:example/model":{"small":"small.bin","medium":"medium.bin","large":"large.bin"}"#
+        ));
+        assert_eq!(
+            serde_json::from_str::<ModuleManifest>(&json).unwrap(),
+            manifest
+        );
+        let yaml = serde_yaml_ng::to_string(&manifest).unwrap();
+        assert_eq!(
+            serde_yaml_ng::from_str::<ModuleManifest>(&yaml).unwrap(),
+            manifest
+        );
+    }
 
     #[test]
     fn dependency_fields_round_trip_independently() {

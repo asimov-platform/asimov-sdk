@@ -19,12 +19,9 @@ reproductions and build results are distinguished from source-review findings.
   must also require the manifest's name to equal the requested `ModuleName`.
   Cover malformed manifests and symlinked binaries with local fixtures.
 
-- [ ] **Make manifest serialization lossless and round-trippable.**
-  In `lib/asimov-module/src/models/module_manifest.rs`, `RequiredModel::Choices`
-  serializes as
-  an array of pairs but deserializes only from a map (reproduced). Preserve
-  ordered model choices through YAML, JSON, and
-  installed-manifest migration; test serialization and deserialization.
+- [ ] **Cover dependency preservation through installed-manifest migration.**
+  Add a registry migration fixture with every dependency field and ordered
+  model choices, checking the installed JSON against the source YAML.
 
 - [ ] **Align manifest readers with the installed directory layout.**
   `ModuleManifest::read_manifest` in
