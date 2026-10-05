@@ -367,6 +367,13 @@
   },
   {
     "package": {
+      "name": "asimov-remote",
+      "description": "Remote execution of ASIMOV component patterns",
+      "metadata": {}
+    }
+  },
+  {
+    "package": {
       "name": "asimov-repository",
       "readme": true,
       "metadata": {
@@ -385,7 +392,17 @@
           "title": "ASIMOV.rs: Runner Implementation"
         }
       }
-    }
+    },
+    "test": [
+      {
+        "name": "pipeline",
+        "path": "tests/pipeline.rs",
+        "harness": false,
+        "required-features": [
+          "std"
+        ]
+      }
+    ]
   },
   {
     "package": {
