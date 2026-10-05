@@ -1297,6 +1297,7 @@ dependencies = [
  "p2panda-core",
  "rocket",
  "serde",
+ "serde_json",
  "serde_with",
  "turso",
  "uuid",

@@ -64,6 +64,9 @@ uuid = { workspace = true, features = ["serde", "v7"], optional = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = ["js", "serde", "v7"], optional = true }
 
+[dev-dependencies]
+serde_json.workspace = true
+
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]
 all-features = true

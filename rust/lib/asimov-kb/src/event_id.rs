@@ -6,7 +6,10 @@ use core::{ops::RangeInclusive, str::FromStr};
 use derive_more::Display;
 
 #[derive(Clone, Debug, Display, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_with::DeserializeFromStr, serde::Serialize)
+)]
 pub struct EventId(pub(crate) Id<16>);
 
 impl EventId {

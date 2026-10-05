@@ -55,13 +55,6 @@ reproductions and build results are distinguished from source-review findings.
   range/precision, provide checked conversion/arithmetic, and test boundary
   values and exact serialization round trips.
 
-- [ ] **Enforce typed knowledge-base ID classes during deserialization.**
-  The derived Serde implementation in `lib/asimov-kb/src/person_id.rs` and its
-  event/organization/blob siblings deserializes the inner generic `Id` without
-  the wrapper's `FromStr` class check. A `PersonId` containing an organization
-  ID was reproduced. Route deserialization through validated constructors and
-  reject every wrong-class pairing, including 32-byte non-blob IDs.
-
 - [ ] **Return protocol errors for peer-controlled input instead of panicking.**
   `lib/asimov-protocol/src/message_recv.rs` asserts the received length is at
   most 1024; a length of 1025 panics (reproduced). `peer_connection.rs` asserts
