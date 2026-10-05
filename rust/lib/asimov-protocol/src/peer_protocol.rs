@@ -2,7 +2,7 @@
 
 //! The peer-to-peer protocol.
 
-use crate::{Message, MessageRecv, MessageSend, NodeMetrics, PeerAccept};
+use crate::{Message, MessageRecv, MessageSend, NodeMetrics, PeerAccept, ProtocolMessageError};
 use alloc::sync::Arc;
 use asimov_id::PublicKey;
 use iroh::{
@@ -38,6 +38,18 @@ impl NodeProtocol {
     pub fn metrics(&self) -> &Arc<NodeMetrics> {
         &self.metrics
     }
+
+    fn response(&self, request: Message) -> Result<Message, ProtocolMessageError> {
+        match request {
+            Message::Ping => {
+                self.metrics.pings_recv.inc();
+                Ok(Message::Ping)
+            },
+            Message::Bye => Ok(Message::Bye),
+            Message::Hello(_) => Err(ProtocolMessageError::Unexpected(request)),
+            _ => Err(ProtocolMessageError::Unsupported(request)),
+        }
+    }
 }
 
 impl ProtocolHandler for NodeProtocol {
@@ -58,32 +70,17 @@ impl ProtocolHandler for NodeProtocol {
 
         let mut connection = state.into_connection();
 
-        let mut is_alive = true;
-        while is_alive {
+        loop {
             let request = connection.recv().await.map_err(AcceptError::from_err)?;
-            let response: Message = match request {
-                Message::Hello(hello) => {
-                    Message::Hello(hello) // TODO
-                },
-
-                Message::Bye => {
-                    is_alive = false;
-                    Message::Bye
-                },
-
-                Message::Ping => {
-                    // Update the metrics counters:
-                    self.metrics.pings_recv.inc();
-
-                    Message::Ping
-                },
-
-                _ => unimplemented!(), // TODO
-            };
+            let response = self.response(request).map_err(AcceptError::from_err)?;
+            let is_bye = response == Message::Bye;
             connection
                 .send(response)
                 .await
                 .map_err(AcceptError::from_err)?;
+            if is_bye {
+                break;
+            }
         }
 
         // Send the response and finish the send stream:
@@ -94,5 +91,36 @@ impl ProtocolHandler for NodeProtocol {
         connection.inner.closed().await;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{PeerHello, test_transport::MemoryTransport};
+    use alloc::vec;
+
+    #[tokio::test]
+    async fn established_protocol_rejects_unsupported_and_out_of_order_messages() {
+        let protocol = NodeProtocol::new();
+        for request in [
+            Message::Ping,
+            Message::Bye,
+            Message::Hello(PeerHello::default()),
+            Message::List(vec!["example".into()]),
+            Message::Blob(asimov_kb::BlobId::from([42; 32])),
+        ] {
+            let mut transport = MemoryTransport::default();
+            transport.send(request.clone()).await.unwrap();
+            transport.input = core::mem::take(&mut transport.output);
+            let result = protocol.response(transport.recv().await.unwrap());
+            match request {
+                Message::Ping | Message::Bye => assert_eq!(result.unwrap(), request),
+                Message::Hello(_) => {
+                    assert!(matches!(result, Err(ProtocolMessageError::Unexpected(_))))
+                },
+                _ => assert!(matches!(result, Err(ProtocolMessageError::Unsupported(_)))),
+            }
+        }
     }
 }

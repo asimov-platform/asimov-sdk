@@ -9,6 +9,17 @@ use thiserror::Error;
 
 pub type BoxError = Box<dyn Error + Send + Sync>;
 
+/// A message that cannot be handled after the peer handshake.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ProtocolMessageError {
+    #[error("unexpected message after the peer handshake: {0:?}")]
+    Unexpected(Message),
+
+    #[error("unsupported peer message: {0:?}")]
+    Unsupported(Message),
+}
+
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum AcceptError {
