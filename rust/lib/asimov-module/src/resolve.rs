@@ -84,12 +84,14 @@ impl Resolver {
             }
         }
 
+        let mut seen = BTreeSet::new();
         Ok(results
             .into_iter()
              // The `results` set is sorted by path_length.
              // Reverse to prefer longer matches.
             .rev()
             .map(|(_, module)| module)
+            .filter(|module| seen.insert(module.clone()))
             .collect())
     }
 
@@ -439,6 +441,25 @@ mod test {
 
     extern crate std;
     use std::{eprintln, vec};
+
+    #[test]
+    fn overlapping_matches_return_each_module_at_its_best_rank() {
+        let mut resolver = Resolver::new();
+        resolver.insert_protocol("overlap", "file").unwrap();
+        resolver
+            .insert_prefix("overlap", "file:///path/to")
+            .unwrap();
+        resolver
+            .insert_pattern("overlap", "file:///path/to/:file")
+            .unwrap();
+        resolver.insert_file_extension("overlap", "txt").unwrap();
+        resolver.insert_prefix("middle", "file:///path").unwrap();
+        resolver.insert_file_extension("fallback", "txt").unwrap();
+
+        let results = resolver.resolve("file:///path/to/file.txt").unwrap();
+        let names: Vec<_> = results.iter().map(|module| module.name.as_str()).collect();
+        assert_eq!(names, ["overlap", "middle", "fallback"]);
+    }
 
     #[test]
     fn matching() {

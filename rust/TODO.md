@@ -231,12 +231,11 @@ reproductions and build results are distinguished from source-review findings.
   command failure from an empty inventory; test Ruby/system discovery too.
 
 - [ ] **Improve resolver matching and transactional insertion.**
-  In `lib/asimov-module/src/resolve.rs`, one module matching both a protocol and
-  a prefix is returned twice, and `report.v1.txt` misses a registered `txt`
-  extension (reproduced). Deduplicate by module at its best specificity and
-  define longest-suffix handling for compound extensions. Validate a manifest
+  In `lib/asimov-module/src/resolve.rs`, `report.v1.txt` misses a registered
+  `txt` extension (reproduced). Define longest-suffix handling for compound
+  extensions. Validate a manifest
   before mutating indexes so a later invalid pattern/MIME does not leave partial
-  registration. Add overlapping-match and failed-insertion regressions.
+  registration. Add suffix-match and failed-insertion regressions.
 
 - [ ] **Share module-name validation with the authoring toolkit.**
   `validate_module_name` in `lib/asimov-module-kit/src/module.rs` accepts
