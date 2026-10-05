@@ -69,19 +69,6 @@ reproductions and build results are distinguished from source-review findings.
 
 ## P2: Build, feature, and facade correctness
 
-- [ ] **Repair the Nexus validator integration and dimensional contract.**
-  `lib/asimov-nexus/src/search_request.rs` fails to compile with `validator`:
-  the derive mishandles the default const generic and integer range literals
-  are used for `f32`. Cloud's all-features build also fails (reproduced).
-  Make validation compile, enforce the dimension represented by `N` rather than
-  a hardcoded minimum of 128, and reject non-finite vector/score values. Test
-  alternate dimensions, wrong lengths, score bounds, and NaN/infinity.
-
-- [ ] **Handle non-exhaustive mDNS service events in the server example.**
-  `lib/asimov-server/examples/mdns-client.rs:9` fails the workspace all-targets
-  check with `mdns-sd 0.20.3` because `ServiceEvent` is non-exhaustive. Handle
-  unknown events in the example (reproduced on 2026-10-05).
-
 - [ ] **Make the no-std contract hold on a target without std.**
   Host `--no-default-features` checks pass, but `asimov-core` fails for
   `thumbv7em-none-eabihf`: default-enabled `know` pulls `serde_json/std` and
@@ -437,12 +424,12 @@ limit disk use. Findings above remain open despite passing default tests.
   Hugging Face and module-template network smoke tests remained ignored.
   `cargo test -p asimov-patterns --all-features --locked` also passed.
 - Isolated all-features library checks passed for credit, id, kb, keyring,
-  module-kit, server, and social; cloud and nexus failed in validator
-  derivation. On 2026-10-05, the workspace all-features/all-targets check with
-  `--keep-going` failed in Nexus validator derivation and the server mDNS
-  example. The combined integration check passed:
+  module-kit, server, and social. On 2026-10-05, Nexus all-features tests,
+  Cloud's isolated all-features/all-targets check, and both integration checks
+  below passed:
 
   ```sh
+  cargo check --workspace --all-features --all-targets --locked
   cargo check -p asimov-kb -p asimov-protocol --all-features --all-targets --locked
   ```
 - The genuine no-std check failed through `know`'s std features:

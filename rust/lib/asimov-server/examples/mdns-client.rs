@@ -22,6 +22,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             ServiceEvent::SearchStopped(ty) => {
                 println!("Search stopped for service of type {}", ty);
             },
+            event => {
+                println!("Other service event: {:?}", event);
+            },
         }
     }
 

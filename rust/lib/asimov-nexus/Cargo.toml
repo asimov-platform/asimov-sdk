@@ -36,7 +36,7 @@ derive_more = { version = "2", features = ["display"] }
 serde.workspace = true
 
 # Integrations:
-validator = { version = "0.21.0", features = ["derive"], optional = true }
+validator = { version = "0.21.0", default-features = false, optional = true }
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]
