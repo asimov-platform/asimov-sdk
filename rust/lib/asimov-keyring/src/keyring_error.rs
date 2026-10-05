@@ -27,6 +27,23 @@ pub enum KeyringError {
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
 
+    /// Publishing a rekeyed public key and restoring the previous secret failed.
+    ///
+    /// The backend may retain the new secret. After resolving the storage
+    /// failures, `Keyring::ensure_secret_key` repairs the cache from the stored
+    /// secret without rotating it again.
+    #[cfg(feature = "std")]
+    #[error(
+        "public-key publication failed: {cache_error}; secret rollback failed: {rollback_error}"
+    )]
+    RekeyRollbackFailed {
+        /// The failure publishing the public-key cache.
+        #[source]
+        cache_error: std::io::Error,
+        /// The failure restoring or removing the secret-key entry.
+        rollback_error: keyring_core::Error,
+    },
+
     /// The keyring backend failed to initialize or access a secret-key entry.
     #[error("keyring error: {0}")]
     KeyringError(#[from] keyring_core::Error),

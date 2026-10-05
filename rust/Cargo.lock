@@ -1318,6 +1318,7 @@ dependencies = [
  "linux-keyutils-keyring-store",
  "secrecy",
  "serde",
+ "tempfile",
  "thiserror 2.0.21",
  "tracing",
  "whoami",

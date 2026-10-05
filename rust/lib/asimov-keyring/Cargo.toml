@@ -21,7 +21,7 @@ title = "ASIMOV.rs: Keyring"
 
 [features]
 default = ["all", "std"]
-std = ["asimov-core/std", "dep:whoami"]
+std = ["asimov-core/std", "dep:tempfile", "dep:whoami"]
 unstable = []
 
 # Features:
@@ -43,6 +43,7 @@ secrecy.workspace = true
 thiserror.workspace = true
 
 # Features:
+tempfile = { workspace = true, optional = true }
 
 # Interoperability:
 clap = { workspace = true, features = ["derive", "std"], optional = true }

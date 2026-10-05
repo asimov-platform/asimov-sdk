@@ -35,14 +35,6 @@ reproductions and build results are distinguished from source-review findings.
   failed renames, link failures, and interrupted upgrades with the prior
   version still usable.
 
-- [ ] **Preserve key identity when the public-key cache is missing or stale.**
-  In `lib/asimov-keyring/src/keyring.rs`, `my_public_key` calls `rekey` when the
-  public file is absent, even if the secret still exists; `ensure_secret_key`
-  does not repair the public file. Derive and atomically repair the public key
-  from the existing secret. Make failed public-file writes during explicit rekey
-  recoverable and test the missing, stale, and unwritable cache cases with a
-  mock store.
-
 - [ ] **Check credit range and precision at conversion boundaries.**
   `Credits::as_nanos` in `lib/asimov-credit/src/credits.rs` narrows an `i128`
   mantissa with `as`: ten billion credits becomes `-8446744073709551616` nanos
@@ -149,10 +141,10 @@ reproductions and build results are distinguished from source-review findings.
 
 - [ ] **Give keyring handles a coordinated store lifetime.**
   `lib/asimov-keyring/src/keyring.rs::open` replaces the process-global default
-  store, and `close` unsets it for every handle. An early `my_public_key` error
-  skips close entirely. Introduce explicit backend ownership/injection and a
-  shared lifetime guard; test overlapping handles, concurrent access, and
-  cleanup after errors without touching the operating system's real keyring.
+  store, and `close` unsets it for every handle. Introduce explicit backend
+  ownership/injection and a shared lifetime guard; coordinate same-user key
+  mutations and test overlapping handles, concurrent access, and cleanup after
+  errors without touching the operating system's real keyring.
 
 - [ ] **Honor optional configuration variables when reading a profile.**
   `read_variables` in `lib/asimov-module/src/models/module_manifest.rs` calls
