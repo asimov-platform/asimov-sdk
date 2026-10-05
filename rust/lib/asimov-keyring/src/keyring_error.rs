@@ -13,6 +13,10 @@ pub enum KeyringError {
     #[error("user not found")]
     UserNotFound,
 
+    /// A user name is not a portable, single filename component.
+    #[error("invalid keyring user: {0}")]
+    InvalidUser(#[from] asimov_core::InvalidFilenameComponent),
+
     /// A panic poisoned an in-process keyring coordination lock.
     #[cfg(feature = "std")]
     #[error("keyring coordination lock poisoned")]

@@ -59,6 +59,7 @@ impl Store {
     }
 
     pub(crate) fn user_lock(&self, user: &str) -> Result<Arc<Mutex<()>>, KeyringError> {
+        asimov_core::validate_filename_component(user)?;
         let mut users = self.users.lock().map_err(|_| KeyringError::LockPoisoned)?;
         users.retain(|_, lock| lock.strong_count() != 0);
         if let Some(lock) = users.get(user).and_then(Weak::upgrade) {

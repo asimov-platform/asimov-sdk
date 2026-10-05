@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-id, asimov-kb: Require `TryFrom` for variable-length byte inputs and
   conversions from ASIMOV public keys to Iroh keys and endpoint addresses
 ### Fixed
+- asimov-module, asimov-keyring: Reject unsafe filename components and confine
+  configuration, manifest, and public-key file access against symlink escapes
 - asimov-keyring: Share backend lifetimes and serialize same-user operations
   without changing the process-default keyring store
 - asimov-keyring: Preserve existing identities when repairing public-key caches

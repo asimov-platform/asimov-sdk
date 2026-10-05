@@ -131,14 +131,6 @@ reproductions and build results are distinguished from source-review findings.
   missing-home errors instead of panicking. Test custom roots, absent home
   variables, and Windows paths, including keyring and peer resolution.
 
-- [ ] **Constrain configuration and public-key filename components.**
-  `ModuleManifest::variable` joins unchecked profile/module/variable names in
-  `lib/asimov-module/src/models/module_manifest.rs`; keyring `get_public_key`
-  and `rekey` join arbitrary users in `lib/asimov-keyring/src/keyring.rs`.
-  `read_manifest` also accepts a raw module-name path. Validate components
-  before reads/writes and test absolute paths, parent traversal, platform
-  separators, and symlink escape behavior.
-
 - [ ] **Honor optional configuration variables when reading a profile.**
   `read_variables` in `lib/asimov-module/src/models/module_manifest.rs` calls
   `variable` for every declaration, including optional variables with no value,

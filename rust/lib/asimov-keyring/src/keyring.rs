@@ -4,6 +4,7 @@
 
 use super::{KeyringError, store::Store};
 use alloc::{string::ToString, sync::Arc};
+use asimov_core::crates::cap_std::{self, fs::Dir};
 use asimov_directory::fs::StateDirectory;
 use asimov_id::PublicKey;
 use iroh_base::SecretKey;
@@ -17,8 +18,10 @@ pub const KEYRING_SERVICE: &str = "sh.asimov";
 ///
 /// Secret keys are indexed by [`KEYRING_SERVICE`] and a user name. Public keys
 /// are stored as text in the `keyring` subdirectory of the ASIMOV home state
-/// directory. User names are joined directly to this directory as file paths;
-/// callers should supply names suitable for use as a single file name.
+/// directory. User names must be portable, single filename components; invalid
+/// names return [`KeyringError::InvalidUser`] before any backend or file access.
+/// Reads cannot follow symlinks outside the opened cache directory, and atomic
+/// writes replace the named entry rather than following its symlink target.
 ///
 /// Handles own their backend through a shared guard. Closing or dropping one
 /// handle leaves the others usable; the last handle releases the backend.
@@ -31,8 +34,10 @@ pub const KEYRING_SERVICE: &str = "sh.asimov";
 /// Available with the `std` feature.
 #[derive(Clone)]
 pub struct Keyring {
-    /// Directory containing the per-user, text-encoded public keys.
+    // Retained only to locate fixtures; production I/O uses the directory handle.
+    #[cfg(test)]
     path: PathBuf,
+    directory: Arc<Dir>,
     store: Arc<Store>,
 }
 
@@ -174,22 +179,18 @@ mod tests {
         with_keyring(|keyring| {
             let user = "blocked-cache";
             let secret = store_secret(keyring, user);
-            let directory = keyring.path.clone();
-            std::fs::write(directory.join("not-a-directory"), b"blocked").unwrap();
-            for parent in ["missing-directory", "not-a-directory"] {
-                keyring.path = directory.join(parent);
-                assert!(matches!(
-                    keyring.ensure_secret_key(user),
-                    Err(KeyringError::IoError(_))
-                ));
-                assert!(matches!(keyring.rekey(user), Err(KeyringError::IoError(_))));
-                assert_eq!(
-                    keyring.get_secret_key(user).unwrap().unwrap().public(),
-                    secret.public()
-                );
-            }
-
-            keyring.path = directory;
+            let blocked = keyring.path.join(user);
+            std::fs::create_dir(&blocked).unwrap();
+            assert!(matches!(
+                keyring.ensure_secret_key(user),
+                Err(KeyringError::IoError(_))
+            ));
+            assert!(matches!(keyring.rekey(user), Err(KeyringError::IoError(_))));
+            assert_eq!(
+                keyring.get_secret_key(user).unwrap().unwrap().public(),
+                secret.public()
+            );
+            std::fs::remove_dir(blocked).unwrap();
             assert_eq!(
                 keyring.ensure_secret_key(user).unwrap().public(),
                 secret.public()
@@ -346,13 +347,16 @@ mod tests {
         let weak = Arc::downgrade(&backend);
         let mut survivor = Keyring::with_store(directory.path(), backend.clone()).unwrap();
         let secret = survivor.ensure_secret_key("error-test").unwrap();
+        let blocked_cache = directory.path().join("error-test");
+        std::fs::remove_file(&blocked_cache).unwrap();
+        std::fs::create_dir(&blocked_cache).unwrap();
         let failed = || -> Result<(), KeyringError> {
             let mut handle = Keyring::with_store(directory.path(), backend.clone())?;
-            handle.path = directory.path().join("missing-directory");
             handle.ensure_secret_key("error-test")?;
             Ok(())
         };
         assert!(matches!(failed(), Err(KeyringError::IoError(_))));
+        std::fs::remove_dir(blocked_cache).unwrap();
         assert_eq!(
             survivor.ensure_secret_key("error-test").unwrap().public(),
             secret.public()
@@ -458,6 +462,146 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    fn rejects_invalid_users_before_accessing_storage() {
+        with_keyring(|keyring| {
+            for user in [
+                "",
+                ".",
+                "..",
+                "../victim",
+                "/tmp/victim",
+                "a/b",
+                "a\\b",
+                "C:\\victim",
+                "C:victim",
+                "\\\\server\\share",
+                "key:stream",
+                "key\0",
+                "key.",
+                "key ",
+                "NUL",
+                "con.txt",
+            ] {
+                assert!(
+                    matches!(
+                        keyring.get_public_key(user),
+                        Err(KeyringError::InvalidUser(_))
+                    ),
+                    "{user:?}"
+                );
+                assert!(
+                    matches!(
+                        keyring.get_secret_key(user),
+                        Err(KeyringError::InvalidUser(_))
+                    ),
+                    "{user:?}"
+                );
+                assert!(
+                    matches!(
+                        keyring.ensure_secret_key(user),
+                        Err(KeyringError::InvalidUser(_))
+                    ),
+                    "{user:?}"
+                );
+                assert!(
+                    matches!(keyring.rekey(user), Err(KeyringError::InvalidUser(_))),
+                    "{user:?}"
+                );
+                assert!(matches!(
+                    keyring.store.entry(user).unwrap().get_secret(),
+                    Err(keyring_core::Error::NoEntry)
+                ));
+            }
+            assert_eq!(std::fs::read_dir(&keyring.path).unwrap().count(), 0);
+            for user in ["alice@example.org", "Alice Smith", "用户"] {
+                let secret = keyring.ensure_secret_key(user).unwrap();
+                assert_eq!(
+                    keyring.get_public_key(user).unwrap(),
+                    Some(secret.public().into())
+                );
+            }
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn escaping_cache_symlinks_are_not_read_or_written_through() {
+        use std::os::unix::fs::symlink;
+        let root = tempfile::tempdir().unwrap();
+        let outside = root.path().join("outside");
+        std::fs::write(&outside, "untouched").unwrap();
+        let mut keyring = Keyring::with_store(
+            root.path().join("keys"),
+            keyring_core::mock::Store::new().unwrap(),
+        )
+        .unwrap();
+        let user = "alice";
+        let secret = store_secret(&keyring, user);
+        for target in [
+            outside,
+            root.path().join("missing"),
+            PathBuf::from("../outside"),
+        ] {
+            let cache = keyring.path.join(user);
+            symlink(target, &cache).unwrap();
+            assert!(matches!(
+                keyring.get_public_key(user),
+                Err(KeyringError::IoError(_))
+            ));
+            assert!(matches!(
+                keyring.ensure_secret_key(user),
+                Err(KeyringError::IoError(_))
+            ));
+            assert_eq!(
+                keyring.get_secret_key(user).unwrap().unwrap().public(),
+                secret.public()
+            );
+            std::fs::remove_file(&cache).unwrap();
+        }
+        // Atomic publication replaces the link itself, never its target.
+        symlink("../outside", keyring.path.join(user)).unwrap();
+        let (_, public) = keyring.rekey(user).unwrap();
+        assert_eq!(keyring.get_public_key(user).unwrap(), Some(public));
+        assert!(
+            !std::fs::symlink_metadata(keyring.path.join(user))
+                .unwrap()
+                .is_symlink()
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("outside")).unwrap(),
+            "untouched"
+        );
+        assert!(!root.path().join("missing").exists());
+        symlink(user, keyring.path.join("alias")).unwrap();
+        assert_eq!(keyring.get_public_key("alias").unwrap(), Some(public));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replacing_the_cache_path_does_not_redirect_an_open_handle() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = root.path().join("keys");
+        let moved = root.path().join("moved");
+        let outside = root.path().join("outside");
+        std::fs::create_dir(&outside).unwrap();
+        std::fs::write(outside.join("alice"), "untouched").unwrap();
+        let mut keyring =
+            Keyring::with_store(&cache, keyring_core::mock::Store::new().unwrap()).unwrap();
+        std::fs::rename(&cache, &moved).unwrap();
+        std::os::unix::fs::symlink(&outside, &cache).unwrap();
+        let (_, public) = keyring.rekey("alice").unwrap();
+        assert_eq!(keyring.get_public_key("alice").unwrap(), Some(public));
+        assert_eq!(
+            std::fs::read_to_string(moved.join("alice")).unwrap(),
+            alloc::format!("{public}\n")
+        );
+        assert_eq!(
+            std::fs::read_to_string(outside.join("alice")).unwrap(),
+            "untouched"
+        );
+    }
 }
 
 impl Keyring {
@@ -492,10 +636,14 @@ impl Keyring {
     /// Returns an error if locating or creating the state directory, or
     /// initializing the platform store, fails.
     pub fn open() -> Result<Self, KeyringError> {
-        let path = StateDirectory::home()?.join("keyring");
-        std::fs::create_dir_all(&path)?;
+        let state = StateDirectory::home()?;
+        let root = Dir::open_ambient_dir(state.as_str(), cap_std::ambient_authority())?;
+        root.create_dir_all("keyring")?;
+        let directory = Arc::new(root.open_dir("keyring")?);
         Ok(Self {
-            path: path.into(),
+            #[cfg(test)]
+            path: state.join("keyring").into(),
+            directory,
             store: Store::platform()?,
         })
     }
@@ -506,6 +654,8 @@ impl Keyring {
     /// Distinct backend instances are independent. Creates the directory if
     /// needed, without changing the `keyring_core` default store. The backend
     /// remains alive while any handle or caller retains ownership.
+    /// The supplied path selects the trusted cache root. Its opened directory
+    /// handle is retained, so later path/symlink replacement cannot redirect I/O.
     ///
     /// # Errors
     ///
@@ -517,8 +667,11 @@ impl Keyring {
     ) -> Result<Self, KeyringError> {
         let path = path.into();
         std::fs::create_dir_all(&path)?;
+        let directory = Arc::new(Dir::open_ambient_dir(&path, cap_std::ambient_authority())?);
         Ok(Self {
+            #[cfg(test)]
             path,
+            directory,
             store: Store::shared(backend)?,
         })
     }
@@ -548,8 +701,7 @@ impl Keyring {
 
     // Internal helpers run while the public operation holds the user's lock.
     fn read_public_key(&self, user: &str) -> Result<Option<PublicKey>, KeyringError> {
-        let key_path = self.path.join(user);
-        match std::fs::read_to_string(&key_path) {
+        match self.directory.read_to_string(user) {
             Ok(encoded_pk) => Ok(Some(encoded_pk.trim().parse()?)),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error.into()),
@@ -648,15 +800,15 @@ impl Keyring {
             let secret_bytes = Zeroizing::new(secret_key.to_bytes());
             entry.set_secret(secret_bytes.as_slice())?;
         }
-        if let Err(error) = staged.persist(self.path.join(user)) {
+        if let Err(error) = staged.replace(user) {
             let rollback = match previous_secret {
                 Some(secret) => entry.set_secret(secret.as_slice()),
                 None => entry.delete_credential(),
             };
             return Err(match rollback {
-                Ok(()) => error.error.into(),
+                Ok(()) => error.into(),
                 Err(rollback_error) => KeyringError::RekeyRollbackFailed {
-                    cache_error: error.error,
+                    cache_error: error,
                     rollback_error,
                 },
             });
@@ -672,17 +824,21 @@ impl Keyring {
                 if error.kind() == std::io::ErrorKind::InvalidData => {},
             Err(error) => return Err(error),
         }
-        self.stage_public_key(public_key)?
-            .persist(self.path.join(user))
-            .map_err(|error| error.error)?;
+        self.stage_public_key(public_key)?.replace(user)?;
         Ok(())
     }
 
     fn stage_public_key(
         &self,
         public_key: PublicKey,
-    ) -> Result<tempfile::NamedTempFile, std::io::Error> {
-        let mut file = tempfile::NamedTempFile::new_in(&self.path)?;
+    ) -> Result<cap_tempfile::TempFile<'_>, std::io::Error> {
+        let mut file = cap_tempfile::TempFile::new(&self.directory)?;
+        #[cfg(unix)]
+        {
+            use cap_std::fs::{Permissions, PermissionsExt};
+            file.as_file()
+                .set_permissions(Permissions::from_mode(0o600))?;
+        }
         writeln!(file, "{public_key}")?;
         file.as_file().sync_all()?;
         Ok(file)

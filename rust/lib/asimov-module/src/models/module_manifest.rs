@@ -87,6 +87,14 @@ pub struct ModuleManifest {
 #[cfg(feature = "std")]
 #[derive(Debug, thiserror::Error)]
 pub enum ReadVarError {
+    /// A profile, module, or variable name is not a single filename component.
+    #[error("invalid {component}: {source}")]
+    InvalidComponent {
+        component: &'static str,
+        #[source]
+        source: asimov_core::InvalidFilenameComponent,
+    },
+
     #[error("variable named `{0}` not found in module manifest")]
     UnknownVar(String),
 
@@ -102,9 +110,25 @@ pub enum ReadVarError {
 }
 
 impl ModuleManifest {
+    /// Reads a manifest using a single portable module-name component.
+    ///
+    /// Invalid names return `InvalidInput`. Relative symlinks may resolve only
+    /// within the directory being searched; escaping links return an I/O error.
     #[cfg(all(feature = "std", feature = "serde"))]
     pub fn read_manifest(module_name: &str) -> std::io::Result<Self> {
-        let directory = asimov_env::paths::asimov_root().join("modules");
+        Self::read_manifest_with_root(module_name, asimov_env::paths::asimov_root)
+    }
+
+    #[cfg(all(feature = "std", feature = "serde"))]
+    fn read_manifest_with_root(
+        module_name: &str,
+        root: impl FnOnce() -> std::path::PathBuf,
+    ) -> std::io::Result<Self> {
+        use asimov_core::{crates::cap_std, validate_filename_component};
+        validate_filename_component(module_name)
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+        let root = cap_std::fs::Dir::open_ambient_dir(root(), cap_std::ambient_authority())?;
+        let directory = root.open_dir("modules")?;
         let search_paths = [
             ("installed", "json"),
             ("installed", "yaml"), // legacy, new installs are converted to JSON
@@ -112,11 +136,13 @@ impl ModuleManifest {
         ];
 
         for (sub_dir, ext) in search_paths {
-            let file = std::path::PathBuf::from(sub_dir)
-                .join(module_name)
-                .with_extension(ext);
-
-            match std::fs::read(directory.join(&file)) {
+            let file = alloc::format!("{module_name}.{ext}");
+            let content = if sub_dir.is_empty() {
+                directory.read(&file)
+            } else {
+                directory.open_dir(sub_dir).and_then(|dir| dir.read(&file))
+            };
+            match content {
                 Ok(content) if ext == "json" => {
                     return serde_json::from_slice(&content).map_err(std::io::Error::other);
                 },
@@ -138,6 +164,8 @@ impl ModuleManifest {
         &self,
         profile: Option<&str>,
     ) -> Result<alloc::collections::BTreeMap<String, String>, ReadVarError> {
+        Self::validate_component("module name", &self.name)?;
+        Self::validate_component("profile name", profile.unwrap_or("default"))?;
         self.config
             .as_ref()
             .map(|c| c.variables.as_slice())
@@ -147,8 +175,34 @@ impl ModuleManifest {
             .collect()
     }
 
+    /// Reads a configuration value after validating all filename components.
+    ///
+    /// Invalid names are rejected even for environment/default values. File
+    /// access is confined to the selected profile and module directories;
+    /// symlinks cannot escape them. I/O errors other than absence propagate.
     #[cfg(feature = "std")]
     pub fn variable(&self, key: &str, profile: Option<&str>) -> Result<String, ReadVarError> {
+        self.variable_with_root(key, profile, asimov_env::paths::asimov_root)
+    }
+
+    #[cfg(feature = "std")]
+    fn validate_component(component: &'static str, value: &str) -> Result<(), ReadVarError> {
+        asimov_core::validate_filename_component(value)
+            .map_err(|source| ReadVarError::InvalidComponent { component, source })
+    }
+
+    #[cfg(feature = "std")]
+    fn variable_with_root(
+        &self,
+        key: &str,
+        profile: Option<&str>,
+        root: impl FnOnce() -> std::path::PathBuf,
+    ) -> Result<String, ReadVarError> {
+        use asimov_core::crates::cap_std;
+        let profile = profile.unwrap_or("default");
+        Self::validate_component("module name", &self.name)?;
+        Self::validate_component("profile name", profile)?;
+        Self::validate_component("variable name", key)?;
         let Some(var) = self
             .config
             .as_ref()
@@ -165,14 +219,14 @@ impl ModuleManifest {
             return Ok(value);
         }
 
-        let profile = profile.unwrap_or("default");
-        let path = asimov_env::paths::asimov_root()
-            .join("configs")
-            .join(profile)
-            .join(&self.name)
-            .join(key);
-
-        std::fs::read_to_string(&path).or_else(|err| {
+        let read = || -> std::io::Result<String> {
+            let root = cap_std::fs::Dir::open_ambient_dir(root(), cap_std::ambient_authority())?;
+            root.open_dir("configs")?
+                .open_dir(profile)?
+                .open_dir(&self.name)?
+                .read_to_string(key)
+        };
+        read().or_else(|err| {
             if err.kind() == std::io::ErrorKind::NotFound {
                 var.default_value
                     .clone()
@@ -536,6 +590,10 @@ mod ordered {
         deserializer.deserialize_map(OrderedVisitor)
     }
 }
+
+#[cfg(all(test, feature = "std"))]
+#[path = "module_manifest_paths.rs"]
+mod path_tests;
 
 #[cfg(test)]
 mod tests {
