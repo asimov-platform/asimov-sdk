@@ -330,10 +330,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_success() {
-        let mut runner = Executor::new("curl");
-        runner.command().arg("https://www.google.com");
-        let result = runner.execute().await;
-        assert!(result.is_ok());
+        // Listing this test exercises a local executable without recursion.
+        let mut runner = Executor::new(std::env::current_exe().unwrap());
+        runner
+            .command()
+            .args(["--list", "--exact", "executor::tests::test_success"]);
+        runner.capture_stdout();
+        let output = runner.execute().await.unwrap().into_inner();
+        let output = core::str::from_utf8(&output).unwrap();
+        assert!(output.contains("executor::tests::test_success: test"));
     }
 
     #[tokio::test]
@@ -353,11 +358,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_unexpected_failure() {
-        let mut runner = Executor::new("curl");
+        let mut runner = Executor::new(std::env::current_exe().unwrap());
+        runner.command().arg("--invalid-executor-fixture-option");
+        runner.capture_stderr();
         let result = runner.execute().await;
         assert!(matches!(
             result,
-            Err(ExecutorError::UnexpectedFailure(_, _))
+            Err(ExecutorError::UnexpectedFailure(Some(code), Some(stderr)))
+                if code != 0 && stderr.contains("invalid-executor-fixture-option")
         ));
     }
 }

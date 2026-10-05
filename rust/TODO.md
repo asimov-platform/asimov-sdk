@@ -367,9 +367,8 @@ reproductions and build results are distinguished from source-review findings.
   with lifecycle/backpressure conformance tests.
 
 - [ ] **Replace non-hermetic and empty test cases with useful fixtures.**
-  `lib/asimov-runner/src/executor.rs::tests::test_success` depends on `curl` and
-  public Google access and is not ignored. Several `programs/*::test_execute`
-  bodies contain only TODOs. Use local process fixtures for uncovered invocation
+  Several `lib/asimov-runner/src/programs/*::test_execute` bodies contain only
+  TODOs. Use local process fixtures for uncovered invocation
   contracts, and retain network tests as explicit smoke tests. Add randomized
   framing/URL/ID round-trip tests and targeted failure injection for the P1
   findings rather than duplicating existing transport tests.
