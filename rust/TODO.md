@@ -288,6 +288,26 @@ reproductions and build results are distinguished from source-review findings.
 
 ## P2: Protocols, execution, and service APIs
 
+- [ ] **Bound proxy connection, upload, and shutdown lifetimes.**
+  `lib/asimov-proxy/src/openai.rs` needs upload deadlines and bounded concurrency;
+  stalled response streams can indefinitely delay graceful shutdown. Add
+  per-stage deadlines for CONNECT, SOCKS, and TLS in `proxy_connector.rs`, and
+  test client disconnection and cancellation without buffering responses.
+
+- [ ] **Complete upstream-proxy interoperability coverage.**
+  `lib/asimov-proxy/src/proxy_config.rs` lacks port-aware NO_PROXY rules.
+  `proxy_connector.rs` uses only the first locally resolved SOCKS address;
+  CONNECT parsing must enforce its header cap even when the terminator arrives
+  in the same read and preserve any following tunnel bytes. Test malformed
+  CONNECT responses, HTTPS proxies, SOCKS DNS modes, and multi-address fallback
+  against local fixtures.
+
+- [ ] **Move proxy body logging off the response polling path.**
+  `lib/asimov-proxy/src/body_logger.rs` locks a mutex and writes synchronously
+  for each frame, discards write failures, and lacks exchange correlation IDs.
+  Use a bounded writer queue with explicit failure/backpressure behavior and
+  shutdown flushing. Test slow/full sinks while preserving streaming.
+
 - [ ] **Handle empty peer resolution and preserve source failures.**
   `lib/asimov-protocol/src/resolve_handle.rs::resolve_random` samples `0..0`
   for no matches (panic reproduced); without `random` its public method always
@@ -435,9 +455,9 @@ reproductions and build results are distinguished from source-review findings.
   ontology, platform, repository, runtime, token, universe, and vault contain
   only crate setup. Add concise crate-level status/scope documentation before
   defining each first API. Ledger currently exposes a hidden ERC-20 binding,
-  proxy re-exports Gofer, and credit's database integration features only enable
-  dependencies; specify useful, testable integration contracts for those
-  surfaces rather than implying completed implementations.
+  and credit's database integration features only enable dependencies; specify
+  useful, testable integration contracts for those surfaces rather than implying
+  completed implementations.
 
 - [ ] **Repair README generation dependencies and failure handling.**
   `Makefile` references the missing

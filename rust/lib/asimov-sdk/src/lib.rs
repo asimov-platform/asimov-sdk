@@ -42,6 +42,9 @@ pub use asimov_patterns as patterns;
 #[cfg(feature = "prompt")]
 pub use asimov_prompt as prompt;
 
+#[cfg(feature = "proxy")]
+pub use asimov_proxy as proxy;
+
 #[cfg(feature = "registry")]
 pub use asimov_registry as registry;
 

@@ -35,6 +35,7 @@ all = [
     "module",
     "patterns",
     "prompt",
+    "proxy",
     "registry",
     "remote",
     "runner",
@@ -56,6 +57,7 @@ std = [
     "asimov-module?/std",
     "asimov-patterns?/std",
     "asimov-prompt?/std",
+    "asimov-proxy?/std",
     "asimov-registry?/std",
     "asimov-remote?/std",
     "asimov-runner?/std",
@@ -77,6 +79,7 @@ kb = ["dep:asimov-kb"]
 module = ["dep:asimov-module"]
 patterns = ["dep:asimov-patterns"]
 prompt = ["dep:asimov-prompt"]
+proxy = ["dep:asimov-proxy"]
 registry = ["dep:asimov-registry"]
 remote = ["dep:asimov-remote", "asimov-remote/http"]
 runner = ["dep:asimov-runner"]
@@ -89,7 +92,7 @@ derive = []
 # Integrations:
 serde = ["asimov-core?/serde"]
 tokio = ["asimov-flow?/tokio"]
-tracing = ["asimov-core?/tracing", "asimov-installer?/tracing"]
+tracing = ["asimov-core?/tracing", "asimov-installer?/tracing", "asimov-proxy?/tracing"]
 
 [dependencies]
 asimov-config = { workspace = true, optional = true }
@@ -104,6 +107,7 @@ asimov-kb = { workspace = true, optional = true }
 asimov-module = { workspace = true, optional = true }
 asimov-patterns = { workspace = true, optional = true }
 asimov-prompt = { workspace = true, optional = true }
+asimov-proxy = { workspace = true, optional = true }
 asimov-registry = { workspace = true, optional = true }
 asimov-remote = { workspace = true, optional = true }
 asimov-runner = { workspace = true, optional = true }
