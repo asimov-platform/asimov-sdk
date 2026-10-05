@@ -393,8 +393,8 @@ reproductions and build results are distinguished from source-review findings.
   `lib/asimov-kb/src/blob_id.rs` advertises 16-byte-ID bounds/patterns for a
   32-byte hash: a valid blob ID has length 45 while the advertised maximum is
   23 (reproduced). Derive correct limits and test zero/max/random payloads.
-  Also make `IdClass::from_str` reject trailing text and replace GraphQL names
-  such as `PERSON ID`/`ID<16>` with valid, consistently registered scalars whose
+  Replace GraphQL names such as `PERSON ID`/`ID<16>` with valid, consistently
+  registered scalars whose
   validation checks the actual ID format.
 
 - [ ] **Bound telemetry flush memory and checkpoint successful batches.**

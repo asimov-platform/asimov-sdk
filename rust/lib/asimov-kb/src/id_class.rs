@@ -67,12 +67,43 @@ impl FromStr for IdClass {
     type Err = IdError;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        Ok(match input.chars().next().unwrap_or_default() {
-            'B' => Self::Blob,
-            'E' => Self::Event,
-            'O' => Self::Organization,
-            'P' => Self::Person,
+        Ok(match input {
+            "B" => Self::Blob,
+            "E" => Self::Event,
+            "O" => Self::Organization,
+            "P" => Self::Person,
             _ => return Err(IdError::UnknownClass),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::string::ToString;
+
+    #[test]
+    fn class_parsing_requires_exactly_one_designator() {
+        for class in [
+            IdClass::Blob,
+            IdClass::Event,
+            IdClass::Organization,
+            IdClass::Person,
+        ] {
+            assert_eq!(class.as_str().parse::<IdClass>().unwrap(), class);
+            for suffix in ["extra", " ", "\n", "é"] {
+                assert!(
+                    alloc::format!("{class}{suffix}")
+                        .parse::<IdClass>()
+                        .is_err()
+                );
+            }
+            let id = crate::Id::<16>::zero(class);
+            assert_eq!(id.to_string().parse::<crate::Id<16>>().unwrap(), id);
+        }
+        for invalid in ["", "p", "X", "é", "🦀"] {
+            assert!(invalid.parse::<IdClass>().is_err());
+            assert!(invalid.parse::<crate::Id<16>>().is_err());
+        }
     }
 }

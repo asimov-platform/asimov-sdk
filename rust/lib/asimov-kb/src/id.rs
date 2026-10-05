@@ -99,7 +99,7 @@ impl<const N: usize> FromStr for Id<N> {
     type Err = IdError;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let class = IdClass::from_str(input)?;
+        let class = IdClass::from_str(input.get(..1).ok_or(IdError::UnknownClass)?)?;
         let mut id = Id::zero(class);
         use bs58::decode::Error::*;
         match bs58::decode(&input[1..]).onto(&mut id.bytes) {
