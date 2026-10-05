@@ -102,8 +102,8 @@ reproductions and build results are distinguished from source-review findings.
   check alongside host checks.
 
 - [ ] **Normalize default bundles and optional feature forwarding.**
-  Use weak std forwarding for optional dependencies such as KB's `uuid` and
-  snapshot's `hex`. Replace explicitly re-enabled dependency defaults in runner,
+  Use weak std forwarding for snapshot's optional `hex` dependency.
+  Replace explicitly re-enabled dependency defaults in runner,
   installer, snapshot, and server with required features, and inherit shared
   dependencies consistently to make each crate's build surface predictable.
 

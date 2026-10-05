@@ -23,7 +23,7 @@ title = "ASIMOV.rs: Knowledge Base"
 default = ["all", "std"]
 all = ["new", "tracing"]
 new = ["blake3", "uuid"]
-std = ["asimov-core/std", "bs58/std", "uuid/std"]
+std = ["asimov-core/std", "bs58/std", "uuid?/std"]
 tracing = []
 unstable = []
 
