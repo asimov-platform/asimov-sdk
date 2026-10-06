@@ -24,6 +24,13 @@ pub enum FromDirError {
         #[source]
         source: serde_yaml_ng::Error,
     },
+    #[cfg(feature = "json")]
+    #[error("failed to parse JSON manifest file `{path}`: {source}")]
+    ParseJson {
+        path: std::path::PathBuf,
+        #[source]
+        source: serde_json::Error,
+    },
     #[error("failed to add manifest file `{path}` to resolver: {source}")]
     Insert {
         path: std::path::PathBuf,
@@ -42,6 +49,8 @@ impl From<FromDirError> for clientele::SysexitsError {
             ManifestIo { .. } => EX_IOERR,
             #[cfg(feature = "yaml")]
             Parse { .. } => EX_CONFIG,
+            #[cfg(feature = "json")]
+            ParseJson { .. } => EX_CONFIG,
             Insert { source, .. } => source.into(),
         }
     }

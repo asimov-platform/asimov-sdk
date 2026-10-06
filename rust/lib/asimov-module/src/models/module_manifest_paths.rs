@@ -176,6 +176,8 @@ fn manifest_symlinks_cannot_escape_search_directories() {
     for component in [
         "modules",
         "modules/installed",
+        "modules/installed/example",
+        "modules/installed/example/manifest.json",
         "modules/installed/example.json",
     ] {
         let root = tempfile::tempdir().unwrap();
@@ -204,4 +206,41 @@ fn manifest_symlinks_cannot_escape_search_directories() {
             .kind(),
         std::io::ErrorKind::NotFound
     );
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn installed_layout_precedes_legacy_files_and_errors_do_not_fall_back() {
+    let root = tempfile::tempdir().unwrap();
+    let installed = root.path().join("modules/installed");
+    std::fs::create_dir_all(installed.join("example")).unwrap();
+    let paths = [
+        installed.join("example/manifest.json"),
+        installed.join("example.json"),
+        installed.join("example.yaml"),
+        installed.join("example.yml"),
+        root.path().join("modules/example.yaml"),
+        root.path().join("modules/example.yml"),
+    ];
+    for (index, path) in paths.iter().enumerate() {
+        let manifest = ModuleManifest {
+            name: "example".into(),
+            label: Some(alloc::format!("{index}")),
+            ..Default::default()
+        };
+        let contents = if path.extension().unwrap() == "json" {
+            serde_json::to_string(&manifest).unwrap()
+        } else {
+            serde_yaml_ng::to_string(&manifest).unwrap()
+        };
+        std::fs::write(path, contents).unwrap();
+    }
+    let read = || ModuleManifest::read_manifest_from_root("example", root.path());
+    for (index, path) in paths.iter().enumerate() {
+        assert_eq!(read().unwrap().label, Some(alloc::format!("{index}")));
+        std::fs::write(path, "{ invalid").unwrap();
+        assert!(read().is_err(), "malformed {path:?} must not fall back");
+        std::fs::remove_file(path).unwrap();
+    }
+    assert_eq!(read().unwrap_err().kind(), std::io::ErrorKind::NotFound);
 }

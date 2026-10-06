@@ -49,6 +49,8 @@ pub use asimov_core::{InvalidModuleName, ModuleName};
 mod models;
 pub use models::*;
 
+pub mod layout;
+
 #[cfg(feature = "index")]
 pub mod index;
 #[cfg(feature = "index")]

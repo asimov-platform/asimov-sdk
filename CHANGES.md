@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Fixed
+- asimov-module: Read and resolve installed module directories while retaining
+  legacy manifest lookup, and support lookup from an explicit state root
 - asimov-installer: Stage upgrades before replacing working installations,
   roll back publication failures, and recover interrupted upgrades on retry
 

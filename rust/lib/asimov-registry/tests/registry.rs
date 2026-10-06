@@ -4,6 +4,34 @@ use asimov_module::InstalledModuleManifest;
 use asimov_registry::{Registry, error::ReadReadmeError};
 use tempfile::tempdir;
 
+#[tokio::test]
+async fn module_readers_find_a_registry_created_installation() {
+    use asimov_module::{ModuleManifest, resolve::Resolver};
+    let root = tempdir().unwrap();
+    let registry = Registry::new(root.path(), Default::default());
+    registry.create_file_tree().await.unwrap();
+    let staged = tempdir().unwrap();
+    let installed = InstalledModuleManifest {
+        version: Some("1.2.3".into()),
+        manifest: serde_json::from_str(SAMPLE_MANIFEST).unwrap(),
+    };
+    std::fs::write(
+        staged.path().join(asimov_registry::MANIFEST_FILE_NAME),
+        serde_json::to_vec(&installed).unwrap(),
+    )
+    .unwrap();
+    let name = "ipfs".parse().unwrap();
+    registry.add_module(&name, staged.path()).await.unwrap();
+    assert_eq!(
+        ModuleManifest::read_manifest_from_root("ipfs", root.path()).unwrap(),
+        installed.manifest
+    );
+    let resolver = Resolver::try_from_dir(registry.install_dir()).unwrap();
+    let modules = resolver.resolve("ipfs://example").unwrap();
+    assert_eq!(modules.len(), 1);
+    assert_eq!(modules[0].name, "ipfs");
+}
+
 // See: https://asimov-specs.github.io/module-manifest/
 const SAMPLE_MANIFEST: &str = r#"{
   "name": "ipfs",

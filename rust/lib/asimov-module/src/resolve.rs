@@ -224,43 +224,90 @@ impl Resolver {
         Ok(())
     }
 
+    /// Load an installed-module collection (for example `modules/installed`).
+    ///
+    /// Reads `<name>/manifest.json` before legacy `<name>.json`, `.yaml`, and
+    /// `.yml` files. Only the highest-priority existing manifest is registered;
+    /// malformed manifests and I/O failures are returned, not silently skipped.
+    /// Hidden transaction directories and unrelated entries are ignored. This
+    /// does not recursively scan a state root or follow enabled-module symlinks.
     #[cfg(all(feature = "std", feature = "serde"))]
     pub fn try_from_dir(path: impl AsRef<std::path::Path>) -> Result<Self, error::FromDirError> {
+        use asimov_core::crates::cap_std;
         use error::FromDirError;
 
         let path = path.as_ref();
 
-        let dir = std::fs::read_dir(path).map_err(|source| FromDirError::ManifestDirIo {
-            path: path.into(),
-            source,
-        })?;
+        let directory = cap_std::fs::Dir::open_ambient_dir(path, cap_std::ambient_authority())
+            .map_err(|source| FromDirError::ManifestDirIo {
+                path: path.into(),
+                source,
+            })?;
+        let dir = directory
+            .entries()
+            .map_err(|source| FromDirError::ManifestDirIo {
+                path: path.into(),
+                source,
+            })?;
 
-        let mut resolver = Resolver::new();
-
+        let mut names = BTreeSet::new();
         for entry in dir {
             let entry = entry.map_err(|source| FromDirError::ManifestDirIo {
                 path: path.into(),
                 source,
             })?;
-            if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
-                continue;
-            }
-            let filename = entry.file_name();
-            let filename = filename.to_string_lossy();
-            if !filename.ends_with(".yaml") && !filename.ends_with(".yml") {
-                continue;
-            }
-            let path = entry.path();
-            let file = std::fs::File::open(&path).map_err(|source| FromDirError::ManifestIo {
-                path: path.clone(),
-                source,
-            })?;
-
-            let manifest =
-                serde_yaml_ng::from_reader(file).map_err(|source| FromDirError::Parse {
-                    path: path.clone(),
+            let file_type = entry
+                .file_type()
+                .map_err(|source| FromDirError::ManifestDirIo {
+                    path: path.into(),
                     source,
                 })?;
+            let filename = entry.file_name();
+            let Some(filename) = filename.to_str() else {
+                continue;
+            };
+            if filename.starts_with('.') {
+                continue;
+            }
+            if file_type.is_dir() {
+                names.insert(filename.to_string());
+            } else if file_type.is_file() {
+                for extension in [".json", ".yaml", ".yml"] {
+                    if let Some(name) = filename.strip_suffix(extension) {
+                        names.insert(name.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+        let mut resolver = Resolver::new();
+        for name in names {
+            asimov_core::validate_filename_component(&name).map_err(|source| {
+                FromDirError::ManifestIo {
+                    path: path.join(&name),
+                    source: std::io::Error::new(std::io::ErrorKind::InvalidInput, source),
+                }
+            })?;
+            let Some((relative, content)) = crate::layout::read_manifest_bytes(&directory, &name)
+                .map_err(|source| FromDirError::ManifestIo {
+                path: path.join(&name),
+                source,
+            })?
+            else {
+                continue;
+            };
+            let path = path.join(relative);
+            let manifest = if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                serde_json::from_slice(&content).map_err(|source| FromDirError::ParseJson {
+                    path: path.clone(),
+                    source,
+                })?
+            } else {
+                serde_yaml_ng::from_slice(&content).map_err(|source| FromDirError::Parse {
+                    path: path.clone(),
+                    source,
+                })?
+            };
             resolver
                 .insert_manifest(&manifest)
                 .map_err(|source| FromDirError::Insert {
@@ -451,6 +498,10 @@ fn split_url(url: &str) -> Result<Vec<Sect>, UrlParseError> {
 
     Ok(res)
 }
+
+#[cfg(all(test, feature = "std", feature = "serde"))]
+#[path = "resolve_paths.rs"]
+mod path_tests;
 
 #[cfg(test)]
 mod test {

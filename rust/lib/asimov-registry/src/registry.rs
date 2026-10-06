@@ -10,7 +10,7 @@ pub mod error;
 use error::*;
 mod upgrade;
 
-pub const MANIFEST_FILE_NAME: &str = "manifest.json";
+pub use asimov_module::layout::MANIFEST_FILE_NAME;
 pub const README_FILE_PATH: &str = "doc/README.md";
 pub const BIN_DIR_NAME: &str = "bin";
 
@@ -34,8 +34,12 @@ impl Registry {
     pub fn new(asimov_dir: impl Into<PathBuf>, _options: Options) -> Self {
         let dir = asimov_dir.into();
         Self {
-            install_dir: dir.join("modules").join("installed"),
-            enable_dir: dir.join("modules").join("enabled"),
+            install_dir: dir
+                .join(asimov_module::layout::MODULES_DIR_NAME)
+                .join(asimov_module::layout::INSTALLED_DIR_NAME),
+            enable_dir: dir
+                .join(asimov_module::layout::MODULES_DIR_NAME)
+                .join("enabled"),
             exec_dir: dir.join("libexec"),
         }
     }

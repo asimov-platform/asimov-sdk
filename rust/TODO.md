@@ -19,14 +19,6 @@ reproductions and build results are distinguished from source-review findings.
   must also require the manifest's name to equal the requested `ModuleName`.
   Cover malformed manifests and symlinked binaries with local fixtures.
 
-- [ ] **Align manifest readers with the installed directory layout.**
-  `ModuleManifest::read_manifest` in
-  `lib/asimov-module/src/models/module_manifest.rs` searches legacy flat files,
-  while `Registry` writes `modules/installed/<name>/manifest.json`.
-  `Resolver::try_from_dir` in `lib/asimov-module/src/resolve.rs` also reads only
-  flat YAML files. Share the layout contract and test lookup/resolution against
-  a registry-created installation, retaining explicit legacy compatibility.
-
 - [ ] **Check credit range and precision at conversion boundaries.**
   `Credits::as_nanos` in `lib/asimov-credit/src/credits.rs` narrows an `i128`
   mantissa with `as`: ten billion credits becomes `-8446744073709551616` nanos

@@ -110,13 +110,29 @@ pub enum ReadVarError {
 }
 
 impl ModuleManifest {
-    /// Reads a manifest using a single portable module-name component.
+    /// Reads a manifest from the ASIMOV state root.
+    ///
+    /// Prefers `modules/installed/<name>/manifest.json`, then legacy flat
+    /// JSON/YAML/YML files in `modules/installed`, then YAML/YML in `modules`.
     ///
     /// Invalid names return `InvalidInput`. Relative symlinks may resolve only
     /// within the directory being searched; escaping links return an I/O error.
     #[cfg(all(feature = "std", feature = "serde"))]
     pub fn read_manifest(module_name: &str) -> std::io::Result<Self> {
         Self::read_manifest_with_root(module_name, asimov_env::paths::asimov_root)
+    }
+
+    /// Reads a manifest from an explicit ASIMOV state root.
+    ///
+    /// Uses the same precedence and path confinement as [`Self::read_manifest`].
+    /// Missing files return `NotFound`; invalid names return `InvalidInput`.
+    /// Parse and other I/O errors propagate without falling back to older files.
+    #[cfg(all(feature = "std", feature = "serde"))]
+    pub fn read_manifest_from_root(
+        module_name: &str,
+        root: impl AsRef<std::path::Path>,
+    ) -> std::io::Result<Self> {
+        Self::read_manifest_with_root(module_name, || root.as_ref().to_path_buf())
     }
 
     #[cfg(all(feature = "std", feature = "serde"))]
@@ -128,28 +144,29 @@ impl ModuleManifest {
         validate_filename_component(module_name)
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
         let root = cap_std::fs::Dir::open_ambient_dir(root(), cap_std::ambient_authority())?;
-        let directory = root.open_dir("modules")?;
-        let search_paths = [
-            ("installed", "json"),
-            ("installed", "yaml"), // legacy, new installs are converted to JSON
-            ("", "yaml"),          // legacy, new installs go to `installed/`
-        ];
-
-        for (sub_dir, ext) in search_paths {
+        let directory = root.open_dir(crate::layout::MODULES_DIR_NAME)?;
+        match directory.open_dir(crate::layout::INSTALLED_DIR_NAME) {
+            Ok(installed) => {
+                if let Some((path, content)) =
+                    crate::layout::read_manifest_bytes(&installed, module_name)?
+                {
+                    return match path.extension().and_then(|ext| ext.to_str()) {
+                        Some("json") => {
+                            serde_json::from_slice(&content).map_err(std::io::Error::other)
+                        },
+                        _ => serde_yaml_ng::from_slice(&content).map_err(std::io::Error::other),
+                    };
+                }
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
+            Err(error) => return Err(error),
+        }
+        for ext in ["yaml", "yml"] {
             let file = alloc::format!("{module_name}.{ext}");
-            let content = if sub_dir.is_empty() {
-                directory.read(&file)
-            } else {
-                directory.open_dir(sub_dir).and_then(|dir| dir.read(&file))
-            };
-            match content {
-                Ok(content) if ext == "json" => {
-                    return serde_json::from_slice(&content).map_err(std::io::Error::other);
-                },
-                Ok(content) if ext == "yaml" => {
+            match directory.read(&file) {
+                Ok(content) => {
                     return serde_yaml_ng::from_slice(&content).map_err(std::io::Error::other);
                 },
-                Ok(_) => unreachable!(),
 
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(err) => return Err(err),
