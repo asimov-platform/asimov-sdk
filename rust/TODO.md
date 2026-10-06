@@ -94,6 +94,10 @@ reproductions and build results are distinguished from source-review findings.
 
 ## P2: Modules, environment, and persistent state
 
+- [ ] **Support GNOME and KDE desktop keyrings over D-Bus.**
+  Add persistent GNOME Keyring and KDE KWallet support to `lib/asimov-keyring/`
+  through their D-Bus interfaces.
+
 - [ ] **Provide explicit identity migration between keyring backends.**
   `lib/asimov-keyring/` keeps native and file secrets separate. Add an explicit
   migration API that verifies the destination before switching, preserving the
