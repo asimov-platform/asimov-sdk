@@ -94,6 +94,12 @@ reproductions and build results are distinguished from source-review findings.
 
 ## P2: Modules, environment, and persistent state
 
+- [ ] **Provide explicit identity migration between keyring backends.**
+  `lib/asimov-keyring/` keeps native and file secrets separate. Add an explicit
+  migration API that verifies the destination before switching, preserving the
+  public identity. Cover Linux kernel-key expiry/reboot and existing caches
+  when no secret is available; a public key alone cannot recover the identity.
+
 - [ ] **Detect dependency cycles and reuse the chosen release during install.**
   `preinstall` in `lib/asimov-installer/src/installer.rs` recursively installs
   dependencies without an in-progress set, so self/cyclic dependencies recurse
@@ -372,6 +378,9 @@ reproductions and build results are distinguished from source-review findings.
   Make warning-free documentation builds a CI check. Prioritize missing
   error, persistence, and feature-availability documentation on the public
   registry, installer, protocol, credit, and snapshot APIs.
+  Strict keyring Clippy checks also encounter existing `clone_on_copy` in
+  `asimov-kb`, `collapsible_if`/`needless_borrow` in `asimov-module`, and
+  `items_after_test_module` in `asimov-keyring/src/keyring.rs`.
 
 ## Validation evidence
 

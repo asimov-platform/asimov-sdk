@@ -14,7 +14,7 @@ use std::{io::Write, path::PathBuf};
 /// Service name used to identify ASIMOV secret-key entries in the keyring store.
 pub const KEYRING_SERVICE: &str = "sh.asimov";
 
-/// Stores user secret keys in a platform keyring and public keys in local files.
+/// Stores user secret keys in a selected backend and public keys in local files.
 ///
 /// Secret keys are indexed by [`KEYRING_SERVICE`] and a user name. Public keys
 /// are stored as text in the `keyring` subdirectory of the ASIMOV home state
@@ -27,7 +27,8 @@ pub const KEYRING_SERVICE: &str = "sh.asimov";
 /// handle leaves the others usable; the last handle releases the backend.
 /// Operations for the same user and backend instance are serialized within
 /// this process, including cache publication and rollback. Direct backend
-/// access and other processes are outside this coordination.
+/// access and other processes are outside this coordination for native stores.
+/// The file backend also locks each user's operations across processes.
 /// Operations return [`KeyringError::LockPoisoned`] if a coordination lock
 /// cannot be acquired because a previous holder panicked.
 ///
@@ -624,17 +625,23 @@ impl Keyring {
             .map(|secret| secret.public().into())
     }
 
-    /// Creates the public-key directory and shares the platform keyring store.
+    /// Creates the public-key directory and opens the configured keyring store.
     ///
     /// Uses the native Keychain store on Apple platforms, the native Windows
     /// store on Windows, and the kernel keyutils store on Linux. Other platforms
-    /// use the mock store. Overlapping handles reuse the same backend. Does
+    /// use the mock store. Overlapping native handles reuse the backend. Does
     /// not read or change the process-wide `keyring_core` default store.
+    /// By default on Linux, reuses an existing file store or selects one if
+    /// kernel-keyring access is unavailable, including in Docker containers.
+    /// On Unix, `ASIMOV_KEYRING_BACKEND=file` selects private, persistent files
+    /// explicitly; `native` forces the platform backend without fallback.
+    /// See the [crate documentation](crate) for storage and deployment.
     ///
     /// # Errors
     ///
     /// Returns an error if locating or creating the state directory, or
-    /// initializing the platform store, fails.
+    /// initializing the selected store, fails. Rejects unrecognized backend
+    /// names rather than falling back to another store.
     pub fn open() -> Result<Self, KeyringError> {
         let state = StateDirectory::home()?;
         let root = Dir::open_ambient_dir(state.as_str(), cap_std::ambient_authority())?;
@@ -644,7 +651,7 @@ impl Keyring {
             #[cfg(test)]
             path: state.join("keyring").into(),
             directory,
-            store: Store::platform()?,
+            store: Store::configured(&root)?,
         })
     }
 
@@ -696,6 +703,7 @@ impl Keyring {
     pub fn get_public_key(&self, user: &str) -> Result<Option<PublicKey>, KeyringError> {
         let lock = self.store.user_lock(user)?;
         let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
+        let _file_lock = self.store.file_lock(user)?;
         self.read_public_key(user)
     }
 
@@ -720,6 +728,7 @@ impl Keyring {
     pub fn get_secret_key(&self, user: &str) -> Result<Option<SecretKey>, KeyringError> {
         let lock = self.store.user_lock(user)?;
         let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
+        let _file_lock = self.store.file_lock(user)?;
         self.read_secret_key(user)
     }
 
@@ -756,6 +765,7 @@ impl Keyring {
     pub fn ensure_secret_key(&mut self, user: &str) -> Result<SecretKey, KeyringError> {
         let lock = self.store.user_lock(user)?;
         let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
+        let _file_lock = self.store.file_lock(user)?;
         match self.read_secret_key(user)? {
             Some(secret_key) => {
                 self.repair_public_key(user, secret_key.public().into())?;
@@ -783,6 +793,7 @@ impl Keyring {
     pub fn rekey(&mut self, user: &str) -> Result<(SecretKey, PublicKey), KeyringError> {
         let lock = self.store.user_lock(user)?;
         let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
+        let _file_lock = self.store.file_lock(user)?;
         self.replace_key_pair(user)
     }
 

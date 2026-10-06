@@ -7,6 +7,7 @@ use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
+use asimov_core::crates::cap_std::fs::Dir;
 use keyring_core::{CredentialStore, Entry};
 use std::sync::Mutex;
 
@@ -17,6 +18,55 @@ pub(crate) struct Store {
 }
 
 impl Store {
+    pub(crate) fn configured(_root: &Dir) -> Result<Arc<Self>, KeyringError> {
+        match std::env::var_os("ASIMOV_KEYRING_BACKEND").as_deref() {
+            #[cfg(target_os = "linux")]
+            None => Self::automatic(_root, Self::platform),
+            #[cfg(not(target_os = "linux"))]
+            None => Self::platform(),
+            Some(value) if value == "native" => Self::platform(),
+            #[cfg(unix)]
+            Some(value) if value == "file" => Self::file(_root),
+            _ => Err(keyring_core::Error::Invalid(
+                "ASIMOV_KEYRING_BACKEND".into(),
+                "expected native, or file on Unix".into(),
+            )
+            .into()),
+        }
+    }
+
+    #[cfg(unix)]
+    fn file(root: &Dir) -> Result<Arc<Self>, KeyringError> {
+        Self::shared(Arc::new(crate::file_store::FileStore::new(root)?))
+    }
+
+    #[cfg(target_os = "linux")]
+    fn automatic(
+        root: &Dir,
+        native: impl FnOnce() -> Result<Arc<Self>, KeyringError>,
+    ) -> Result<Arc<Self>, KeyringError> {
+        // Retain the file identity if kernel access later becomes available.
+        // Invalid or inaccessible file storage must not select a new identity.
+        match root.symlink_metadata(crate::file_store::DIRECTORY) {
+            Ok(_) => return Self::file(root),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
+            Err(error) => return Err(error.into()),
+        }
+
+        let native = native().and_then(|store| {
+            // The keyutils store initializes lazily when building an entry.
+            // This opens the kernel keyrings without reading or writing a key.
+            store.entry("default")?;
+            Ok(store)
+        });
+        match native {
+            Err(KeyringError::KeyringError(keyring_core::Error::NoStorageAccess(_))) => {
+                Self::file(root)
+            },
+            other => other,
+        }
+    }
+
     pub(crate) fn platform() -> Result<Arc<Self>, KeyringError> {
         static PLATFORM: Mutex<Weak<Store>> = Mutex::new(Weak::new());
         Self::get_or_init(&PLATFORM, platform_backend)
@@ -58,6 +108,20 @@ impl Store {
         self.backend.build(crate::KEYRING_SERVICE, user, None)
     }
 
+    // Keep the file lock through the whole read/modify/cache/rollback operation.
+    // Locking individual credential calls would race concurrent first use.
+    pub(crate) fn file_lock(&self, _user: &str) -> Result<Option<std::fs::File>, KeyringError> {
+        #[cfg(unix)]
+        if let Some(store) = self
+            .backend
+            .as_any()
+            .downcast_ref::<crate::file_store::FileStore>()
+        {
+            return Ok(Some(store.lock(_user)?));
+        }
+        Ok(None)
+    }
+
     pub(crate) fn user_lock(&self, user: &str) -> Result<Arc<Mutex<()>>, KeyringError> {
         asimov_core::validate_filename_component(user)?;
         let mut users = self.users.lock().map_err(|_| KeyringError::LockPoisoned)?;
@@ -87,6 +151,108 @@ fn platform_backend() -> keyring_core::Result<Arc<CredentialStore>> {
 mod tests {
     use super::*;
     use core::sync::atomic::{AtomicUsize, Ordering};
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn automatically_falls_back_when_lazy_kernel_access_is_denied() {
+        use alloc::boxed::Box;
+        use keyring_core::api::CredentialStoreApi;
+
+        struct DeniedStore;
+        impl CredentialStoreApi for DeniedStore {
+            fn vendor(&self) -> String {
+                "test".into()
+            }
+            fn id(&self) -> String {
+                "denied".into()
+            }
+            fn as_any(&self) -> &dyn core::any::Any {
+                self
+            }
+            fn build(
+                &self,
+                _service: &str,
+                _user: &str,
+                _modifiers: Option<&std::collections::HashMap<&str, &str>>,
+            ) -> keyring_core::Result<Entry> {
+                Err(keyring_core::Error::NoStorageAccess(Box::new(
+                    std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+                )))
+            }
+        }
+
+        let path = tempfile::tempdir().unwrap();
+        let root = Dir::open_ambient_dir(
+            path.path(),
+            asimov_core::crates::cap_std::ambient_authority(),
+        )
+        .unwrap();
+        let store = Store::automatic(&root, || Store::shared(Arc::new(DeniedStore))).unwrap();
+        assert!(store.backend.as_any().is::<crate::file_store::FileStore>());
+        assert!(path.path().join(".keyring").is_dir());
+        drop(store);
+
+        // Changing container permissions must not switch an existing identity.
+        let reopened = Store::automatic(&root, || panic!("file store already selected")).unwrap();
+        assert!(
+            reopened
+                .backend
+                .as_any()
+                .is::<crate::file_store::FileStore>()
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn automatic_selection_keeps_accessible_native_storage_and_other_errors() {
+        let path = tempfile::tempdir().unwrap();
+        let root = Dir::open_ambient_dir(
+            path.path(),
+            asimov_core::crates::cap_std::ambient_authority(),
+        )
+        .unwrap();
+        let native = Store::shared(keyring_core::mock::Store::new().unwrap()).unwrap();
+        let selected = Store::automatic(&root, || Ok(native.clone())).unwrap();
+        assert!(Arc::ptr_eq(&selected, &native));
+        assert!(matches!(
+            selected.entry("default").unwrap().get_secret(),
+            Err(keyring_core::Error::NoEntry)
+        ));
+
+        assert!(matches!(
+            Store::automatic(&root, || Err(KeyringError::LockPoisoned)),
+            Err(KeyringError::LockPoisoned)
+        ));
+        assert!(matches!(
+            Store::automatic(&root, || Err(keyring_core::Error::Invalid(
+                "test".into(),
+                "invalid configuration".into(),
+            )
+            .into())),
+            Err(KeyringError::KeyringError(keyring_core::Error::Invalid(
+                _,
+                _
+            )))
+        ));
+        assert!(!path.path().join(".keyring").exists());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn automatic_selection_does_not_bypass_invalid_file_storage() {
+        let path = tempfile::tempdir().unwrap();
+        let root = Dir::open_ambient_dir(
+            path.path(),
+            asimov_core::crates::cap_std::ambient_authority(),
+        )
+        .unwrap();
+        root.write(".keyring", b"untouched").unwrap();
+        assert!(matches!(
+            Store::automatic(&root, || panic!("must not fall back to native")),
+            Err(KeyringError::IoError(_))
+        ));
+        assert_eq!(root.read(".keyring").unwrap(), b"untouched");
+    }
 
     #[test]
     fn overlapping_opens_initialize_once_and_release_the_backend() {
