@@ -22,7 +22,18 @@ title = "ASIMOV.rs: Runner Implementation"
 [features]
 default = ["all", "std"]
 all = ["tracing"]
-std = ["asimov-core/std", "asimov-flow/tokio", "bytes/std", "clientele/std", "memchr/std", "tracing?/std"]
+std = [
+    "asimov-core/std",
+    "asimov-flow/tokio",
+    "bytes/std",
+    "clientele/std",
+    "memchr/std",
+    "dep:process-wrap",
+    "dep:rustix",
+    "rustix?/std",
+    "tokio/signal",
+    "tracing?/std",
+]
 tracing = ["dep:tracing"]
 unstable = []
 
@@ -46,6 +57,12 @@ url.workspace = true
 # Optional dependencies:
 tracing = { workspace = true, optional = true }
 
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, optional = true, features = ["process"] }
+
+[target.'cfg(windows)'.dependencies]
+process-wrap = { workspace = true, optional = true, features = ["tokio1", "job-object", "kill-on-drop"] }
+
 [dev-dependencies]
 serde_json = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["full", "test-util"] }
@@ -53,6 +70,12 @@ tokio = { workspace = true, features = ["full", "test-util"] }
 [[test]]
 name = "pipeline"
 path = "tests/pipeline.rs"
+harness = false
+required-features = ["std"]
+
+[[test]]
+name = "process_tree"
+path = "tests/process_tree.rs"
 harness = false
 required-features = ["std"]
 

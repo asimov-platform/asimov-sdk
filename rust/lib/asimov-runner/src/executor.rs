@@ -4,14 +4,16 @@
 //!
 //! [`Executor`] configures a command without starting it. Call
 //! [`Executor::execute`] for a complete spawn-and-wait cycle, or use
-//! [`Executor::spawn`] and [`Executor::wait`] to interact with the child between
-//! those steps. `execute` and `wait` buffer captured output until the child exits;
-//! `spawn` returns the live child handle without collecting its output.
+//! [`Executor::spawn_owned`] and [`Executor::wait`] to interact with the child
+//! between those steps while retaining its lifetime policy. `execute` and `wait`
+//! buffer captured output until the child exits; spawning returns the live child
+//! handle without collecting its output.
 //! [`Executor::execute_jsonl`] and [`Executor::execute_jsonl_with_input`] instead
 //! return live batch streams with concurrent input/output handling.
 
 use crate::{
     Command, ExecutionCompletion, ExecutorError, ExecutorResult, Input, InputCompletion, Output,
+    OwnedChild,
 };
 use alloc::borrow::ToOwned;
 use std::{ffi::OsStr, io::ErrorKind, process::Stdio};
@@ -24,6 +26,8 @@ use tokio::process::Child;
 /// standard streams are connected to the null device, `NO_COLOR=1` is set, and
 /// spawned children are configured to be killed when their handles are dropped.
 /// Use [`command`](Self::command) to customize these settings before execution.
+/// Server hosts can opt into [`with_process_tree`](Self::with_process_tree) to
+/// include descendants in cancellation.
 ///
 /// Each execution spawns a new process using the stored command configuration.
 /// Stdout is returned only when configured as a pipe; otherwise the successful
@@ -52,7 +56,7 @@ use tokio::process::Child;
 /// # }
 /// ```
 #[derive(Debug)]
-pub struct Executor(Command, crate::BatchOptions);
+pub struct Executor(Command, crate::BatchOptions, bool);
 
 impl Executor {
     /// Prepares a command with the executor's default environment and streams.
@@ -77,7 +81,7 @@ impl Executor {
         command.stdout(Stdio::null());
         command.stderr(Stdio::null());
         command.kill_on_drop(true);
-        Self(command, crate::BatchOptions::default())
+        Self(command, crate::BatchOptions::default(), false)
     }
 
     /// Configures batching for captured JSONL results, without changing the
@@ -91,6 +95,29 @@ impl Executor {
     /// The policy used for captured JSONL batches.
     pub fn batch_options(&self) -> crate::BatchOptions {
         self.1
+    }
+
+    /// Owns each execution's subprocess tree as a Unix process group or Windows
+    /// job. Dropping an execution future or stream terminates that tree and
+    /// schedules leader reaping on the spawning Tokio runtime. Normal leader
+    /// exit also terminates remaining descendants. Keep the runtime alive for
+    /// asynchronous cleanup; Unix descendants are reaped by their parent or
+    /// the system's orphan reaper.
+    ///
+    /// This opt-in policy overrides raw kill-on-drop and process-group/Windows
+    /// creation settings. Unix descendants that leave the group are not owned.
+    /// Unsupported platforms fail at spawn instead of falling back silently.
+    /// For manual pipe access, use [`spawn_owned`](Self::spawn_owned); the legacy
+    /// raw [`spawn`](Self::spawn) cannot retain tree ownership and rejects it.
+    #[must_use]
+    pub fn with_process_tree(mut self) -> Self {
+        self.2 = true;
+        self
+    }
+
+    /// Whether executions own their subprocess trees. Disabled by default.
+    pub fn owns_process_tree(&self) -> bool {
+        self.2
     }
 
     /// Returns the underlying command for configuring arguments, environment,
@@ -135,7 +162,7 @@ impl Executor {
     /// Returns an error if spawning or waiting fails, or if the child exits
     /// unsuccessfully. See [`ExecutorError`] for the error categories.
     pub async fn execute(&mut self) -> ExecutorResult {
-        let process = self.spawn().await?;
+        let process = self.spawn_owned().await?;
         self.wait(process).await
     }
 
@@ -203,7 +230,7 @@ impl Executor {
         input: &mut Input,
         output: &mut Output,
     ) -> Result<ExecutionCompletion, ExecutorError> {
-        communicate(self.spawn().await?, input, output).await
+        communicate(self.spawn_owned().await?, input, output).await
     }
 
     /// Starts a new child process using the current command configuration.
@@ -216,8 +243,15 @@ impl Executor {
     /// # Errors
     ///
     /// Maps an I/O `NotFound` error to [`ExecutorError::MissingProgram`] and all
-    /// other spawn errors to [`ExecutorError::SpawnFailure`].
+    /// other spawn errors to [`ExecutorError::SpawnFailure`]. Tree ownership
+    /// returns a `SpawnFailure` with I/O `InvalidInput`; use [`Self::spawn_owned`].
     pub async fn spawn(&mut self) -> Result<Child, ExecutorError> {
+        if self.owns_process_tree() {
+            return Err(ExecutorError::SpawnFailure(std::io::Error::new(
+                ErrorKind::InvalidInput,
+                "process-tree ownership requires Executor::spawn_owned",
+            )));
+        }
         match self.0.spawn() {
             Ok(process) => Ok(process),
             Err(err) if err.kind() == ErrorKind::NotFound => {
@@ -228,11 +262,27 @@ impl Executor {
         }
     }
 
+    /// Starts a child retaining the configured tree-ownership policy.
+    /// Piped streams and lifecycle operations are available on [`OwnedChild`].
+    /// Spawn errors use the same mapping as [`Self::spawn`]; unsupported tree
+    /// ownership returns a `SpawnFailure` with I/O `Unsupported`.
+    pub async fn spawn_owned(&mut self) -> Result<OwnedChild, ExecutorError> {
+        match OwnedChild::spawn(&mut self.0, self.2) {
+            Ok(process) => Ok(process),
+            Err(error) if error.kind() == ErrorKind::NotFound => Err(
+                ExecutorError::MissingProgram(self.0.as_std().get_program().to_owned()),
+            ),
+            Err(error) => Err(ExecutorError::SpawnFailure(error)),
+        }
+    }
+
     /// Collects the child's remaining piped output and waits for it to exit.
     ///
     /// Any stdin handle still owned by `process` is closed before waiting.
     /// On success, returns all captured stdout in a cursor positioned at zero.
     /// Streams whose handles were taken from the child are not collected here.
+    /// Accepts either an [`OwnedChild`] or a raw Tokio child; raw children retain
+    /// their original lifetime policy, regardless of this executor's settings.
     ///
     /// # Errors
     ///
@@ -240,8 +290,8 @@ impl Executor {
     /// exit becomes [`ExecutorError::Failure`] for a recognized sysexits status
     /// or [`ExecutorError::UnexpectedFailure`] otherwise, with captured UTF-8
     /// stderr attached. Stdout is not retained in either failure variant.
-    pub async fn wait(&mut self, process: Child) -> ExecutorResult {
-        communicate(process, &mut Input::Ignored, &mut Output::Captured)
+    pub async fn wait(&mut self, process: impl Into<OwnedChild>) -> ExecutorResult {
+        communicate(process.into(), &mut Input::Ignored, &mut Output::Captured)
             .await?
             .into_result()
     }
@@ -249,7 +299,7 @@ impl Executor {
 
 /// Supervises input and process exit independently from draining stdout/stderr.
 pub(crate) async fn communicate(
-    mut process: Child,
+    mut process: OwnedChild,
     input: &mut Input,
     output: &mut Output,
 ) -> Result<ExecutionCompletion, ExecutorError> {
@@ -259,7 +309,7 @@ pub(crate) async fn communicate(
 /// Borrows the child so a pipeline supervisor can cancel I/O, then kill and reap
 /// the same child. The owning caller retains kill-on-drop cancellation behavior.
 pub(crate) async fn communicate_child(
-    process: &mut Child,
+    process: &mut OwnedChild,
     input: &mut Input,
     output: &mut Output,
 ) -> Result<ExecutionCompletion, ExecutorError> {

@@ -72,13 +72,15 @@
 //! observed failure is reported, preferring downstream stages when multiple
 //! outcomes are ready. Other directly supervised children are terminated and reaped before
 //! returning that failure. Dropping execution or its stream requests termination
-//! through each owned child's kill-on-drop policy; it does not synchronously reap
-//! children, terminate arbitrary descendants, or roll back external side effects.
+//! through each owned child's kill-on-drop policy. Fetcher/lister stages with
+//! `with_process_tree()` include their process groups/jobs and schedule leader
+//! reaping. Drop does not synchronously reap or roll back external side effects.
 //!
 //! All stages spawn before output is consumed, and command-owned copies of pipe
 //! endpoints are released immediately after spawning. Polling the execution or
-//! returned stream drives supervision and boundary I/O; no detached tasks are
-//! created. Stderr and buffered final output have no configured size bound.
+//! returned stream drives supervision and boundary I/O. Only process-tree drop
+//! cleanup uses detached reaping tasks. Stderr and buffered final output have no
+//! configured size bound.
 //! Graph batch sizes and collection delay follow [`BatchOptions`]. EOF flushes
 //! a partial batch. Already-read complete lines are delivered before a terminal
 //! error, without delaying cleanup once that error is observed.
@@ -118,7 +120,7 @@
 use crate::batch::{FrameStream, batch_frames};
 use crate::{
     BatchOptions, BatchStream, Executor, ExecutorError, Indexer, Input, InputCompletion, Lister,
-    Output, StreamExt, Writer,
+    Output, OwnedChild, StreamExt, Writer,
 };
 use alloc::{boxed::Box, vec, vec::Vec};
 use core::{
@@ -133,7 +135,7 @@ use std::{
     io::{self, Cursor},
     process::Stdio,
 };
-use tokio::{process::Child, sync::watch};
+use tokio::sync::watch;
 
 /// A pipeline failure attributed to a configured program.
 #[derive(Debug)]
@@ -496,7 +498,7 @@ impl Running {
 }
 
 struct Spawned {
-    child: Child,
+    child: OwnedChild,
     input: Input,
     output: Output,
     info: StageInfo,
@@ -647,7 +649,7 @@ async fn start(
         if info.index + 1 != count {
             output = Output::Ignored;
         }
-        let result = executor.spawn().await;
+        let result = executor.spawn_owned().await;
         // Command stores pipe handles too. Keeping it alive would prevent EOF.
         drop(executor);
         let mut child = match result {

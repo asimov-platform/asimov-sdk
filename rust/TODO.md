@@ -91,6 +91,9 @@ reproductions and build results are distinguished from source-review findings.
   dependencies. Preserve the synchronized Rust 1.97.1 MSRV and add Windows and
   applicable WebAssembly/no-std smoke checks; host feature unification is
   insufficient to validate these contracts.
+  Run runner's `process_tree` fixture natively on Windows. The job backend
+  cross-checks in isolation, but the full local Windows build is blocked by
+  `ring`'s missing `aarch64-w64-mingw32-clang` compiler.
 
 ## P2: Modules, environment, and persistent state
 
@@ -211,12 +214,6 @@ reproductions and build results are distinguished from source-review findings.
   during a slow download, storage operation, or tool callback.
 
 ## P2: Protocols, execution, and service APIs
-
-- [ ] **Cancel complete subprocess trees when requested by server hosts.**
-  Runner kill-on-drop terminates only its direct child. When that child is
-  `asimov fetch` or `asimov list`, module descendants can outlive an HTTP
-  deadline or disconnect. Add opt-in process-group/job ownership and test
-  descendant termination and reaping on cancellation.
 
 - [ ] **Bound proxy connection, upload, and shutdown lifetimes.**
   `lib/asimov-proxy/src/openai.rs` needs upload deadlines and bounded concurrency;
@@ -394,6 +391,8 @@ reproductions and build results are distinguished from source-review findings.
   Strict patterns/runner checks also hit existing `doc_lazy_continuation` in
   `asimov-patterns/src/lib.rs`, `io_other_error`/`question_mark` in
   `asimov-env/src/envs/`, and `from_over_into` in `asimov-prompt/src/prompt_role.rs`.
+  Runner's own checks report `needless_return`, `from_over_into`,
+  `large_enum_variant`, `collapsible_if`, and `needless_borrows_for_generic_args`.
 
 ## Validation evidence
 

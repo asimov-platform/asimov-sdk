@@ -222,13 +222,14 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
     #[must_use]
     pub fn with_capabilities(mut self, capabilities: ListerCapabilities) -> Self {
         let batching = self.executor.batch_options();
+        let process_tree = self.executor.owns_process_tree();
         let program = self
             .executor
             .command()
             .as_std()
             .get_program()
             .to_os_string();
-        Self::configured(
+        let configured = Self::configured(
             program,
             self.arguments,
             self.input,
@@ -236,7 +237,12 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
             self.options,
             capabilities,
         )
-        .with_batching(batching)
+        .with_batching(batching);
+        if process_tree {
+            configured.with_process_tree()
+        } else {
+            configured
+        }
     }
 
     // Pipeline stages are heterogeneous and store the string-specialized
@@ -273,6 +279,16 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
 }
 
 impl<T: Clone, F> Lister<T, F> {
+    /// Owns the subprocess tree, terminating descendants on cancellation,
+    /// leader exit, or the local line cap. See [`Executor::with_process_tree`]
+    /// for platform and reaping semantics. Capability changes and pipeline
+    /// conversion preserve this policy.
+    #[must_use]
+    pub fn with_process_tree(mut self) -> Self {
+        self.executor = self.executor.with_process_tree();
+        self
+    }
+
     /// Sets batching thresholds for captured JSONL output. This does not change
     /// subprocess arguments, native pipeline edges, or listing limits.
     /// The default policy is [`crate::BatchOptions::default`].

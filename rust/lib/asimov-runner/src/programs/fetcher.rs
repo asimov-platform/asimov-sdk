@@ -86,6 +86,26 @@ impl Fetcher {
         }
     }
 
+    /// Owns the subprocess tree, terminating descendants on cancellation or
+    /// leader exit. See [`Executor::with_process_tree`] for platform and reaping
+    /// semantics. This policy is preserved when used as a pipeline stage.
+    ///
+    /// Server hosts can drop the returned stream on a deadline or disconnect:
+    ///
+    /// ```no_run
+    /// use asimov_runner::{Fetcher, GraphOutput};
+    ///
+    /// let fetcher = Fetcher::new_with_args(
+    ///     "asimov", ["fetch"], "https://example.com/resource",
+    ///     GraphOutput::Captured, Default::default(),
+    /// ).with_process_tree();
+    /// ```
+    #[must_use]
+    pub fn with_process_tree(mut self) -> Self {
+        self.executor = self.executor.with_process_tree();
+        self
+    }
+
     /// Starts a new fetcher process and returns its live JSONL graph stream.
     ///
     /// # Errors

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - asimov-patterns: Serialize fetch/list and shared options for HTTP clients
 - asimov-runner: Support command prefixes such as `asimov fetch` and `asimov list`
+- asimov-runner: Add opt-in subprocess-tree cancellation for hosted fetch/list
 - asimov-keyring: Automatically use private files in `~/.asimov/.keyring` when
   Linux kernel keyrings are unavailable, including in Docker containers
 - asimov-keyring: Allow explicit backend selection with `ASIMOV_KEYRING_BACKEND`

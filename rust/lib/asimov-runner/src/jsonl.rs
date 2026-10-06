@@ -56,6 +56,8 @@ use tokio::io::AsyncRead;
 /// size bound. Dropping a process
 /// stream requests termination under the executor's default kill-on-drop policy;
 /// overriding that policy through [`Executor::command`] also affects streaming.
+/// [`Executor::with_process_tree`] includes descendants in termination and
+/// schedules leader reaping, including when the stream was never polled.
 /// [`Executor::execute_jsonl_with_io`] additionally supports forwarding instead
 /// of capture: those streams yield no payload batches but must still be consumed
 /// to drive I/O and observe completion. Errors use
@@ -313,7 +315,7 @@ impl Executor {
         input: &mut Input,
         output: &mut Output,
     ) -> Result<FrameStream, ExecutorError> {
-        let mut process = self.spawn().await?;
+        let mut process = self.spawn_owned().await?;
         let stdout = if matches!(output, Output::Captured) {
             process.stdout.take()
         } else {

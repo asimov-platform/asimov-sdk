@@ -146,6 +146,11 @@ pub mod output;
 pub use output::*;
 
 #[cfg(feature = "std")]
+pub mod owned_child;
+#[cfg(feature = "std")]
+pub use owned_child::*;
+
+#[cfg(feature = "std")]
 pub mod pipeline;
 #[cfg(feature = "std")]
 pub use pipeline::*;

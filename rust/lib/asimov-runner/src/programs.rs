@@ -160,7 +160,9 @@
 //! input streams when programs are connected together.
 //! Cancelling buffered execution retains its input in the wrapper; drop that
 //! wrapper to also release any owned upstream streams. Termination applies to
-//! each owned child, without guaranteeing termination of descendant processes.
+//! each owned child. Hosts can opt into [`Fetcher::with_process_tree`] or
+//! [`Lister::with_process_tree`] to include descendants in a Unix process group
+//! or Windows job and schedule leader reaping, including on the lister's line cap.
 //! Cancellation does not report success or roll back external side effects.
 //! [`Pipeline`](crate::Pipeline) composes graph producers and consumers with
 //! direct OS pipes, checks every stage, and coordinates failure cleanup. Its
