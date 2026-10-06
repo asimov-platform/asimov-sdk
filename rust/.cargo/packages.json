@@ -401,6 +401,14 @@
         "required-features": [
           "std"
         ]
+      },
+      {
+        "name": "process_tree",
+        "path": "tests/process_tree.rs",
+        "harness": false,
+        "required-features": [
+          "std"
+        ]
       }
     ]
   },
