@@ -1406,6 +1406,8 @@ dependencies = [
  "clientele",
  "humantime",
  "rdf-model",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

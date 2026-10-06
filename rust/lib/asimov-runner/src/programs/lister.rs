@@ -16,7 +16,10 @@ use async_trait::async_trait;
 use clientele::options::sort::{SortKey, SortKeys};
 use core::fmt;
 use derive_more::Debug;
-use std::{ffi::OsStr, process::Stdio};
+use std::{
+    ffi::{OsStr, OsString},
+    process::Stdio,
+};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 pub use asimov_patterns::{ListerCapabilities, ListerOptions, OutputFormat};
@@ -68,6 +71,7 @@ pub type ListerResult = Result<ListerStream, ExecutorError>;
 #[derive(Debug)]
 pub struct Lister<T: Clone = String, F = String> {
     executor: Executor,
+    arguments: Vec<OsString>,
     options: ListerOptions<T, F>,
     capabilities: ListerCapabilities,
     input: String,
@@ -100,8 +104,32 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
         output: GraphOutput,
         options: ListerOptions<T, F>,
     ) -> Self {
+        Self::new_with_args(
+            program,
+            core::iter::empty::<&OsStr>(),
+            input,
+            output,
+            options,
+        )
+    }
+
+    /// Configures a lister with literal arguments before generated options.
+    ///
+    /// For example, `program = "asimov"` and `args = ["list"]` executes
+    /// `asimov list [OPTIONS] URL`. Prefixes survive capability overrides and
+    /// pipeline conversion. No shell interpretation is performed.
+    pub fn new_with_args(
+        program: impl AsRef<OsStr>,
+        args: impl IntoIterator<Item = impl AsRef<OsStr>>,
+        input: impl AsRef<str>,
+        output: GraphOutput,
+        options: ListerOptions<T, F>,
+    ) -> Self {
         Self::configured(
             program,
+            args.into_iter()
+                .map(|arg| arg.as_ref().to_os_string())
+                .collect(),
             input,
             output,
             options,
@@ -111,6 +139,7 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
 
     fn configured(
         program: impl AsRef<OsStr>,
+        arguments: Vec<OsString>,
         input: impl AsRef<str>,
         output: GraphOutput,
         options: ListerOptions<T, F>,
@@ -120,6 +149,7 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
         let mut executor = Executor::new(program);
         executor
             .command()
+            .args(&arguments)
             .option("sort", options.sort.as_ref().map(DisplaySortKeys))
             .option("offset", options.offset)
             .option("before", options.before.as_ref())
@@ -143,6 +173,7 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
 
         Self {
             executor,
+            arguments,
             options,
             capabilities,
             input,
@@ -197,8 +228,15 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
             .as_std()
             .get_program()
             .to_os_string();
-        Self::configured(program, self.input, self.output, self.options, capabilities)
-            .with_batching(batching)
+        Self::configured(
+            program,
+            self.arguments,
+            self.input,
+            self.output,
+            self.options,
+            capabilities,
+        )
+        .with_batching(batching)
     }
 
     // Pipeline stages are heterogeneous and store the string-specialized
@@ -207,6 +245,7 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
     fn into_untyped(self) -> Lister {
         Lister {
             executor: self.executor,
+            arguments: self.arguments,
             options: ListerOptions {
                 sort: self.options.sort.map(|keys| {
                     keys.keys()

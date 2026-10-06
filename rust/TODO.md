@@ -212,6 +212,12 @@ reproductions and build results are distinguished from source-review findings.
 
 ## P2: Protocols, execution, and service APIs
 
+- [ ] **Cancel complete subprocess trees when requested by server hosts.**
+  Runner kill-on-drop terminates only its direct child. When that child is
+  `asimov fetch` or `asimov list`, module descendants can outlive an HTTP
+  deadline or disconnect. Add opt-in process-group/job ownership and test
+  descendant termination and reaping on cancellation.
+
 - [ ] **Bound proxy connection, upload, and shutdown lifetimes.**
   `lib/asimov-proxy/src/openai.rs` needs upload deadlines and bounded concurrency;
   stalled response streams can indefinitely delay graceful shutdown. Add
@@ -385,6 +391,9 @@ reproductions and build results are distinguished from source-review findings.
   Strict keyring Clippy checks also encounter existing `clone_on_copy` in
   `asimov-kb`, `collapsible_if`/`needless_borrow` in `asimov-module`, and
   `items_after_test_module` in `asimov-keyring/src/keyring.rs`.
+  Strict patterns/runner checks also hit existing `doc_lazy_continuation` in
+  `asimov-patterns/src/lib.rs`, `io_other_error`/`question_mark` in
+  `asimov-env/src/envs/`, and `from_over_into` in `asimov-prompt/src/prompt_role.rs`.
 
 ## Validation evidence
 

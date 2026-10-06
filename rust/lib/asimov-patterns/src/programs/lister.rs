@@ -162,6 +162,14 @@ pub struct ListerCapabilities {
 ///     .build();
 /// ```
 #[derive(Clone, Debug, Eq, Hash, /*Ord,*/ PartialEq, /*PartialOrd,*/ Builder)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "SortKeys<T>: core::fmt::Display, F: core::fmt::Display",
+        deserialize = "SortKeys<T>: core::str::FromStr, <SortKeys<T> as core::str::FromStr>::Err: core::fmt::Display, F: core::str::FromStr, F::Err: core::fmt::Display"
+    ))
+)]
 #[builder(derive(Debug), on(String, into))]
 pub struct ListerOptions<T: Clone = String, F = String> {
     /// Additional arguments placed after generated options and before the URL.
@@ -169,6 +177,10 @@ pub struct ListerOptions<T: Clone = String, F = String> {
     /// Each string is one literal argument, without shell expansion. The runner
     /// supplies the URL separately; do not duplicate it here. See [`crate::programs`].
     #[builder(field)]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Vec::is_empty")
+    )]
     pub other: Vec<String>,
 
     /// Sort resources by the specified keys. (Prefix a key with `-` for descending order.)
@@ -180,6 +192,14 @@ pub struct ListerOptions<T: Clone = String, F = String> {
     /// representation, not a universally supported PPS grammar; the program
     /// must support both the option and the resulting expression. `None` omits
     /// the request and uses the program's documented default order.
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            with = "crate::serialization::optional_string"
+        )
+    )]
     pub sort: Option<SortKeys<T>>,
 
     /// Exclusive upper cursor bound, passed as `--before=URI`.
@@ -189,6 +209,10 @@ pub struct ListerOptions<T: Clone = String, F = String> {
     /// before that entry in the chosen sort order. May be combined with `after`
     /// to bound an interval, but not with numeric `offset`. `None` omits the bound.
     /// The options value stores this string without validation or normalization.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
     pub before: Option<String>,
 
     /// Exclusive lower cursor bound, passed as `--after=URI`.
@@ -197,6 +221,10 @@ pub struct ListerOptions<T: Clone = String, F = String> {
     /// that entry in the chosen sort order. May be combined with `before`, but
     /// not with numeric `offset`. `None` omits the bound. As with `before`, the
     /// options value stores the absolute URI string without validating it.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
     pub after: Option<String>,
 
     /// The index offset of the first output.
@@ -207,6 +235,10 @@ pub struct ListerOptions<T: Clone = String, F = String> {
     /// Offset is applied after sorting and before the limit. Programs may omit
     /// native support. Do not combine an offset, even `Some(0)`, with `before`
     /// or `after`; these are alternative pagination modes.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
     pub offset: Option<usize>,
 
     /// The maximum count of outputs [default: none].
@@ -223,6 +255,10 @@ pub struct ListerOptions<T: Clone = String, F = String> {
     /// does not validate entry boundaries.
     ///
     /// [implementation]: https://docs.rs/asimov-runner/latest/asimov_runner/struct.Lister.html
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
     pub limit: Option<usize>,
 
     /// The output format.
@@ -235,6 +271,14 @@ pub struct ListerOptions<T: Clone = String, F = String> {
     /// The option selects a representation, not a file. Executors may support
     /// only a subset of formats; JSONL graph pipelines require `jsonl`.
     #[builder(into)]
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            with = "crate::serialization::optional_string"
+        )
+    )]
     pub output: Option<OutputFormat<F>>,
 }
 

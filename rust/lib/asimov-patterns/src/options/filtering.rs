@@ -25,6 +25,7 @@ Jev filtering."#;
 /// required credentials. This type stores expressions without evaluating them;
 /// `asimov-runner` does not perform this filtering.
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[builder(derive(Debug), on(String, into))]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 #[cfg_attr(feature = "clap", command(about = None, long_about = None))]
@@ -43,6 +44,10 @@ pub struct FilteringOptions {
             long_help = HELP_JEV
         )
     )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
     pub jev: Option<String>,
 
     /// Filter and/or transform JSON-LD output using a jq expression.
@@ -56,6 +61,10 @@ pub struct FilteringOptions {
             help = "Filter and/or transform JSON-LD output using a jq expression",
             long_help = HELP_JQ
         )
+    )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
     )]
     pub jq: Option<String>,
 }

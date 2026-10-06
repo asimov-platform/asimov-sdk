@@ -28,6 +28,7 @@ If omitted, the default is module-specific."#;
 /// `clap`). Execution deadlines are configured separately by
 /// [`crate::TimingOptions`].
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[builder(derive(Debug))]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 #[cfg_attr(feature = "clap", command(about = None, long_about = None))]
@@ -42,6 +43,14 @@ pub struct CachingOptions {
             value_parser = parse_max_age,
             help = "Maximum acceptable cache age",
             long_help = HELP_MAX_AGE
+        )
+    )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            with = "crate::serialization::optional_duration"
         )
     )]
     pub max_age: Option<Duration>,

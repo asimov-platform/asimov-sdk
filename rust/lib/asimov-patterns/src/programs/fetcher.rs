@@ -52,6 +52,7 @@ pub trait Fetcher<T>: Execute<T> {}
 ///     .build();
 /// ```
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[builder(derive(Debug), on(String, into))]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 #[cfg_attr(feature = "clap", command(about = None, long_about = None))]
@@ -61,6 +62,10 @@ pub struct FetcherOptions {
     /// Each string is one literal argument, without shell expansion. The runner
     /// supplies the URL separately; do not duplicate it here. See [`crate::programs`].
     #[builder(field)]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Vec::is_empty")
+    )]
     #[cfg_attr(feature = "clap", clap(skip))]
     pub other: Vec<String>,
 
@@ -79,6 +84,10 @@ pub struct FetcherOptions {
             help = HELP_OUTPUT,
             long_help = HELP_OUTPUT
         )
+    )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
     )]
     pub output: Option<String>,
 }

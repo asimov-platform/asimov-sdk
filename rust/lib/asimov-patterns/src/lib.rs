@@ -73,6 +73,10 @@
 //! and uses `humantime`, which requires the standard library. The `clap` feature
 //! also requires the standard library and enables shared argument parsing,
 //! including human-readable cache ages and execution deadlines.
+//! The `serde` feature serializes fetch/list and shared options for the remote
+//! HTTP protocol: durations are human-readable strings, sort keys and formats
+//! use CLI spellings, and unset fields are omitted. Duration parsing uses
+//! `humantime` and requires the standard library.
 //! The default features are `all` and `std`; `std` enables standard-library
 //! support in dependencies. `all`, `tracing`, and `unstable` currently enable no
 //! additional behavior in this crate. Disabling `std` here does not guarantee
@@ -107,3 +111,6 @@ pub use output_format::*;
 
 pub mod programs;
 pub use programs::*;
+
+#[cfg(feature = "serde")]
+mod serialization;

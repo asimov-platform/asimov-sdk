@@ -24,6 +24,7 @@ Zero is accepted. If omitted, timing policy is command-specific."#;
 /// using `deadline_option()` (available with `std` or `clap`). Cache freshness
 /// is configured separately by [`crate::CachingOptions`].
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Builder)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[builder(derive(Debug))]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 #[cfg_attr(feature = "clap", command(about = None, long_about = None))]
@@ -37,6 +38,14 @@ pub struct TimingOptions {
             value_parser = humantime::parse_duration,
             help = "Allow at most this duration for the command",
             long_help = HELP_DEADLINE
+        )
+    )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            with = "crate::serialization::optional_duration"
         )
     )]
     pub deadline: Option<Duration>,

@@ -46,10 +46,31 @@ impl Fetcher {
         output: GraphOutput,
         options: FetcherOptions,
     ) -> Self {
+        Self::new_with_args(
+            program,
+            core::iter::empty::<&OsStr>(),
+            input,
+            output,
+            options,
+        )
+    }
+
+    /// Configures a fetcher with literal arguments before generated options.
+    ///
+    /// For example, use `program = "asimov"` and `args = ["fetch"]` to execute
+    /// `asimov fetch [OPTIONS] URL`. No shell interpretation is performed.
+    pub fn new_with_args(
+        program: impl AsRef<OsStr>,
+        args: impl IntoIterator<Item = impl AsRef<OsStr>>,
+        input: impl AsRef<str>,
+        output: GraphOutput,
+        options: FetcherOptions,
+    ) -> Self {
         let input = input.as_ref().to_string();
         let mut executor = Executor::new(program);
         executor
             .command()
+            .args(args)
             .option("output", options.output.as_ref())
             .args(&options.other)
             .arg(&input)
