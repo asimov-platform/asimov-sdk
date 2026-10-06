@@ -89,8 +89,9 @@ impl Installer {
     /// Stage a replacement before publishing it, preserving enabled state.
     ///
     /// Publication failures roll back the prior installation. An interrupted
-    /// publication is recovered on the next upgrade attempt. Callers must exclude
-    /// concurrent install/uninstall and enable/disable operations on the registry.
+    /// publication is recovered on the next registration, upgrade, or uninstall.
+    /// Publication shares a lock with registration and uninstall; callers must
+    /// exclude low-level registry mutations and enable/disable operations.
     ///
     /// ```rust,no_run
     /// # use asimov_installer::{Installer, InstallOptions};
@@ -134,19 +135,7 @@ impl Installer {
     }
 
     pub async fn uninstall_module(&self, module_name: &ModuleName) -> Result<(), UninstallError> {
-        let manifest = self.registry.read_manifest(module_name).await?;
-
-        self.registry.disable_module(module_name).await?;
-
-        for program in &manifest.manifest.provides.programs {
-            self.registry
-                .remove_binary(program)
-                .await
-                .map_err(|e| UninstallError::RemoveBinary(program.into(), e))?;
-        }
-
-        self.registry.remove_module(module_name).await?;
-
+        self.registry.uninstall_module(module_name).await?;
         Ok(())
     }
 
@@ -297,7 +286,7 @@ impl Installer {
     ) -> Result<(), FinishInstallError> {
         let (module_name, module_dir) = self.stage_install(preinstalled, work_dir).await?;
         self.registry
-            .add_module(&module_name, module_dir.path())
+            .add_module_owned(&module_name, module_dir)
             .await?;
         Ok(())
     }

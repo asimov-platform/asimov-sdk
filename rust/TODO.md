@@ -107,16 +107,10 @@ reproductions and build results are distinguished from source-review findings.
   final path segment without validating status or tag-route shape. Test failed
   redirects and asset fallback using injectable local release endpoints.
 
-- [ ] **Make executable registration ownership-aware and recoverable.**
-  `Registry::add_module` in `lib/asimov-registry/src/registry.rs` commits the
-  module directory before linking binaries, and `add_binary` removes an existing
-  destination without checking its owner. Uninstall in installer removes names
-  from the manifest regardless of their current targets. Preflight collisions,
-  validate executable entries, and roll back failed publication; test two
-  modules providing the same name and partial link failures.
-  Extend upgrade transaction locking to all registry mutations and recover
-  interrupted upgrades before general registry reads, not only upgrade retries.
-  Upgrade publication currently has a brief reader-visible directory/link gap;
+- [ ] **Coordinate low-level registry mutations and read-time recovery.**
+  Extend publication locking to legacy migration, enable/disable, and low-level
+  removal APIs. Recover interrupted publications before general registry reads.
+  Publication currently has a brief reader-visible directory/link gap;
   assess generation-based publication and power-loss durability separately.
 
 - [ ] **Make legacy registry migration atomic and observable.**

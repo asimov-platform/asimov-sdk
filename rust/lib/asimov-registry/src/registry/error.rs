@@ -15,6 +15,8 @@ pub enum CreateFileTreeError {
 
 #[derive(Debug, Error)]
 pub enum AddModuleError {
+    #[error("registration failed: {0}")]
+    Publication(#[from] io::Error),
     #[error("module is already installed")]
     AlreadyInstalled,
     #[error("failed to install module from `{0}` to `{1}`: {2}")]

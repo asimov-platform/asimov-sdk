@@ -8,7 +8,7 @@ use std::{
 };
 
 impl Registry {
-    /// Recover an interrupted upgrade before inspecting the installed version.
+    /// Recover an interrupted registration, upgrade, or uninstall for a module.
     ///
     /// Uncommitted directory and link moves are rolled back. Committed upgrades
     /// only need backup cleanup. Recovery errors retain the transaction for retry.
@@ -29,8 +29,8 @@ impl Registry {
     /// directory and executable links; failed rollback retains a recovery journal.
     /// Dropping the future does not cancel publication once the worker starts.
     /// After process interruption, call [`Self::recover_upgrade`] before use.
-    /// This serializes upgrades, but callers must exclude concurrent installs,
-    /// uninstalls, and enable/disable operations. Multiple filesystem entries
+    /// This serializes registrations, upgrades, and uninstalls, but callers must
+    /// exclude low-level mutations and enable/disable operations. Filesystem entries
     /// cannot be switched atomically: readers may see a brief publication gap.
     pub async fn replace_module(
         &self,
@@ -41,8 +41,8 @@ impl Registry {
         let name = name.clone();
         tokio::task::spawn_blocking(move || {
             let _lock = registry.upgrade_lock()?;
+            registry.recover_publications()?;
             let transaction = std::path::absolute(registry.transaction_dir(&name))?;
-            recover(&transaction)?;
             let result = registry
                 .prepare_upgrade(&name, staged.path(), &transaction)
                 .and_then(|moves| publish(&transaction, &moves, |_| Ok(())));
@@ -64,7 +64,7 @@ impl Registry {
         .map_err(io::Error::other)?
     }
 
-    fn upgrade_lock(&self) -> io::Result<fs::File> {
+    pub(super) fn upgrade_lock(&self) -> io::Result<fs::File> {
         let file = fs::OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -75,7 +75,7 @@ impl Registry {
         Ok(file)
     }
 
-    fn transaction_dir(&self, name: &ModuleName) -> PathBuf {
+    pub(super) fn transaction_dir(&self, name: &ModuleName) -> PathBuf {
         self.install_dir.join(format!(".upgrade-{name}"))
     }
 
@@ -138,18 +138,33 @@ impl Registry {
         // Move directories first; existing enabled links keep their stable target.
         moves.insert(0, (transaction.join("new"), live.clone()));
         moves.insert(0, (live, transaction.join("old")));
-        let journal = fs::File::create(transaction.join("journal.tmp"))?;
-        serde_json::to_writer(&journal, &moves).map_err(io::Error::other)?;
-        journal.sync_all()?;
-        fs::rename(
-            transaction.join("journal.tmp"),
-            transaction.join("journal.json"),
-        )?;
+        write_journal(transaction, &moves)?;
         Ok(moves)
     }
 }
 
-fn validate_module(path: &Path, name: &ModuleName) -> io::Result<BTreeSet<alloc::string::String>> {
+pub(super) fn write_journal(transaction: &Path, moves: &[(PathBuf, PathBuf)]) -> io::Result<()> {
+    let journal = fs::File::create(transaction.join("journal.tmp"))?;
+    serde_json::to_writer(&journal, &moves).map_err(io::Error::other)?;
+    journal.sync_all()?;
+    fs::rename(
+        transaction.join("journal.tmp"),
+        transaction.join("journal.json"),
+    )?;
+    Ok(())
+}
+
+pub(super) fn validate_module(
+    path: &Path,
+    name: &ModuleName,
+) -> io::Result<BTreeSet<alloc::string::String>> {
+    if !fs::symlink_metadata(path)?.is_dir()
+        || !fs::symlink_metadata(path.join(MANIFEST_FILE_NAME))?.is_file()
+    {
+        return Err(io::Error::other(
+            "module directory and manifest must not be symlinks",
+        ));
+    }
     let manifest: asimov_module::InstalledModuleManifest =
         serde_json::from_slice(&fs::read(path.join(MANIFEST_FILE_NAME))?)
             .map_err(io::Error::other)?;
@@ -157,6 +172,18 @@ fn validate_module(path: &Path, name: &ModuleName) -> io::Result<BTreeSet<alloc:
         return Err(io::Error::other("replacement module identity mismatch"));
     }
     let mut programs = BTreeSet::new();
+    let bin = path.join(BIN_DIR_NAME);
+    match fs::symlink_metadata(&bin) {
+        Ok(metadata) if metadata.is_dir() => {},
+        Err(error)
+            if error.kind() == io::ErrorKind::NotFound
+                && manifest.manifest.provides.programs.is_empty() =>
+        {
+            return Ok(programs);
+        },
+        Err(error) => return Err(error),
+        Ok(_) => return Err(io::Error::other("module bin directory is not a directory")),
+    }
     for program in manifest.manifest.provides.programs {
         asimov_core::validate_filename_component(&program).map_err(io::Error::other)?;
         if !fs::symlink_metadata(path.join(BIN_DIR_NAME).join(&program))?.is_file() {
@@ -166,10 +193,21 @@ fn validate_module(path: &Path, name: &ModuleName) -> io::Result<BTreeSet<alloc:
             return Err(io::Error::other("duplicate module binary"));
         }
     }
+    for entry in fs::read_dir(bin)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_file()
+            || !entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| programs.contains(name))
+        {
+            return Err(io::Error::other("undeclared or non-regular module binary"));
+        }
+    }
     Ok(programs)
 }
 
-fn publish(
+pub(super) fn publish(
     transaction: &Path,
     moves: &[(PathBuf, PathBuf)],
     mut before_move: impl FnMut(usize) -> io::Result<()>,
@@ -183,7 +221,7 @@ fn publish(
     Ok(())
 }
 
-fn recover(transaction: &Path) -> io::Result<()> {
+pub(super) fn recover(transaction: &Path) -> io::Result<()> {
     // Never interpret a partially deleted journal as a live transaction.
     let cleanup = transaction.with_extension("cleanup");
     if cleanup.try_exists()? {
@@ -219,11 +257,11 @@ fn recover(transaction: &Path) -> io::Result<()> {
 }
 
 #[cfg(unix)]
-fn symlink(target: &Path, link: &Path) -> io::Result<()> {
+pub(super) fn symlink(target: &Path, link: &Path) -> io::Result<()> {
     std::os::unix::fs::symlink(target, link)
 }
 #[cfg(windows)]
-fn symlink(target: &Path, link: &Path) -> io::Result<()> {
+pub(super) fn symlink(target: &Path, link: &Path) -> io::Result<()> {
     std::os::windows::fs::symlink_file(target, link)
 }
 

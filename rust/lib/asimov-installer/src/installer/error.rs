@@ -44,6 +44,8 @@ pub enum UpgradeError {
 
 #[derive(Debug, Error)]
 pub enum UninstallError {
+    #[error("uninstall publication or recovery failed: {0}")]
+    Publication(#[from] io::Error),
     #[error("unable to read module manifest file: {0}")]
     Read(#[from] registry::ManifestError),
     #[error(transparent)]

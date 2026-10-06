@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Fixed
+- asimov-registry, asimov-installer: Reject executable collisions and invalid
+  binary entries, roll back failed registration/uninstall, and preserve links
+  reassigned to other modules during uninstall
 - asimov-module: Read and resolve installed module directories while retaining
   legacy manifest lookup, and support lookup from an explicit state root
 - asimov-installer: Stage upgrades before replacing working installations,

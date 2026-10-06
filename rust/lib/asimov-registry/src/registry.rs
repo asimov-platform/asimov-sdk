@@ -8,6 +8,7 @@ use tokio::io;
 
 pub mod error;
 use error::*;
+mod registration;
 mod upgrade;
 
 pub use asimov_module::layout::MANIFEST_FILE_NAME;
@@ -86,47 +87,6 @@ impl Registry {
         self.install_dir.join(module_name.as_str())
     }
 
-    pub async fn add_module(
-        &self,
-        module_name: &ModuleName,
-        dir: impl AsRef<Path>,
-    ) -> Result<(), AddModuleError> {
-        if self.is_module_installed(module_name).await.unwrap_or(false) {
-            return Err(AddModuleError::AlreadyInstalled);
-        }
-
-        let module_dir = self.module_dir(module_name);
-
-        tokio::fs::rename(dir.as_ref(), &module_dir)
-            .await
-            .map_err(|e| AddModuleError::Install(dir.as_ref().into(), module_dir.clone(), e))?;
-
-        let bin_dir = module_dir.join(BIN_DIR_NAME);
-
-        let mut entries = match tokio::fs::read_dir(&bin_dir).await {
-            Ok(entries) => entries,
-            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
-            Err(err) => return Err(AddModuleError::ReadBinDir(bin_dir, err)),
-        };
-
-        while let Some(entry) = entries
-            .next_entry()
-            .await
-            .map_err(|e| AddModuleError::ReadBinDir(bin_dir.clone(), e))?
-        {
-            let program_name = entry.file_name();
-            let Some(program_name) = program_name.to_str() else {
-                continue;
-            };
-
-            self.add_binary(program_name, &entry.path())
-                .await
-                .map_err(|e| AddModuleError::AddBinary(program_name.into(), e))?;
-        }
-
-        Ok(())
-    }
-
     pub async fn read_manifest(
         &self,
         module_name: &ModuleName,
@@ -167,6 +127,9 @@ impl Registry {
             .map_err(Into::into)
     }
 
+    /// Remove only the module directory. Prefer [`Self::uninstall_module`] to
+    /// transactionally remove the directory and its owned links together.
+    /// This low-level operation must not overlap a publication transaction.
     pub async fn remove_module(&self, module_name: &ModuleName) -> Result<(), RemoveModuleError> {
         self.migrate_legacy_manifest(module_name).await;
 
@@ -181,22 +144,9 @@ impl Registry {
             .map_err(|e| RemoveModuleError::RemoveModuleDir(module_dir, e))
     }
 
-    async fn add_binary(&self, program_name: &str, binary_path: &Path) -> io::Result<()> {
-        let target_path = match self
-            .exec_dir
-            .parent()
-            .and_then(|parent| binary_path.strip_prefix(parent).ok())
-        {
-            Some(suffix) => PathBuf::from("..").join(suffix),
-            None => binary_path.into(),
-        };
-
-        let link_path = self.exec_dir.join(program_name);
-        let _ = self.remove_binary(program_name).await;
-
-        create_symlink(&target_path, &link_path, false).await
-    }
-
+    /// Unconditionally remove an executable entry, without checking ownership.
+    /// Prefer [`Self::uninstall_module`] when removing a module. This low-level
+    /// operation must not overlap a publication transaction.
     pub async fn remove_binary(&self, name: impl AsRef<str>) -> Result<(), RemoveBinaryError> {
         let name = name.as_ref();
 

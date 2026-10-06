@@ -11,6 +11,8 @@ async fn module_readers_find_a_registry_created_installation() {
     let registry = Registry::new(root.path(), Default::default());
     registry.create_file_tree().await.unwrap();
     let staged = tempdir().unwrap();
+    std::fs::create_dir(staged.path().join("bin")).unwrap();
+    std::fs::write(staged.path().join("bin/asimov-ipfs-fetcher"), "fixture").unwrap();
     let installed = InstalledModuleManifest {
         version: Some("1.2.3".into()),
         manifest: serde_json::from_str(SAMPLE_MANIFEST).unwrap(),
