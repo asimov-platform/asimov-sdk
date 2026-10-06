@@ -18,7 +18,7 @@ publish.workspace = true
 default = ["all", "std"]
 all = ["http", "iroh"]
 std = ["asimov-flow/std", "asimov-patterns/std"]
-http = ["std", "asimov-flow/tokio", "dep:humantime", "dep:reqwest", "dep:serde", "dep:thiserror"]
+http = ["std", "asimov-flow/tokio", "dep:humantime", "dep:reqwest", "dep:secrecy", "dep:serde", "dep:thiserror"]
 iroh = []
 unstable = []
 
@@ -28,6 +28,7 @@ asimov-patterns.workspace = true
 async-trait.workspace = true
 humantime = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["http2", "json", "stream"], optional = true }
+secrecy = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 

@@ -48,7 +48,7 @@ impl SocialClient {
         base_url: impl AsRef<str>,
     ) -> Result<Self, SocialClientError> {
         Ok(Self {
-            executor: Executor::new(base_url, api_token)?,
+            executor: Executor::new(base_url, Some(&api_token.into()))?,
         })
     }
 

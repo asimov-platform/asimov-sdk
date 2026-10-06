@@ -120,6 +120,23 @@ async fn http1_server(
 }
 
 #[tokio::test]
+async fn requests_without_a_token_omit_authorization() {
+    for endpoint in ["fetch", "list"] {
+        let (url, request, resume, server) = http1_server(200, b"", b"").await;
+        let executor = Executor::new(url, None).unwrap();
+        let _stream = timeout(DEADLINE, executor.post_jsonl(endpoint, &json!({})))
+            .await
+            .unwrap()
+            .unwrap();
+        let request = timeout(DEADLINE, request).await.unwrap().unwrap();
+        let (headers, _) = request.split_once("\r\n\r\n").unwrap();
+        assert!(!headers.to_ascii_lowercase().contains("\r\nauthorization:"));
+        drop(resume);
+        server.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn patterns_post_authenticated_json_and_stream_raw_batches_before_eof() {
     async fn fetch(
         operation: &mut impl asimov_patterns::Fetcher<JsonlStream, Error = Error>,
@@ -133,7 +150,7 @@ async fn patterns_post_authenticated_json_and_stream_raw_batches_before_eof() {
     }
     for endpoint in ["fetch", "list"] {
         let (base_url, request, resume, server) = http1_server(200, b"\n{}\r\n", b"\xfftail").await;
-        let executor = Executor::new(format!("{base_url}/"), "test-token").unwrap();
+        let executor = Executor::new(format!("{base_url}/"), Some("test-token")).unwrap();
         let mut records = timeout(DEADLINE, async {
             if endpoint == "fetch" {
                 fetch(&mut Fetcher::new(
@@ -194,7 +211,7 @@ async fn patterns_post_authenticated_json_and_stream_raw_batches_before_eof() {
 #[tokio::test]
 async fn http_status_failure_is_a_startup_error() {
     let (url, request, resume, server) = http1_server(401, b"", b"").await;
-    let executor = Executor::new(url, "token").unwrap();
+    let executor = Executor::new(url, Some("token")).unwrap();
     let error = timeout(DEADLINE, executor.post_jsonl("fetch", &json!({})))
         .await
         .unwrap()
@@ -211,7 +228,7 @@ async fn http_status_failure_is_a_startup_error() {
 #[tokio::test]
 async fn truncated_body_flushes_complete_records_then_reports_failure() {
     let (url, request, resume, server) = http1_server(200, b"{}\npartial", b"").await;
-    let executor = Executor::new(url, "token").unwrap();
+    let executor = Executor::new(url, Some("token")).unwrap();
     let mut batches = executor.post_jsonl("fetch", &json!({})).await.unwrap();
     request.await.unwrap();
     drop(resume); // Close without the terminating HTTP chunk.
@@ -228,7 +245,7 @@ async fn truncated_body_flushes_complete_records_then_reports_failure() {
 
 #[tokio::test]
 async fn unsupported_fetcher_options_do_not_start_requests() {
-    let executor = Executor::new("http://127.0.0.1:1", "token").unwrap();
+    let executor = Executor::new("http://127.0.0.1:1", Some("token")).unwrap();
     for (options, expected) in [
         (FetcherOptions::builder().output("turtle").build(), "output"),
         (FetcherOptions::builder().other("--custom").build(), "other"),
@@ -291,7 +308,7 @@ async fn fetcher_forwards_flattened_options_and_omits_unset_fields() {
     ] {
         let (url, request, resume, server) = http1_server(200, b"", b"").await;
         let mut operation = Fetcher::new(
-            Executor::new(url, "token").unwrap(),
+            Executor::new(url, Some("token")).unwrap(),
             "example:",
             FetcherOptions::builder().output("jsonl").build(),
         )
@@ -319,12 +336,15 @@ async fn fetcher_forwards_flattened_options_and_omits_unset_fields() {
 
 #[test]
 fn configuration_supports_prefixes_and_redacts_token() {
-    let executor =
-        Executor::new("https://example.com/api?ignored=1#ignored", "secret-token").unwrap();
+    let executor = Executor::new(
+        "https://example.com/api?ignored=1#ignored",
+        Some("secret-token"),
+    )
+    .unwrap();
     assert_eq!(executor.base_url().as_str(), "https://example.com/api/");
     assert!(!format!("{executor:?}").contains("secret-token"));
     for url in ["invalid", "file:///tmp/example", "mailto:me@example.com"] {
-        assert!(Executor::new(url, "token").is_err());
+        assert!(Executor::new(url, Some("token")).is_err());
     }
 }
 
@@ -344,7 +364,7 @@ async fn typed_lister_forwards_all_options_and_preserves_response_bytes() {
     ] {
         let (url, request, resume, server) = http1_server(200, b"{}\r\n", b"\xfftail").await;
         let mut lister = super::Lister::new(
-            Executor::new(url, "token").unwrap(),
+            Executor::new(url, Some("token")).unwrap(),
             "https://example.com/collection",
             ListerOptions::<Property, Format>::builder()
                 .sort(
@@ -468,7 +488,11 @@ async fn absent_options_are_omitted_but_explicit_values_are_forwarded() {
     ];
     for (options, expected) in cases {
         let (url, request, resume, server) = http1_server(200, b"", b"").await;
-        let mut operation = Lister::new(Executor::new(url, "token").unwrap(), "example:", options);
+        let mut operation = Lister::new(
+            Executor::new(url, Some("token")).unwrap(),
+            "example:",
+            options,
+        );
         let mut stream = timeout(DEADLINE, operation.execute())
             .await
             .unwrap()
@@ -516,7 +540,7 @@ async fn lister_forwards_shared_options_without_pattern_options() {
     ] {
         let (url, request, resume, server) = http1_server(200, b"", b"").await;
         let mut operation = Lister::new(
-            Executor::new(url, "token").unwrap(),
+            Executor::new(url, Some("token")).unwrap(),
             "example:",
             ListerOptions::default(),
         )
@@ -549,7 +573,7 @@ async fn lister_forwards_shared_options_without_pattern_options() {
 async fn endpoint_option_rejections_are_reported_as_http_errors() {
     let (url, request, resume, server) = http1_server(400, b"", b"").await;
     let mut operation = Lister::new(
-        Executor::new(url, "token").unwrap(),
+        Executor::new(url, Some("token")).unwrap(),
         "example:",
         ListerOptions::builder()
             .limit(0)
@@ -588,7 +612,7 @@ async fn http2_requests_can_reuse_the_same_operation() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut executor = Executor::new(
         format!("http://{}", listener.local_addr().unwrap()),
-        "token",
+        Some("token"),
     )
     .unwrap();
     // h2c isolates HTTP/2 framing from TLS certificate provisioning in this test.

@@ -1,5 +1,8 @@
 # Rust workspace backlog
 
+- [ ] Restore `lib/asimov-remote/examples.md.j2`: README generation fails
+  because the crate's template includes this missing file.
+
 Review date: 2026-10-04. Scope: all 41 workspace members, their feature and
 dependency wiring, public APIs, implementations, tests, and build/documentation
 configuration. Paths below are relative to `rust/` unless prefixed with `../`.

@@ -1516,6 +1516,7 @@ dependencies = [
  "hyper 1.11.1",
  "hyper-util",
  "reqwest 0.12.28",
+ "secrecy",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

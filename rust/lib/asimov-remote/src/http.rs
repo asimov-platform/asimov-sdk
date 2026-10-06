@@ -24,7 +24,7 @@
 //! use core::time::Duration;
 //!
 //! # async fn example() -> Result<(), Error> {
-//! let executor = Executor::new("https://asimov.social", "api-token")?;
+//! let executor = Executor::new("https://asimov.social", Some("api-token"))?;
 //! let caching = CachingOptions::builder()
 //!     .max_age(Duration::from_secs(3600))
 //!     .build();
@@ -51,6 +51,7 @@ use asimov_flow::{BatchStream, jsonl_batches_from_chunks};
 use async_trait::async_trait;
 use core::fmt;
 use reqwest::{Client, Url, header::ACCEPT};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
 pub use asimov_flow::{BatchOptions, JsonlBatch, JsonlLine, StreamExt};
@@ -78,7 +79,7 @@ pub enum Error {
 pub struct Executor {
     client: Client,
     base_url: Url,
-    api_token: String,
+    api_token: Option<SecretString>,
     batching: BatchOptions,
 }
 
@@ -95,7 +96,10 @@ impl Executor {
     /// Uses rustls with HTTP/2 negotiation and HTTP/1.1 fallback. Plain HTTP URLs
     /// are accepted for development. Path prefixes and an optional trailing slash
     /// are supported; query strings and fragments on the base URL are ignored.
-    pub fn new(base_url: impl AsRef<str>, api_token: impl Into<String>) -> Result<Self, Error> {
+    /// Pass `Some(token)` to send an `Authorization: Bearer` header, or `None`
+    /// to omit authentication. The token is copied into a [`SecretString`],
+    /// which zeroizes its storage on drop.
+    pub fn new(base_url: impl AsRef<str>, api_token: Option<&str>) -> Result<Self, Error> {
         let mut base_url = Url::parse(base_url.as_ref())
             .map_err(|error| Error::InvalidBaseUrl(format!("{error}")))?;
         if !matches!(base_url.scheme(), "http" | "https") || base_url.host_str().is_none() {
@@ -111,7 +115,7 @@ impl Executor {
         Ok(Self {
             client: Client::builder().use_rustls_tls().build()?,
             base_url,
-            api_token: api_token.into(),
+            api_token: api_token.map(SecretString::from),
             batching: BatchOptions::default(),
         })
     }
@@ -146,15 +150,15 @@ impl Executor {
                 "endpoint must use the configured origin".into(),
             ));
         }
-        let response = self
+        let mut request = self
             .client
             .post(url)
-            .bearer_auth(&self.api_token)
             .header(ACCEPT, "application/jsonl")
-            .json(request)
-            .send()
-            .await?
-            .error_for_status()?;
+            .json(request);
+        if let Some(token) = &self.api_token {
+            request = request.bearer_auth(token.expose_secret());
+        }
+        let response = request.send().await?.error_for_status()?;
         Ok(jsonl_batches_from_chunks(
             response
                 .bytes_stream()
