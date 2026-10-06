@@ -356,6 +356,12 @@ mod tests {
                 .write_all(b"e\r\ndata: second\n\n\r\n0\r\n\r\n")
                 .await
                 .unwrap();
+            drop(socket);
+
+            // Close the next request without a response to trigger HTTP 502.
+            // Connecting to a closed port can outlast the deadline on Windows.
+            let (mut socket, _) = upstream.accept().await.unwrap();
+            read_request_headers(&mut socket).await;
         });
 
         // Use a local cleartext upstream to exercise the entire serving path.
@@ -433,11 +439,11 @@ mod tests {
                 .unwrap()
                 .contains("data: second")
         );
-        upstream_task.await.unwrap();
 
-        // The completed upstream listener is gone; errors become HTTP 502.
+        // The upstream closes without responding; errors become HTTP 502.
         let failed = client.get(&url).send().await.unwrap();
         assert_eq!(failed.status(), StatusCode::BAD_GATEWAY);
+        upstream_task.await.unwrap();
         stop.send(()).unwrap();
         tokio::time::timeout(Duration::from_secs(2), server)
             .await

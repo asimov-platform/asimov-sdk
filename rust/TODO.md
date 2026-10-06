@@ -61,6 +61,11 @@ reproductions and build results are distinguished from source-review findings.
 
 ## P2: Build, feature, and facade correctness
 
+- [ ] **Confirm the proxy HTTP 502 fixture fix on Windows CI.**
+  Run 37508505937 timed out while reconnecting to a closed upstream port in
+  `lib/asimov-proxy/src/openai.rs`. The fixture now accepts and closes the final
+  request without responding; local tests pass on macOS.
+
 - [ ] **Make the no-std contract hold on a target without std.**
   Host `--no-default-features` checks pass, but `asimov-core` fails for
   `thumbv7em-none-eabihf`: default-enabled `know` pulls `serde_json/std` and
