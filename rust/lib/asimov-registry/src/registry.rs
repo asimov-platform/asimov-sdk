@@ -8,6 +8,7 @@ use tokio::io;
 
 pub mod error;
 use error::*;
+mod upgrade;
 
 pub const MANIFEST_FILE_NAME: &str = "manifest.json";
 pub const README_FILE_PATH: &str = "doc/README.md";

@@ -27,14 +27,6 @@ reproductions and build results are distinguished from source-review findings.
   flat YAML files. Share the layout contract and test lookup/resolution against
   a registry-created installation, retaining explicit legacy compatibility.
 
-- [ ] **Make upgrades recoverable before removing the working installation.**
-  `Installer::upgrade_module` in `lib/asimov-installer/src/installer.rs`
-  uninstalls the old version before assembly, registration, and re-enabling
-  can succeed. Assemble and validate the replacement first, retain a rollback
-  copy, and commit directory/link changes together. Test missing binaries,
-  failed renames, link failures, and interrupted upgrades with the prior
-  version still usable.
-
 - [ ] **Check credit range and precision at conversion boundaries.**
   `Credits::as_nanos` in `lib/asimov-credit/src/credits.rs` narrows an `i128`
   mantissa with `as`: ten billion credits becomes `-8446744073709551616` nanos
@@ -115,10 +107,8 @@ reproductions and build results are distinguished from source-review findings.
 - [ ] **Detect dependency cycles and reuse the chosen release during install.**
   `preinstall` in `lib/asimov-installer/src/installer.rs` recursively installs
   dependencies without an in-progress set, so self/cyclic dependencies recurse
-  indefinitely. `upgrade_module` also resolves latest once for comparison and
-  again inside preinstall. Track the dependency chain and pin one selected
-  release through the operation; test cycles, diamond dependencies, and a
-  changing latest-release response.
+  indefinitely. Track the dependency chain; test cycles and diamond dependencies.
+  Add a changing latest-release fixture to verify upgrade release pinning.
 
 - [ ] **Validate GitHub release redirects and cover asset fallback.**
   In `lib/asimov-installer/src/installer/github.rs`, redirect lookup accepts the
@@ -132,6 +122,10 @@ reproductions and build results are distinguished from source-review findings.
   from the manifest regardless of their current targets. Preflight collisions,
   validate executable entries, and roll back failed publication; test two
   modules providing the same name and partial link failures.
+  Extend upgrade transaction locking to all registry mutations and recover
+  interrupted upgrades before general registry reads, not only upgrade retries.
+  Upgrade publication currently has a brief reader-visible directory/link gap;
+  assess generation-based publication and power-loss durability separately.
 
 - [ ] **Make legacy registry migration atomic and observable.**
   `move_legacy_manifest` in `lib/asimov-registry/src/registry.rs` writes

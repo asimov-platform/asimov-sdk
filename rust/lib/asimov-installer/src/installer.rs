@@ -86,6 +86,12 @@ impl Installer {
         github::fetch_latest_release(&self.client, module_name).await
     }
 
+    /// Stage a replacement before publishing it, preserving enabled state.
+    ///
+    /// Publication failures roll back the prior installation. An interrupted
+    /// publication is recovered on the next upgrade attempt. Callers must exclude
+    /// concurrent install/uninstall and enable/disable operations on the registry.
+    ///
     /// ```rust,no_run
     /// # use asimov_installer::{Installer, InstallOptions};
     /// let i = Installer::default();
@@ -97,6 +103,7 @@ impl Installer {
         module_name: &ModuleName,
         options: &InstallOptions,
     ) -> Result<(), UpgradeError> {
+        self.registry.recover_upgrade(module_name).await?;
         let version = if let Some(ref want_version) = options.version {
             want_version.clone()
         } else {
@@ -112,21 +119,16 @@ impl Installer {
 
         let work_dir = self.work_dir(module_name).await?;
 
-        // check if currently enabled, have to re-enable after upgrade
-        let was_enabled = self.registry.is_module_enabled(module_name).await?;
-
+        let options = InstallOptions {
+            version: Some(version),
+            model_size: options.model_size.clone(),
+        };
         let preinstalled = self
-            .preinstall(module_name, options, work_dir.path())
+            .preinstall(module_name, &options, work_dir.path())
             .await?;
 
-        // now ok to uninstall old version
-        self.uninstall_module(module_name).await?;
-
-        self.finish_install(preinstalled, work_dir.path()).await?;
-
-        if was_enabled {
-            self.registry.enable_module(module_name).await?;
-        }
+        let (_, staged) = self.stage_install(preinstalled, work_dir.path()).await?;
+        self.registry.replace_module(module_name, staged).await?;
 
         Ok(())
     }
@@ -293,6 +295,18 @@ impl Installer {
         preinstalled: Preinstalled,
         work_dir: &Path,
     ) -> Result<(), FinishInstallError> {
+        let (module_name, module_dir) = self.stage_install(preinstalled, work_dir).await?;
+        self.registry
+            .add_module(&module_name, module_dir.path())
+            .await?;
+        Ok(())
+    }
+
+    async fn stage_install(
+        &self,
+        preinstalled: Preinstalled,
+        work_dir: &Path,
+    ) -> Result<(ModuleName, tempfile::TempDir), FinishInstallError> {
         let Preinstalled {
             module_name,
             manifest,
@@ -301,14 +315,16 @@ impl Installer {
             extract_dir,
         } = preinstalled;
 
-        let module_dir = work_dir.join("module");
-
-        tokio::fs::create_dir(&module_dir)
-            .await
-            .map_err(|e| FinishInstallError::CreateDir(module_dir.clone(), e))?;
+        // A sibling survives cancellation of the download work directory while
+        // the registry's publication worker owns the staged module.
+        let parent = work_dir.parent().unwrap_or(work_dir);
+        let module_dir = tempfile::Builder::new()
+            .prefix(".module-")
+            .tempdir_in(parent)
+            .map_err(|e| FinishInstallError::CreateDir(parent.into(), e))?;
 
         assemble_module(
-            &module_dir,
+            module_dir.path(),
             InstalledModuleManifest {
                 version: Some(version),
                 manifest,
@@ -318,9 +334,7 @@ impl Installer {
         )
         .await?;
 
-        self.registry.add_module(&module_name, &module_dir).await?;
-
-        Ok(())
+        Ok((module_name, module_dir))
     }
 }
 
@@ -423,6 +437,60 @@ async fn find_readme(extract_dir: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn failed_replacement_assembly_preserves_the_installed_module() {
+        let root = tempfile::tempdir().unwrap();
+        let registry = Registry::new(root.path(), Default::default());
+        registry.create_file_tree().await.unwrap();
+        let installer = Installer::new(reqwest::Client::new(), registry);
+        let name: ModuleName = "example".parse().unwrap();
+        let old = root.path().join("old");
+        std::fs::create_dir_all(old.join("bin")).unwrap();
+        std::fs::write(old.join("bin/example"), "working binary").unwrap();
+        std::fs::write(
+            old.join("manifest.json"),
+            r#"{"name":"example","version":"1","provides":{"programs":["example"]}}"#,
+        )
+        .unwrap();
+        installer.registry.add_module(&name, old).await.unwrap();
+        installer.registry.enable_module(&name).await.unwrap();
+
+        let work = installer.work_dir(&name).await.unwrap();
+        let extract = work.path().join("extract");
+        std::fs::create_dir(&extract).unwrap();
+        let manifest = installer
+            .registry
+            .read_manifest(&name)
+            .await
+            .unwrap()
+            .manifest;
+        let replacement = Preinstalled {
+            module_name: name.clone(),
+            manifest,
+            version: "2".into(),
+            readme: None,
+            extract_dir: extract,
+        };
+        assert!(matches!(
+            installer.stage_install(replacement, work.path()).await,
+            Err(FinishInstallError::MoveBinary(_, _))
+        ));
+        assert_eq!(
+            installer
+                .registry
+                .module_version(&name)
+                .await
+                .unwrap()
+                .as_deref(),
+            Some("1")
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("libexec/example")).unwrap(),
+            "working binary"
+        );
+        assert!(installer.registry.is_module_enabled(&name).await.unwrap());
+    }
 
     #[tokio::test]
     async fn find_readme_in_archive() {

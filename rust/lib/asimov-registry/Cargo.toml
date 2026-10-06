@@ -53,7 +53,7 @@ serde_yaml_ng.workspace = true
 tar.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["fs"] }
+tokio = { workspace = true, features = ["fs", "rt"] }
 
 # Optional dependencies:
 asimov-env = { workspace = true, optional = true }

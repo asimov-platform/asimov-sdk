@@ -22,6 +22,8 @@ pub enum InstallError {
 
 #[derive(Debug, Error)]
 pub enum UpgradeError {
+    #[error("upgrade publication or recovery failed: {0}")]
+    Publication(#[from] io::Error),
     #[error("failed to check the latest version of module: {0}")]
     Fetch(#[from] FetchError),
     #[error("unable to read current version of module: {0}")]
