@@ -23,6 +23,9 @@ If omitted, the default is module-specific."#;
 /// `7d`, or `1m 30s`; it rejects a zero maximum age.
 /// Builders and direct field assignments do not validate durations.
 ///
+/// With `serde`, the wire name is `max-age`; `max_age` and `maxAge` are accepted
+/// as input aliases. Supplying multiple spellings of the field is an error.
+///
 /// These options describe requests; they do not implement caching. Hosts can
 /// forward explicit values using `max_age_option()` (available with `std` or
 /// `clap`). Execution deadlines are configured separately by
@@ -48,6 +51,9 @@ pub struct CachingOptions {
     #[cfg_attr(
         feature = "serde",
         serde(
+            rename = "max-age",
+            alias = "max_age",
+            alias = "maxAge",
             default,
             skip_serializing_if = "Option::is_none",
             with = "crate::serialization::optional_duration"

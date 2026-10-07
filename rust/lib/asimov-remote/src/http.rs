@@ -5,7 +5,7 @@
 //! Fetching maps one resource URL to `{"urls":[URL],"options":{...}}` at `fetch`.
 //! Listing maps a collection URL to `{"url":URL,"options":{...}}` at `list`,
 //! forwarding every configured [`ListerOptions`] field. Shared caching, filtering,
-//! and timing fields are flattened into the same `options` object: `max_age`,
+//! and timing fields are flattened into the same `options` object: `max-age`,
 //! `jev`, `jq`, and `deadline`. Both operations use [`FilteringOptions`] for
 //! filtering. Durations use human-readable strings such as `"1h"` or
 //! `"1m 30s"`, preserving subsecond precision. The endpoint applies cache policy,
@@ -171,7 +171,7 @@ impl Executor {
 /// One configured resource fetch. Each execution sends a fresh request.
 ///
 /// [`CachingOptions`], [`FilteringOptions`], and [`TimingOptions`] are flattened
-/// into the request's `options` object as `max_age`, `jev`, `jq`, and `deadline`.
+/// into the request's `options` object as `max-age`, `jev`, `jq`, and `deadline`.
 /// Durations use human-readable strings. The endpoint applies these options,
 /// including Jev filtering before jq and relative execution deadlines. Unset
 /// fields are omitted. Only unset or `jsonl` output and an empty `other` array
@@ -259,7 +259,7 @@ impl asimov_patterns::Fetcher<JsonlStream> for Fetcher {}
 /// arguments retain their spelling and argument boundaries. Unset fields and
 /// an empty `other` array are omitted; explicit zero values are preserved.
 /// [`CachingOptions`], [`FilteringOptions`], and [`TimingOptions`] are flattened
-/// into this object as `max_age`, `jev`, `jq`, and `deadline`. Durations use
+/// into this object as `max-age`, `jev`, `jq`, and `deadline`. Durations use
 /// human-readable strings. The endpoint applies these options, including Jev
 /// filtering before jq and relative execution deadlines.
 ///
@@ -421,7 +421,7 @@ impl<T: Clone + fmt::Display + Send, F: fmt::Display + Send> asimov_patterns::Li
 
 #[derive(Serialize)]
 struct SharedOptions<'a> {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "max-age", skip_serializing_if = "Option::is_none")]
     max_age: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     deadline: Option<String>,

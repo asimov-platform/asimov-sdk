@@ -2,6 +2,9 @@
 
 #![cfg(feature = "serde")]
 
+extern crate alloc;
+
+use alloc::format;
 use asimov_patterns::{
     CachingOptions, FetcherOptions, FilteringOptions, ListerOptions, TimingOptions,
 };
@@ -26,7 +29,7 @@ fn flattened_options_match_the_remote_http_protocol() {
     let wire = json!({
         "sort": "-name,date", "before": "urn:item:b", "after": "urn:item:a",
         "offset": 0, "limit": 25, "output": "jsonl", "other": ["--custom=a b"],
-        "max_age": "1h", "jev": "The name is Ukrainian", "jq": "select(.name)",
+        "max-age": "1h", "jev": "The name is Ukrainian", "jq": "select(.name)",
         "deadline": "1m 250ms"
     });
     let options: Options = serde_json::from_value(wire.clone()).unwrap();
@@ -50,7 +53,7 @@ fn flattened_options_match_the_remote_http_protocol() {
 #[test]
 fn preserves_explicit_zero_and_empty_values_but_rejects_bad_types() {
     let options: Options = serde_json::from_value(json!({
-        "deadline": "0s", "max_age": "0s", "limit": 0, "jq": "", "jev": ""
+        "deadline": "0s", "max-age": "0s", "limit": 0, "jq": "", "jev": ""
     }))
     .unwrap();
     assert_eq!(options.timing.deadline, Some(Duration::ZERO));
@@ -59,11 +62,63 @@ fn preserves_explicit_zero_and_empty_values_but_rejects_bad_types() {
     for wire in [
         json!({"deadline": "yesterday"}),
         json!({"deadline": -1}),
-        json!({"max_age": {"secs": 1}}),
+        json!({"max-age": {"secs": 1}}),
         json!({"sort": ["name"]}),
         json!({"output": {"Other": "jsonl"}}),
         json!({"other": "--flag"}),
     ] {
         assert!(serde_json::from_value::<Options>(wire).is_err());
+    }
+}
+
+#[test]
+fn caching_aliases_parse_but_always_serialize_as_kebab_case() {
+    for name in ["max-age", "max_age", "maxAge"] {
+        for (value, expected) in [
+            (json!("1h 250ms"), Some(Duration::from_millis(3_600_250))),
+            (json!("0s"), Some(Duration::ZERO)),
+            (json!(null), None),
+        ] {
+            let wire = json!({(name): value});
+            let caching: CachingOptions = serde_json::from_value(wire.clone()).unwrap();
+            let options: Options = serde_json::from_value(wire).unwrap();
+            assert_eq!(caching.max_age, expected);
+            assert_eq!(options.caching, caching);
+            let canonical = if expected.is_some() {
+                json!({"max-age": value})
+            } else {
+                json!({})
+            };
+            assert_eq!(serde_json::to_value(caching).unwrap(), canonical);
+            assert_eq!(serde_json::to_value(options).unwrap(), canonical);
+        }
+        for value in [json!("invalid"), json!(42), json!({"secs": 1})] {
+            let wire = json!({(name): value});
+            assert!(serde_json::from_value::<CachingOptions>(wire.clone()).is_err());
+            assert!(serde_json::from_value::<Options>(wire).is_err());
+        }
+    }
+}
+
+#[test]
+fn duplicate_caching_names_are_rejected_even_when_equal_or_null() {
+    for first in ["max-age", "max_age", "maxAge"] {
+        for second in ["max-age", "max_age", "maxAge"] {
+            for (a, b) in [
+                (r#""1h""#, r#""1h""#),
+                (r#""1h""#, r#""2h""#),
+                ("null", r#""1h""#),
+                (r#""1h""#, "null"),
+            ] {
+                let wire = format!(r#"{{"{first}":{a},"{second}":{b}}}"#);
+                for error in [
+                    serde_json::from_str::<CachingOptions>(&wire).unwrap_err(),
+                    serde_json::from_str::<Options>(&wire).unwrap_err(),
+                ] {
+                    assert!(error.is_data(), "{wire}: {error}");
+                    assert!(format!("{error}").contains("duplicate field `max-age`"));
+                }
+            }
+        }
     }
 }

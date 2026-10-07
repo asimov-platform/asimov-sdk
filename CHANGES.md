@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Fixed
+- asimov-patterns, asimov-remote: Serialize the cache option as `max-age`,
+  accepting `max_age` and `maxAge` as input aliases
 - asimov-registry, asimov-installer: Reject executable collisions and invalid
   binary entries, roll back failed registration/uninstall, and preserve links
   reassigned to other modules during uninstall

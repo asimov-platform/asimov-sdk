@@ -267,7 +267,7 @@ async fn fetcher_forwards_flattened_options_and_omits_unset_fields() {
             None,
             None,
             None,
-            json!({"urls": ["example:"], "options": {"max_age": "0s"}}),
+            json!({"urls": ["example:"], "options": {"max-age": "0s"}}),
         ),
         (
             None,
@@ -298,7 +298,7 @@ async fn fetcher_forwards_flattened_options_and_omits_unset_fields() {
             json!({
                 "urls": ["example:"],
                 "options": {
-                    "max_age": "1m 30s 123ms 456us 789ns",
+                    "max-age": "1m 30s 123ms 456us 789ns",
                     "jev": "The name is \"Українське\"",
                     "jq": "select(.name == \"Ada Lovelace\")",
                     "deadline": "1ns",
@@ -422,7 +422,7 @@ async fn typed_lister_forwards_all_options_and_preserves_response_bytes() {
                     "limit": 0,
                     "output": name,
                     "other": ["--custom", "literal argument", ""],
-                    "max_age": "1h",
+                    "max-age": "1h",
                     "jev": "The name is Ukrainian",
                     "jq": "select(.name)",
                     "deadline": "0s",
@@ -514,7 +514,7 @@ async fn lister_forwards_shared_options_without_pattern_options() {
             None,
             None,
             None,
-            json!({"max_age": "0s"}),
+            json!({"max-age": "0s"}),
         ),
         (None, Some(""), None, None, json!({"jev": ""})),
         (None, None, Some(""), None, json!({"jq": ""})),
@@ -531,7 +531,7 @@ async fn lister_forwards_shared_options_without_pattern_options() {
             Some("select(.name == \"Ada Lovelace\")"),
             Some(Duration::new(90, 123_456_789)),
             json!({
-                "max_age": "1ns",
+                "max-age": "1ns",
                 "jev": "The name is \"Українське\"",
                 "jq": "select(.name == \"Ada Lovelace\")",
                 "deadline": "1m 30s 123ms 456us 789ns",
@@ -633,7 +633,7 @@ async fn http2_requests_can_reuse_the_same_operation() {
                             serde_json::from_slice::<Value>(&bytes).unwrap(),
                             json!({
                                 "urls": ["https://example.com"],
-                                "options": {"max_age": "1h", "jq": ".", "deadline": "30s"},
+                                "options": {"max-age": "1h", "jq": ".", "deadline": "30s"},
                             })
                         );
                         Ok::<_, Infallible>(
