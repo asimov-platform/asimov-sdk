@@ -18,13 +18,14 @@ publish.workspace = true
 default = ["all", "std"]
 all = ["http", "iroh"]
 std = ["asimov-flow/std", "asimov-patterns/std"]
-http = ["std", "asimov-flow/tokio", "dep:humantime", "dep:reqwest", "dep:secrecy", "dep:serde", "dep:thiserror"]
+http = ["std", "asimov-flow/tokio", "dep:agent-detector", "dep:humantime", "dep:reqwest", "dep:secrecy", "dep:serde", "dep:thiserror"]
 iroh = []
 unstable = []
 
 [dependencies]
 asimov-flow.workspace = true
 asimov-patterns.workspace = true
+agent-detector = { workspace = true, optional = true, features = ["process-tree"] }
 async-trait.workspace = true
 humantime = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["http2", "json", "stream"], optional = true }

@@ -1148,7 +1148,7 @@ version = "25.7.2"
 dependencies = [
  "cap-directories",
  "cap-std",
- "dogma 0.3.0",
+ "dogma 0.3.1",
  "know",
  "serde",
  "tracing",
@@ -1508,6 +1508,7 @@ dependencies = [
 name = "asimov-remote"
 version = "25.7.2"
 dependencies = [
+ "agent-detector",
  "asimov-flow",
  "asimov-patterns",
  "async-trait",
@@ -2852,7 +2853,7 @@ checksum = "c1db8ca4eb83fe648d4513976c9cb0e40bd9f26ec951de4ce292755266578556"
 dependencies = [
  "argfile",
  "clap",
- "dogma 0.3.0",
+ "dogma 0.3.1",
  "dotenvy",
  "error-stack",
  "getenv",
@@ -3766,9 +3767,9 @@ dependencies = [
 
 [[package]]
 name = "dogma"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96b2cf7c3a03412d7025203973c203d8bfc42cac13a8157146017ac63e9dee49"
+checksum = "5fef37f51bbf54e6b8bd00ba9f28d586a4edb5e92dcca6397014d532a608bd8e"
 dependencies = [
  "dogma-path",
  "dogma-traits",
@@ -3778,27 +3779,27 @@ dependencies = [
 
 [[package]]
 name = "dogma-path"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58b7ae412e1ce20261853a9407589d86b86808071b3fdbd312c996fa6c1952ff"
+checksum = "97ff8aff309b090a777fa8f056ce15acc2122dd215e10815d5a01ba5f323b204"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "dogma-traits"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca21cdc3fede3c0bfcd0cc6f49d2c3db730c1c55747ee992397e88cfd1196495"
+checksum = "b2ef39753d8e9637d1f1664170265c1555087823115f8e844cdeac2bc5069353"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "dogma-uri"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4c46ba3e58c3a729c8e9e94f674ba9227ad62fd2fa854b56c058c45b97fc6c5"
+checksum = "14e915652f3d6298d8e19c168517def7c84b0a706e6219d2a309ad7b7f02ee8c"
 dependencies = [
  "fluent-uri",
  "iref",
@@ -8837,7 +8838,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4baa82a01f108da71b2851f4365d0c2380276829b2f6b830c0bf78e662e763c0"
 dependencies = [
- "dogma 0.3.0",
+ "dogma 0.3.1",
  "known-languages",
  "serde",
  "serde_json",

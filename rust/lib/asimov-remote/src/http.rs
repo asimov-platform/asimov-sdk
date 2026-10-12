@@ -50,7 +50,10 @@ use alloc::{
 use asimov_flow::{BatchStream, jsonl_batches_from_chunks};
 use async_trait::async_trait;
 use core::fmt;
-use reqwest::{Client, Url, header::ACCEPT};
+use reqwest::{
+    Client, Url,
+    header::{ACCEPT, HeaderValue},
+};
 use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
@@ -99,6 +102,10 @@ impl Executor {
     /// Pass `Some(token)` to send an `Authorization: Bearer` header, or `None`
     /// to omit authentication. The token is copied into a [`SecretString`],
     /// which zeroizes its storage on drop.
+    ///
+    /// The `User-Agent` is the caller name reported by `agent-detector` at
+    /// construction, or `asimov-remote/<version>` if detection yields no valid
+    /// HTTP header value.
     pub fn new(base_url: impl AsRef<str>, api_token: Option<&str>) -> Result<Self, Error> {
         let mut base_url = Url::parse(base_url.as_ref())
             .map_err(|error| Error::InvalidBaseUrl(format!("{error}")))?;
@@ -112,8 +119,16 @@ impl Executor {
         }
         base_url.set_query(None);
         base_url.set_fragment(None);
+        let user_agent = agent_detector::agent_name()
+            .and_then(|name| HeaderValue::try_from(name).ok())
+            .unwrap_or_else(|| {
+                HeaderValue::from_static(concat!("asimov-remote/", env!("CARGO_PKG_VERSION")))
+            });
         Ok(Self {
-            client: Client::builder().use_rustls_tls().build()?,
+            client: Client::builder()
+                .user_agent(user_agent)
+                .use_rustls_tls()
+                .build()?,
             base_url,
             api_token: api_token.map(SecretString::from),
             batching: BatchOptions::default(),
