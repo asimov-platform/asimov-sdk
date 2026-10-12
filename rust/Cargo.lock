@@ -1510,6 +1510,8 @@ version = "25.7.2"
 dependencies = [
  "agent-detector",
  "asimov-flow",
+ "asimov-id",
+ "asimov-keyring",
  "asimov-patterns",
  "async-trait",
  "http-body-util",
@@ -1520,8 +1522,10 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "whoami",
 ]
 
 [[package]]

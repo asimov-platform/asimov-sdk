@@ -17,13 +17,15 @@ publish.workspace = true
 [features]
 default = ["all", "std"]
 all = ["http", "iroh"]
-std = ["asimov-flow/std", "asimov-patterns/std"]
-http = ["std", "asimov-flow/tokio", "dep:agent-detector", "dep:humantime", "dep:reqwest", "dep:secrecy", "dep:serde", "dep:thiserror"]
+std = ["asimov-flow/std", "asimov-id?/std", "asimov-keyring?/std", "asimov-patterns/std"]
+http = ["std", "asimov-flow/tokio", "dep:asimov-id", "dep:asimov-keyring", "dep:agent-detector", "dep:humantime", "dep:reqwest", "dep:secrecy", "dep:serde", "dep:thiserror"]
 iroh = []
 unstable = []
 
 [dependencies]
 asimov-flow.workspace = true
+asimov-id = { workspace = true, optional = true }
+asimov-keyring = { workspace = true, optional = true }
 asimov-patterns.workspace = true
 agent-detector = { workspace = true, optional = true, features = ["process-tree"] }
 async-trait.workspace = true
@@ -38,7 +40,9 @@ http-body-util.workspace = true
 hyper = { version = "1", default-features = false, features = ["server", "http2"] }
 hyper-util = { version = "0.1", default-features = false, features = ["tokio"] }
 serde_json.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "sync", "time"] }
+whoami = { workspace = true, features = ["std"] }
 
 [package.metadata.docs.rs]
 all-features = true

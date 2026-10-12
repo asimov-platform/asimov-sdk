@@ -120,20 +120,79 @@ async fn http1_server(
 }
 
 #[tokio::test]
-async fn requests_without_a_token_omit_authorization() {
+#[cfg(any(unix, windows))]
+async fn default_authorization_uses_the_local_public_key() {
+    const CHILD_HOME: &str = "ASIMOV_REMOTE_TEST_HOME";
+    const PUBLIC_KEY: &str = "3qbR1eZRqXUWroWKKYhbDmR3FfqTHfqSU8zZSxtANzYh";
+
+    // Isolate identity lookup from the developer's home and native keyring.
+    let Some(home) = std::env::var_os(CHILD_HOME) else {
+        let home = tempfile::tempdir().unwrap();
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "http::tests::default_authorization_uses_the_local_public_key",
+                "--nocapture",
+            ])
+            .env(CHILD_HOME, home.path())
+            .env("HOME", home.path())
+            .env("USERPROFILE", home.path())
+            .env("ASIMOV_KEYRING_BACKEND", "invalid")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!home.path().join(".asimov/.keyring").exists());
+        return;
+    };
+    let home = std::path::PathBuf::from(home);
+    assert_eq!(std::env::home_dir().unwrap(), home);
+    let directory = home.join(".asimov/keyring");
+    std::fs::create_dir_all(&directory).unwrap();
+    let user = whoami::username().unwrap_or_else(|_| "default".into());
+    let path = directory.join(user);
+    std::fs::write(&path, format!("ⒶY{PUBLIC_KEY}\n")).unwrap();
+
     for endpoint in ["fetch", "list"] {
         let (url, request, resume, server) = http1_server(200, b"", b"").await;
         let executor = Executor::new(url, None).unwrap();
-        let _stream = timeout(DEADLINE, executor.post_jsonl(endpoint, &json!({})))
+        let mut stream = timeout(DEADLINE, executor.post_jsonl(endpoint, &json!({})))
             .await
             .unwrap()
             .unwrap();
         let request = timeout(DEADLINE, request).await.unwrap().unwrap();
         let (headers, _) = request.split_once("\r\n\r\n").unwrap();
-        assert!(!headers.to_ascii_lowercase().contains("\r\nauthorization:"));
-        drop(resume);
+        let authorization = headers.lines().find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case("authorization")
+                .then_some(value.trim())
+        });
+        assert_eq!(authorization, Some(format!("Bearer {PUBLIC_KEY}").as_str()));
+        resume.send(()).unwrap();
+        assert!(timeout(DEADLINE, stream.next()).await.unwrap().is_none());
         server.await.unwrap();
     }
+
+    // A malformed cache or unavailable backend must not produce an anonymous
+    // executor, while explicit tokens must not require a local identity.
+    std::fs::write(&path, "invalid public key").unwrap();
+    assert!(matches!(
+        Executor::new("http://127.0.0.1:1", None),
+        Err(Error::Keyring(asimov_keyring::KeyringError::KeyError(_)))
+    ));
+    assert!(Executor::new("http://127.0.0.1:1", Some("explicit-token")).is_ok());
+    std::fs::remove_file(&path).unwrap();
+    assert!(matches!(
+        Executor::new("http://127.0.0.1:1", None),
+        Err(Error::Keyring(asimov_keyring::KeyringError::KeyringError(
+            _
+        )))
+    ));
+    assert!(Executor::new("http://127.0.0.1:1", Some("explicit-token")).is_ok());
 }
 
 #[tokio::test]

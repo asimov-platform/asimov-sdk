@@ -24,7 +24,7 @@
 //! use core::time::Duration;
 //!
 //! # async fn example() -> Result<(), Error> {
-//! let executor = Executor::new("https://asimov.social", Some("api-token"))?;
+//! let executor = Executor::new("https://asimov.social", None)?;
 //! let caching = CachingOptions::builder()
 //!     .max_age(Duration::from_secs(3600))
 //!     .build();
@@ -48,6 +48,8 @@ use alloc::{
     vec::Vec,
 };
 use asimov_flow::{BatchStream, jsonl_batches_from_chunks};
+use asimov_id::PublicKeyEncoding;
+use asimov_keyring::Keyring;
 use async_trait::async_trait;
 use core::fmt;
 use reqwest::{
@@ -71,6 +73,8 @@ pub type JsonlStream = BatchStream<Error>;
 pub enum Error {
     #[error(transparent)]
     Http(#[from] reqwest::Error),
+    #[error("failed to load local public key: {0}")]
+    Keyring(#[from] asimov_keyring::KeyringError),
     #[error("invalid base URL: {0}")]
     InvalidBaseUrl(String),
     #[error("the HTTP fetch/list protocol does not support option {0}")]
@@ -82,7 +86,7 @@ pub enum Error {
 pub struct Executor {
     client: Client,
     base_url: Url,
-    api_token: Option<SecretString>,
+    api_token: SecretString,
     batching: BatchOptions,
 }
 
@@ -99,13 +103,20 @@ impl Executor {
     /// Uses rustls with HTTP/2 negotiation and HTTP/1.1 fallback. Plain HTTP URLs
     /// are accepted for development. Path prefixes and an optional trailing slash
     /// are supported; query strings and fragments on the base URL are ignored.
-    /// Pass `Some(token)` to send an `Authorization: Bearer` header, or `None`
-    /// to omit authentication. The token is copied into a [`SecretString`],
-    /// which zeroizes its storage on drop.
+    /// Sends an `Authorization: Bearer` header on every request. `Some(token)`
+    /// uses the supplied token; `None` loads the current user's public key with
+    /// [`Keyring::my_public_key`] and encodes it as Base58, without the non-ASCII
+    /// ASIMOV prefix. The token is stored in a [`SecretString`], which zeroizes
+    /// its storage on drop.
     ///
     /// The `User-Agent` is the caller name reported by `agent-detector` at
     /// construction, or `asimov-remote/<version>` if detection yields no valid
     /// HTTP header value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid base URL, HTTP client setup failure, or
+    /// failure to read or initialize the local identity when no token is given.
     pub fn new(base_url: impl AsRef<str>, api_token: Option<&str>) -> Result<Self, Error> {
         let mut base_url = Url::parse(base_url.as_ref())
             .map_err(|error| Error::InvalidBaseUrl(format!("{error}")))?;
@@ -130,7 +141,13 @@ impl Executor {
                 .use_rustls_tls()
                 .build()?,
             base_url,
-            api_token: api_token.map(SecretString::from),
+            api_token: match api_token {
+                Some(token) => SecretString::from(token),
+                None => Keyring::my_public_key()?
+                    .encode(PublicKeyEncoding::Base58)
+                    .expect("Base58 public-key encoding is always supported")
+                    .into(),
+            },
             batching: BatchOptions::default(),
         })
     }
@@ -165,15 +182,15 @@ impl Executor {
                 "endpoint must use the configured origin".into(),
             ));
         }
-        let mut request = self
+        let response = self
             .client
             .post(url)
             .header(ACCEPT, "application/jsonl")
-            .json(request);
-        if let Some(token) = &self.api_token {
-            request = request.bearer_auth(token.expose_secret());
-        }
-        let response = request.send().await?.error_for_status()?;
+            .bearer_auth(self.api_token.expose_secret())
+            .json(request)
+            .send()
+            .await?
+            .error_for_status()?;
         Ok(jsonl_batches_from_chunks(
             response
                 .bytes_stream()

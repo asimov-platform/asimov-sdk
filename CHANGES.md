@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - asimov-keyring: Read existing public keys without accessing the system keyring
 ### Changed
+- asimov-remote: Use the user's Base58 public key as the default bearer token
 - Use dogma-uuid for UUID generation; KB UUID conversions now return `dogma_uuid::Uuid`
 
 ## 25.7.2 - 2026-10-07
