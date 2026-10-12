@@ -34,9 +34,17 @@ fn file_backend_child() {
     let Ok(mode) = std::env::var("ASIMOV_KEYRING_TEST_MODE") else {
         return;
     };
-    if mode == "invalid" {
+    let user = whoami::username().unwrap_or_else(|_| "default".into());
+    if mode == "public" {
+        let mut keyring = Keyring::open().unwrap();
+        let public = keyring.get_public_key(&user).unwrap().unwrap();
+        assert_eq!(keyring.ensure_public_key(&user).unwrap(), public);
+        assert_eq!(Keyring::my_public_key().unwrap(), public);
+        assert!(keyring.get_public_key("absent").unwrap().is_none());
+    }
+    if mode == "invalid" || mode == "public" {
         assert!(matches!(
-            Keyring::open(),
+            Keyring::open().unwrap().get_secret_key(&user),
             Err(KeyringError::KeyringError(keyring_core::Error::Invalid(
                 _,
                 _
@@ -52,6 +60,29 @@ fn file_backend_child() {
         key.to_string(),
     )
     .unwrap();
+}
+
+#[test]
+fn cached_public_keys_do_not_initialize_the_secret_backend() {
+    let home = tempfile::tempdir().unwrap();
+    let directory = home.path().join(".asimov/keyring");
+    fs::create_dir_all(&directory).unwrap();
+    let user = whoami::username().unwrap_or_else(|_| "default".into());
+    let public: asimov_id::PublicKey = iroh_base::SecretKey::from_bytes(&[42; 32]).public().into();
+    fs::write(directory.join(user), public.to_string()).unwrap();
+
+    // An invalid backend makes even attempting to initialize storage fail.
+    let output = child(home.path(), &home.path().join("unused"), Some("invalid"))
+        .env("ASIMOV_KEYRING_TEST_MODE", "public")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!home.path().join(".asimov/.keyring").exists());
 }
 
 #[test]

@@ -2,6 +2,10 @@
 
 //! Keyring support for ASIMOV.
 //!
+//! Public keys are read from `$HOME/.asimov/keyring/<user>` without accessing
+//! the secret-key backend. The backend is opened only to initialize a missing
+//! identity or perform an explicit secret-key operation.
+//!
 //! On Linux, the default backend uses private files when access to the kernel
 //! keyrings is unavailable, including under Docker's default seccomp policy.
 //! No environment configuration is needed. Once the file store exists, it is
@@ -16,8 +20,8 @@
 //!
 //! `ASIMOV_KEYRING_BACKEND=native` forces the platform backend without fallback;
 //! `ASIMOV_KEYRING_BACKEND=file` forces file storage on Unix. Native and file
-//! secrets are separate; an empty backend creates a new identity. Automatic
-//! fallback only handles unavailable kernel-keyring access during opening;
+//! secrets are separate; initializing an empty backend creates a new identity.
+//! Automatic fallback only handles unavailable kernel-keyring access on opening;
 //! subsequent secret-read, corruption, and write errors are returned as errors.
 
 #![no_std]
