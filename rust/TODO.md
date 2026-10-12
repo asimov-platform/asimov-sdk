@@ -72,15 +72,6 @@ Unless marked reproduced, implementation findings are based on source review.
 
 ## P2: Build, feature, and facade correctness
 
-- [ ] **Make KB UUID creation features self-contained.**
-  `lib/asimov-kb/src/id.rs::new_uuid` calls `Uuid::now_v7`, which requires
-  `uuid/std`, but the `uuid`/`new` features do not require `std`. Reproduced:
-  `cargo check -p asimov-kb --lib --no-default-features
-  --features new --locked` reports
-  E0599 for `now_v7`. Gate clock-based constructors with `std` or make their
-  feature imply it; provide caller-supplied time/randomness for no-std creation.
-  Cover the `uuid`, `new`, and `all` features without defaults independently.
-
 - [ ] **Make the no-std contract hold on a target without std.**
   Host `--no-default-features` checks pass, but `asimov-core` fails for
   `thumbv7em-none-eabihf`: default-enabled `know` pulls `serde_json/std` and
@@ -89,7 +80,9 @@ Unless marked reproduced, implementation findings are based on source review.
   `know`'s pretty-printing dependencies. Restore `#![no_std]` in `asimov-env`,
   `asimov-huggingface`, and `asimov-server`. Gate OS/runtime-only dependencies,
   modules, and re-exports together. Add a genuine no-std target check alongside
-  host checks.
+  host checks. The default KB build also fails on `wasm32-unknown-unknown`:
+  `asimov-core/std` pulls native filesystem dependencies (`errno` and
+  `io-extras`) unsupported by that target (reproduced 2026-10-12).
 
 - [ ] **Normalize dependency defaults and shared dependency inheritance.**
   Replace explicitly re-enabled dependency defaults in runner, installer,
@@ -110,7 +103,7 @@ Unless marked reproduced, implementation findings are based on source review.
   Cargo commands at this virtual workspace root still select all members;
   current macOS/Linux/Windows jobs build and test them. Make that selection
   explicit and add independent default/no-default/std builds and optional
-  integration combinations, including KB's creation features above. Include
+  integration combinations, including KB's `uuid`, `new`, and `all` flags. Include
   `cargo check --workspace --all-features --all-targets --locked` to catch
   cross-crate feature conflicts, including KB Iroh support with protocol test
   dependencies. Preserve the Rust 1.97.1 MSRV and native Windows fixtures; add
@@ -437,7 +430,7 @@ Unless marked reproduced, implementation findings are based on source review.
   Generate accurate per-crate examples from metadata, use the actual Rust
   1.97.1 minimum, and refresh package tables/READMEs through their generators.
   `lib/asimov-keyring/README.md` still identifies itself as `asimov-social`;
-  also refresh stale embedded package tables in the ID/KB READMEs.
+  also refresh the stale embedded package table in the ID README.
 
 - [ ] **Keep rustdoc warning-free and document public failure contracts.**
   Add `RUSTDOCFLAGS="-D warnings"` default/all-features documentation builds to
@@ -471,7 +464,6 @@ limit disk use. These checks do not establish runtime correctness of open items.
   `module`/`lint`; SDK `std,directory`/`std,flow`/`std,module`; server
   `http`/`persistence`/`tracing`; module `json`/`yaml`/`serde`/`std,serde`;
   patterns `serde`/`clap`; remote `http`; and social `client`.
-  KB `--no-default-features --features new` failed as described above.
 - `cargo test --workspace --locked --no-fail-fast` passed, including doctests,
   with no explicit test skips. The two network smoke tests (Hugging Face and
   module-template generation) remained ignored. Optional-integration tests were

@@ -55,6 +55,7 @@ asimov-prompt = { workspace = true, features = ["openai"] }
 async-trait.workspace = true
 async-stream.workspace = true
 bs58.workspace = true
+dogma-uuid = { workspace = true, features = ["std", "v7"] }
 futures.workspace = true
 jiff.workspace = true
 openai = { workspace = true, features = ["serde"] }
@@ -68,7 +69,6 @@ thiserror.workspace = true
 tldr.workspace = true
 tokio = { workspace = true, features = ["io-util", "rt"] }
 tokio-util.workspace = true
-uuid = { workspace = true, features = ["std"] }
 
 # Optional dependencies:
 axum = { workspace = true, features = ["tokio"], optional = true }

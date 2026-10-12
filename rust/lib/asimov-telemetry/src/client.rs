@@ -60,12 +60,12 @@ impl Telemetry {
         let id_path = directory.join("id");
         let new_install = !id_path.exists();
         if new_install {
-            let id = bs58::encode(uuid::Uuid::new_v4().as_bytes()).into_string();
+            let id = bs58::encode(dogma_uuid::Uuid::new_v4().as_bytes()).into_string();
             fs::write(&id_path, id).ok()?;
         }
         let user_id = fs::read_to_string(id_path).ok()?;
 
-        let invocation_id = uuid::Uuid::now_v7().to_string();
+        let invocation_id = dogma_uuid::Uuid::now_v7().to_string();
         let events =
             File::create_new(directory.join(format!("events-{invocation_id}.jsonl"))).ok()?;
         events.try_lock().ok()?;
@@ -437,7 +437,7 @@ mod tests {
 
     #[tokio::test]
     async fn sends_installation_at_once_and_logs_of_exited_invocations() {
-        let directory = std::env::temp_dir().join(uuid::Uuid::now_v7().to_string());
+        let directory = std::env::temp_dir().join(dogma_uuid::Uuid::now_v7().to_string());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let endpoint = format!("http://{}", listener.local_addr().unwrap());
         let start = {

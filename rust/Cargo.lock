@@ -1291,6 +1291,7 @@ dependencies = [
  "bs58",
  "clap",
  "derive_more",
+ "dogma-uuid",
  "eloquent",
  "iroh-blobs",
  "libsql",
@@ -1300,7 +1301,6 @@ dependencies = [
  "serde_json",
  "serde_with",
  "turso",
- "uuid",
 ]
 
 [[package]]
@@ -1601,6 +1601,7 @@ dependencies = [
  "axum-prometheus",
  "axum-test",
  "bs58",
+ "dogma-uuid",
  "futures",
  "http 1.5.0",
  "jiff",
@@ -1619,7 +1620,6 @@ dependencies = [
  "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
@@ -1680,11 +1680,11 @@ version = "25.7.2"
 dependencies = [
  "agent-detector",
  "bs58",
+ "dogma-uuid",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tokio",
- "uuid",
 ]
 
 [[package]]
@@ -3810,9 +3810,9 @@ dependencies = [
 
 [[package]]
 name = "dogma-uuid"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edfe2eb3265dd8e80029f7f5a15fbb868707c25be45f506298c5d214c38a0d5c"
+checksum = "4a9d3f98155a6f4ed5c3f64def6be16f63725d5bccf5ed3a0f1c1273ad38b7c3"
 dependencies = [
  "serde",
  "uuid",

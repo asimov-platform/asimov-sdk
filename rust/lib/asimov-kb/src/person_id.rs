@@ -18,7 +18,8 @@ impl PersonId {
     pub const ID_LEN: RangeInclusive<usize> = Self::ID_LEN_MIN..=Self::ID_LEN_MAX;
     pub const PATTERN: &'static str = "^P[1-9A-HJ-NP-Za-km-z]{16,22}$";
 
-    #[cfg(feature = "uuid")]
+    /// Generates a UUIDv7 identifier; requires `uuid` and `std`.
+    #[cfg(all(feature = "uuid", feature = "std"))]
     pub fn new() -> Self {
         Self(Id::new_uuid(IdClass::Person))
     }

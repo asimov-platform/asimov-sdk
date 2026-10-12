@@ -73,3 +73,32 @@ check_typed!(
     Organization,
     16
 );
+
+#[cfg(feature = "uuid")]
+#[test]
+fn uuid_conversions_preserve_identifier_bytes() {
+    for bytes in [[0; 16], [255; 16], core::array::from_fn(|i| i as u8)] {
+        let id = Id::from((IdClass::Person, bytes));
+        let uuid: dogma_uuid::Uuid = id.as_uuid();
+        assert_eq!(uuid.as_bytes(), &bytes);
+        assert_eq!(id.into_uuid(), uuid);
+    }
+}
+
+#[cfg(all(feature = "uuid", feature = "std"))]
+#[test]
+fn generated_ids_preserve_class_and_base58_encoding() {
+    for (id, class) in [
+        (EventId::new().into_id(), IdClass::Event),
+        (OrganizationId::new().into_id(), IdClass::Organization),
+        (PersonId::new().into_id(), IdClass::Person),
+    ] {
+        assert_eq!(id.class(), class);
+        assert_eq!(id.as_bytes()[6] >> 4, 7);
+        assert_eq!(id.as_bytes()[8] >> 6, 0b10);
+        let encoded = id.to_string();
+        let decoded = bs58::decode(&encoded[1..]).into_vec().unwrap();
+        assert_eq!(decoded, id.as_uuid().as_bytes());
+        assert_eq!(encoded.parse::<Id>().unwrap(), id);
+    }
+}

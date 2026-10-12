@@ -1,7 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
 use bs58;
-use uuid::Uuid;
+use dogma_uuid::Uuid;
 
 /// Generate an OpenAI-style identifier with the given prefix.
 pub fn generate_openai_id(prefix: &str) -> String {

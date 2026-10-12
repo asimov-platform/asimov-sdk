@@ -23,7 +23,7 @@ title = "ASIMOV.rs: Knowledge Base"
 default = ["all", "std"]
 all = ["new", "tracing"]
 new = ["blake3", "uuid"]
-std = ["asimov-core/std", "bs58/std", "uuid?/std"]
+std = ["asimov-core/std", "bs58/std", "dogma-uuid?/std"]
 tracing = []
 unstable = []
 
@@ -38,7 +38,7 @@ p2panda = ["dep:p2panda-core"]
 rocket = ["dep:rocket"]
 serde = ["dep:serde", "dep:serde_with"]
 turso = ["dep:turso"]
-uuid = ["dep:uuid"]
+uuid = ["dep:dogma-uuid"]
 
 [dependencies]
 asimov-core.workspace = true
@@ -59,10 +59,10 @@ serde_with = { workspace = true, optional = true }
 turso = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-uuid = { workspace = true, features = ["serde", "v7"], optional = true }
+dogma-uuid = { workspace = true, features = ["serde", "v7"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-uuid = { workspace = true, features = ["js", "serde", "v7"], optional = true }
+dogma-uuid = { workspace = true, features = ["js", "serde", "v7"], optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true

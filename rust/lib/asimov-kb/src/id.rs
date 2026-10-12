@@ -64,19 +64,25 @@ impl<const N: usize> Id<N> {
 
 #[cfg(feature = "uuid")]
 impl Id<16> {
+    /// Generates a UUIDv7 identifier using the current time.
+    ///
+    /// Requires the `uuid` and `std` features.
+    #[cfg(feature = "std")]
     pub fn new_uuid(class: IdClass) -> Self {
         Self {
             class,
-            bytes: uuid::Uuid::now_v7().into_bytes(),
+            bytes: dogma_uuid::Uuid::now_v7().into_bytes(),
         }
     }
 
-    pub fn as_uuid(&self) -> uuid::Uuid {
-        uuid::Uuid::from_bytes(self.bytes)
+    /// Copies the identifier's bytes into a UUID without changing any bits.
+    pub fn as_uuid(&self) -> dogma_uuid::Uuid {
+        dogma_uuid::Uuid::from_bytes(self.bytes)
     }
 
-    pub fn into_uuid(self) -> uuid::Uuid {
-        uuid::Uuid::from_bytes(self.bytes)
+    /// Converts the identifier into a UUID without changing any bits.
+    pub fn into_uuid(self) -> dogma_uuid::Uuid {
+        dogma_uuid::Uuid::from_bytes(self.bytes)
     }
 }
 

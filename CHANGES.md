@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Fixed
 - asimov-keyring: Read existing public keys without accessing the system keyring
+### Changed
+- Use dogma-uuid for UUID generation; KB UUID conversions now return `dogma_uuid::Uuid`
 
 ## 25.7.2 - 2026-10-07
 ### Changed
