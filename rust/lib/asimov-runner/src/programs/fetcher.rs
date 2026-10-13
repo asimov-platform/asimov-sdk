@@ -106,6 +106,14 @@ impl Fetcher {
         self
     }
 
+    /// Sets an environment variable for the subprocess, in addition to those
+    /// it inherits. Descendants inherit it unless the subprocess removes it.
+    #[must_use]
+    pub fn with_env(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Self {
+        self.executor.command().env(key, value);
+        self
+    }
+
     /// Starts a new fetcher process and returns its live JSONL graph stream.
     ///
     /// # Errors

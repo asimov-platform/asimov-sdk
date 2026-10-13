@@ -223,13 +223,13 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
     pub fn with_capabilities(mut self, capabilities: ListerCapabilities) -> Self {
         let batching = self.executor.batch_options();
         let process_tree = self.executor.owns_process_tree();
-        let program = self
-            .executor
-            .command()
-            .as_std()
-            .get_program()
-            .to_os_string();
-        let configured = Self::configured(
+        let command = self.executor.command().as_std();
+        let program = command.get_program().to_os_string();
+        let envs: Vec<(OsString, OsString)> = command
+            .get_envs()
+            .filter_map(|(key, value)| Some((key.to_os_string(), value?.to_os_string())))
+            .collect();
+        let mut configured = Self::configured(
             program,
             self.arguments,
             self.input,
@@ -238,6 +238,7 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Lister<T, F> {
             capabilities,
         )
         .with_batching(batching);
+        configured.executor.command().envs(envs);
         if process_tree {
             configured.with_process_tree()
         } else {
@@ -286,6 +287,15 @@ impl<T: Clone, F> Lister<T, F> {
     #[must_use]
     pub fn with_process_tree(mut self) -> Self {
         self.executor = self.executor.with_process_tree();
+        self
+    }
+
+    /// Sets an environment variable for the subprocess, in addition to those
+    /// it inherits. Descendants inherit it unless the subprocess removes it.
+    /// Capability changes and pipeline conversion preserve it.
+    #[must_use]
+    pub fn with_env(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Self {
+        self.executor.command().env(key, value);
         self
     }
 
