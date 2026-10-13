@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-remote: Construct HTTP fetchers and listers from request values; configure
   caching, filtering, and timing on the requests
 - asimov-remote: Forward explicit fetcher `jsonl` output and support multiple URLs
+- asimov-social: Share remote fetch/list requests and options, with full option
+  forwarding and typed listings; use Serde APIs instead of the former JSON helpers
 
 ## 25.7.3 - 2026-10-12
 ### Changed

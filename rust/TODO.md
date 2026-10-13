@@ -335,14 +335,6 @@ Unless marked reproduced, implementation findings are based on source review.
   client/transport policy independently of the server-side `TimingOptions`.
   Apply reusable client/timeout configuration to cloud account balance calls.
 
-- [ ] **Align SocialClient request options with the shared remote protocol.**
-  `lib/asimov-social/src/fetch_request.rs` has an empty options struct and
-  `list_request.rs` supports only offset/limit, while remote supports caching,
-  filtering, timing, sort, cursors, and output options. Unsupported incoming
-  fields are silently discarded on deserialize/reserialize. Share or explicitly
-  map remote's `FetcherRequest` and `ListerRequest`, preserve explicit values,
-  and add request parity tests for SocialClient and remote fetch/list operations.
-
 - [ ] **Correct KB GraphQL scalar registration and validation.**
   Replace GraphQL names such as `PERSON ID`/`ID<16>` in `lib/asimov-kb/src/`
   with valid, consistently registered scalars whose validation checks the

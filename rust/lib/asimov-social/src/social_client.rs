@@ -4,7 +4,11 @@
 
 use crate::{FetchRequest, ListRequest};
 use alloc::string::String;
-use asimov_remote::http::{BatchOptions, Executor};
+use asimov_remote::{
+    Execute,
+    http::{BatchOptions, Executor, Fetcher, Lister},
+};
+use core::fmt;
 
 pub use asimov_remote::http::{Error as SocialClientError, JsonlStream as SocialResponseStream};
 
@@ -61,21 +65,31 @@ impl SocialClient {
 
     /// POSTs to `fetch` under the configured base URL. Supports the service's
     /// multi-URL request in addition to the single-URL fetcher pattern.
+    /// Uses the remote HTTP fetcher, which rejects non-JSONL output formats and
+    /// additional `other` arguments before sending.
     /// Startup/status errors are returned directly; later body errors are stream
     /// items. Consume the stream to EOF to observe completion.
     pub async fn fetch(
         &self,
         request: FetchRequest,
     ) -> Result<SocialResponseStream, SocialClientError> {
-        self.executor.post_jsonl("fetch", &request).await
+        Fetcher::new(self.executor.clone(), request).execute().await
     }
 
     /// POSTs to `list` under the configured base URL. Returns raw JSONL batches;
     /// JSON, UTF-8, and the RDF mapping are not validated by this transport.
-    pub async fn list(
+    /// All request options are forwarded to the endpoint, including zero limits.
+    /// Sort keys and custom output formats need only implement [`fmt::Display`]
+    /// and the sendable execution bounds. Use `ListRequest::<String>::new` or a
+    /// `ListRequest` type annotation when the options do not determine the types.
+    pub async fn list<T, F>(
         &self,
-        request: ListRequest,
-    ) -> Result<SocialResponseStream, SocialClientError> {
-        self.executor.post_jsonl("list", &request).await
+        request: ListRequest<T, F>,
+    ) -> Result<SocialResponseStream, SocialClientError>
+    where
+        T: Clone + fmt::Display + Send + Sync,
+        F: fmt::Display + Send + Sync,
+    {
+        Lister::new(self.executor.clone(), request).execute().await
     }
 }

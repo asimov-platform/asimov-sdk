@@ -14,6 +14,27 @@
 //! Platform modules re-export their platform-specific handle types. Each module
 //! and its corresponding `SocialHandle` variant require the matching platform
 //! feature; all platform features are enabled by default.
+//!
+//! [`FetchRequest`] and [`ListRequest`] share asimov-remote's transport-independent
+//! request types and options. The `serde` feature enables their JSON encoding
+//! without an HTTP client; `client` enables `SocialClient` for HTTP execution.
+//! Caching, filtering, and timing are configured on the requests and encoded
+//! alongside pattern options in the JSON `options` object.
+//!
+//! ```
+//! # #[cfg(feature = "serde")] {
+//! use asimov_social::{FetchRequest, ListRequest};
+//!
+//! let fetch = FetchRequest::new("https://example.com/profile", Default::default());
+//! let json = serde_json::to_string(&fetch).unwrap();
+//! assert_eq!(serde_json::from_str::<FetchRequest>(&json).unwrap(), fetch);
+//!
+//! let list: ListRequest = serde_json::from_str(
+//!     r#"{"url":"https://example.com/collection","options":{"limit":0}}"#,
+//! ).unwrap();
+//! assert_eq!(list.options.limit, Some(0));
+//! # }
+//! ```
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -24,6 +45,8 @@ extern crate alloc;
 
 #[cfg(feature = "std")]
 extern crate std;
+
+pub use asimov_remote::{CachingOptions, FilteringOptions, TimingOptions};
 
 mod collection_stub;
 pub use collection_stub::*;
