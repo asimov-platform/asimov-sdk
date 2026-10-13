@@ -337,8 +337,8 @@ Unless marked reproduced, implementation findings are based on source review.
   `list_request.rs` supports only offset/limit, while remote supports caching,
   filtering, timing, sort, cursors, and output options. Unsupported incoming
   fields are silently discarded on deserialize/reserialize. Share or explicitly
-  map the wire option types, preserve explicit values, and add request parity
-  tests for SocialClient and remote fetch/list operations.
+  map remote's `FetcherRequest` and `ListerRequest`, preserve explicit values,
+  and add request parity tests for SocialClient and remote fetch/list operations.
 
 - [ ] **Correct KB GraphQL scalar registration and validation.**
   Replace GraphQL names such as `PERSON ID`/`ID<16>` in `lib/asimov-kb/src/`
@@ -414,7 +414,8 @@ Unless marked reproduced, implementation findings are based on source review.
   `../.config/readmer/rust/README.md.liquid` (`make -Bn README.md` fails).
   Both `lib/asimov-remote/` and `lib/asimov-telemetry/` lack the
   `examples.md.j2` required by the shared template and generated READMEs;
-  remote also lacks `package.metadata.readme.title`. Restore the missing inputs.
+  remote also lacks `package.metadata.readme.title`. Remote generation's missing
+  example-template failure was reproduced on 2026-10-13. Restore the inputs.
   Per-crate `Rakefile` tasks depend only on the shared Jinja template, omitting
   manifests, local examples, and the package table; they truncate output and
   ignore renderer exit status. Track all inputs, check subprocess status, and

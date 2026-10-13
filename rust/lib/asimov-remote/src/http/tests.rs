@@ -210,19 +210,25 @@ async fn patterns_post_authenticated_json_and_stream_raw_batches_before_eof() {
     for endpoint in ["fetch", "list"] {
         let (base_url, request, resume, server) = http1_server(200, b"\n{}\r\n", b"\xfftail").await;
         let executor = Executor::new(format!("{base_url}/"), Some("test-token")).unwrap();
+        let expected = if endpoint == "fetch" {
+            json!({
+                "urls": ["https://example.com/alice", "https://example.com/bob"],
+                "options": {"output": "jsonl"},
+            })
+        } else {
+            json!({"url": "https://example.com/profile", "options": {"offset": 2, "limit": 3}})
+        };
         let mut records = timeout(DEADLINE, async {
             if endpoint == "fetch" {
                 fetch(&mut Fetcher::new(
                     executor,
-                    "https://example.com/profile",
-                    Default::default(),
+                    serde_json::from_value(expected.clone()).unwrap(),
                 ))
                 .await
             } else {
                 list(&mut Lister::new(
                     executor,
-                    "https://example.com/profile",
-                    ListerOptions::builder().offset(2).limit(3).build(),
+                    serde_json::from_value(expected.clone()).unwrap(),
                 ))
                 .await
             }
@@ -236,11 +242,6 @@ async fn patterns_post_authenticated_json_and_stream_raw_batches_before_eof() {
         assert!(headers.contains("\r\nauthorization: bearer test-token"));
         assert!(headers.contains("\r\naccept: application/jsonl"));
         assert!(headers.contains("\r\ncontent-type: application/json"));
-        let expected = if endpoint == "fetch" {
-            json!({"urls": ["https://example.com/profile"]})
-        } else {
-            json!({"url": "https://example.com/profile", "options": {"offset": 2, "limit": 3}})
-        };
         assert_eq!(serde_json::from_str::<Value>(body).unwrap(), expected);
 
         let batch = timeout(DEADLINE, records.next())
@@ -309,7 +310,8 @@ async fn unsupported_fetcher_options_do_not_start_requests() {
         (FetcherOptions::builder().output("turtle").build(), "output"),
         (FetcherOptions::builder().other("--custom").build(), "other"),
     ] {
-        let mut operation = Fetcher::new(executor.clone(), "https://example.com", options);
+        let request = FetcherRequest::new("https://example.com", options);
+        let mut operation = Fetcher::new(executor.clone(), request);
         assert!(matches!(
             operation.execute().await,
             Err(Error::UnsupportedOption(actual)) if actual == expected
@@ -366,19 +368,16 @@ async fn fetcher_forwards_flattened_options_and_omits_unset_fields() {
         ),
     ] {
         let (url, request, resume, server) = http1_server(200, b"", b"").await;
-        let mut operation = Fetcher::new(
-            Executor::new(url, Some("token")).unwrap(),
-            "example:",
-            FetcherOptions::builder().output("jsonl").build(),
-        )
-        .with_caching(CachingOptions::builder().maybe_max_age(max_age).build())
-        .with_filtering(
-            FilteringOptions::builder()
-                .maybe_jev(jev)
-                .maybe_jq(jq)
-                .build(),
-        )
-        .with_timing(TimingOptions::builder().maybe_deadline(deadline).build());
+        let body = FetcherRequest::new("example:", FetcherOptions::default())
+            .with_caching(CachingOptions::builder().maybe_max_age(max_age).build())
+            .with_filtering(
+                FilteringOptions::builder()
+                    .maybe_jev(jev)
+                    .maybe_jq(jq)
+                    .build(),
+            )
+            .with_timing(TimingOptions::builder().maybe_deadline(deadline).build());
+        let mut operation = Fetcher::new(Executor::new(url, Some("token")).unwrap(), body);
         let mut stream = timeout(DEADLINE, operation.execute())
             .await
             .unwrap()
@@ -422,8 +421,7 @@ async fn typed_lister_forwards_all_options_and_preserves_response_bytes() {
         (OutputFormat::Other(Format::Csv), "csv"),
     ] {
         let (url, request, resume, server) = http1_server(200, b"{}\r\n", b"\xfftail").await;
-        let mut lister = super::Lister::new(
-            Executor::new(url, Some("token")).unwrap(),
+        let body = ListerRequest::new(
             "https://example.com/collection",
             ListerOptions::<Property, Format>::builder()
                 .sort(
@@ -455,6 +453,7 @@ async fn typed_lister_forwards_all_options_and_preserves_response_bytes() {
                 .build(),
         )
         .with_timing(TimingOptions::builder().deadline(Duration::ZERO).build());
+        let mut lister = super::Lister::new(Executor::new(url, Some("token")).unwrap(), body);
         assert_eq!(
             lister.capabilities(),
             ListerCapabilities {
@@ -549,8 +548,7 @@ async fn absent_options_are_omitted_but_explicit_values_are_forwarded() {
         let (url, request, resume, server) = http1_server(200, b"", b"").await;
         let mut operation = Lister::new(
             Executor::new(url, Some("token")).unwrap(),
-            "example:",
-            options,
+            ListerRequest::new("example:", options),
         );
         let mut stream = timeout(DEADLINE, operation.execute())
             .await
@@ -598,19 +596,16 @@ async fn lister_forwards_shared_options_without_pattern_options() {
         ),
     ] {
         let (url, request, resume, server) = http1_server(200, b"", b"").await;
-        let mut operation = Lister::new(
-            Executor::new(url, Some("token")).unwrap(),
-            "example:",
-            ListerOptions::default(),
-        )
-        .with_caching(CachingOptions::builder().maybe_max_age(max_age).build())
-        .with_filtering(
-            FilteringOptions::builder()
-                .maybe_jev(jev)
-                .maybe_jq(jq)
-                .build(),
-        )
-        .with_timing(TimingOptions::builder().maybe_deadline(deadline).build());
+        let body = ListerRequest::new("example:", ListerOptions::default())
+            .with_caching(CachingOptions::builder().maybe_max_age(max_age).build())
+            .with_filtering(
+                FilteringOptions::builder()
+                    .maybe_jev(jev)
+                    .maybe_jq(jq)
+                    .build(),
+            )
+            .with_timing(TimingOptions::builder().maybe_deadline(deadline).build());
+        let mut operation = Lister::new(Executor::new(url, Some("token")).unwrap(), body);
         let mut stream = timeout(DEADLINE, operation.execute())
             .await
             .unwrap()
@@ -633,12 +628,14 @@ async fn endpoint_option_rejections_are_reported_as_http_errors() {
     let (url, request, resume, server) = http1_server(400, b"", b"").await;
     let mut operation = Lister::new(
         Executor::new(url, Some("token")).unwrap(),
-        "example:",
-        ListerOptions::builder()
-            .limit(0)
-            .output("turtle")
-            .other("--custom")
-            .build(),
+        ListerRequest::new(
+            "example:",
+            ListerOptions::builder()
+                .limit(0)
+                .output("turtle")
+                .other("--custom")
+                .build(),
+        ),
     );
     let error = timeout(DEADLINE, operation.execute())
         .await
@@ -707,7 +704,7 @@ async fn http2_requests_can_reuse_the_same_operation() {
             .await
             .unwrap();
     });
-    let mut operation = Fetcher::new(executor, "https://example.com", Default::default())
+    let request = FetcherRequest::new("https://example.com", Default::default())
         .with_caching(
             CachingOptions::builder()
                 .max_age(Duration::from_secs(3600))
@@ -719,6 +716,7 @@ async fn http2_requests_can_reuse_the_same_operation() {
                 .deadline(Duration::from_secs(30))
                 .build(),
         );
+    let mut operation = Fetcher::new(executor, request);
     for _ in 0..2 {
         let mut stream = timeout(DEADLINE, operation.execute())
             .await

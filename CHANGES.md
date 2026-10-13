@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+### Added
+- asimov-remote: Standalone `FetcherRequest` and `ListerRequest` with JSON
+  serialization and parsing through the `serde` feature
+### Changed
+- asimov-remote: Construct HTTP fetchers and listers from request values; configure
+  caching, filtering, and timing on the requests
+- asimov-remote: Forward explicit fetcher `jsonl` output and support multiple URLs
+
 ## 25.7.3 - 2026-10-12
 ### Changed
 - asimov-remote: Use the user's Base58 public key as the bearer token when

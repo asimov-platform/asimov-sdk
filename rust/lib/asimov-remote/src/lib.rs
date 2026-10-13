@@ -6,6 +6,10 @@
 //! JSONL batches defined in asimov-flow. Local execution belongs to asimov-runner.
 //! This crate has no dependency on a local process executor or social domain API.
 //!
+//! [`FetcherRequest`] and [`ListerRequest`] own request bodies independently of
+//! an executor. The `serde` feature enables JSON serialization and parsing,
+//! including without the `http` or `std` features.
+//!
 //! The `http` feature provides rustls-backed HTTP with HTTP/2 negotiation and
 //! HTTP/1.1 streaming fallback. The initial fetch/list protocol uses JSON POST
 //! requests and `application/jsonl` responses. The `iroh` feature exposes an empty
@@ -23,7 +27,12 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-pub use asimov_patterns::Execute;
+pub use asimov_patterns::{
+    CachingOptions, Execute, FetcherOptions, FilteringOptions, ListerOptions, TimingOptions,
+};
+
+mod requests;
+pub use requests::{FetcherRequest, ListerRequest};
 
 #[cfg(feature = "http")]
 pub mod http;

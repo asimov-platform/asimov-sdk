@@ -52,12 +52,12 @@ Remote `http::Fetcher` and `http::Lister` are configured operations implementing
 the existing pattern traits and `Execute<BatchStream<http::Error>>`. Their wire
 profile is explicit: JSON POSTs to `fetch` and `list` with
 `Accept: application/jsonl`. Response bytes are framed without format validation.
-Fetcher input remains one resource URL; the SocialClient façade additionally
-supports the service's multi-URL request. Remote listing forwards all configured
-`ListerOptions` fields in the request's `options` object. Sort expressions and
-format names use their command-line spellings; `other` is an array of literal
-arguments. Endpoint validation determines which options it supports. Remote
-fetching rejects raw `other` arguments and non-JSONL output formats locally.
+Remote fetching and the SocialClient façade support multi-URL request bodies.
+Remote listing forwards all configured `ListerOptions` fields in the request's
+`options` object. Sort expressions and format names use their command-line
+spellings; `other` is an array of literal arguments. Endpoint validation
+determines which options it supports. Remote fetching rejects raw `other`
+arguments and non-JSONL output formats locally.
 
 Remote listing delegates offset and limit to the endpoint as entry counts; it
 does not silently treat records as entries. The existing local lister also has

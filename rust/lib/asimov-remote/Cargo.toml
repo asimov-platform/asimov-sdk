@@ -16,10 +16,11 @@ publish.workspace = true
 
 [features]
 default = ["all", "std"]
-all = ["http", "iroh"]
-std = ["asimov-flow/std", "asimov-id?/std", "asimov-keyring?/std", "asimov-patterns/std"]
-http = ["std", "asimov-flow/tokio", "dep:asimov-id", "dep:asimov-keyring", "dep:agent-detector", "dep:humantime", "dep:reqwest", "dep:secrecy", "dep:serde", "dep:thiserror"]
+all = ["http", "iroh", "serde"]
+std = ["asimov-flow/std", "asimov-id?/std", "asimov-keyring?/std", "asimov-patterns/std", "clientele?/std", "serde?/std"]
+http = ["std", "serde", "asimov-flow/tokio", "dep:asimov-id", "dep:asimov-keyring", "dep:agent-detector", "dep:reqwest", "dep:secrecy", "dep:thiserror"]
 iroh = []
+serde = ["dep:clientele", "dep:serde", "asimov-patterns/serde"]
 unstable = []
 
 [dependencies]
@@ -29,7 +30,7 @@ asimov-keyring = { workspace = true, optional = true }
 asimov-patterns.workspace = true
 agent-detector = { workspace = true, optional = true, features = ["process-tree"] }
 async-trait.workspace = true
-humantime = { workspace = true, optional = true }
+clientele = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["http2", "json", "stream"], optional = true }
 secrecy = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }

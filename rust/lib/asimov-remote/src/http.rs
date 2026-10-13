@@ -2,8 +2,8 @@
 
 //! HTTP(S) execution of the JSON POST fetch/list protocol.
 //!
-//! Fetching maps one resource URL to `{"urls":[URL],"options":{...}}` at `fetch`.
-//! Listing maps a collection URL to `{"url":URL,"options":{...}}` at `list`,
+//! [`FetcherRequest`] sends `{"urls":[URL,...],"options":{...}}` to `fetch`.
+//! [`ListerRequest`] sends `{"url":URL,"options":{...}}` to `list`,
 //! forwarding every configured [`ListerOptions`] field. Shared caching, filtering,
 //! and timing fields are flattened into the same `options` object: `max-age`,
 //! `jev`, `jq`, and `deadline`. Both operations use [`FilteringOptions`] for
@@ -19,7 +19,8 @@
 //! graph consumers; JSONL framing alone does not establish that mapping.
 //!
 //! ```no_run
-//! use asimov_remote::{Execute, http::{CachingOptions, Executor, Fetcher, Error}};
+//! use asimov_remote::{Execute, FetcherRequest};
+//! use asimov_remote::http::{CachingOptions, Executor, Fetcher, Error};
 //! use asimov_flow::StreamExt;
 //! use core::time::Duration;
 //!
@@ -28,9 +29,10 @@
 //! let caching = CachingOptions::builder()
 //!     .max_age(Duration::from_secs(3600))
 //!     .build();
-//! let mut fetcher = Fetcher::new(
-//!     executor, "https://example.com/profile", Default::default(),
+//! let request = FetcherRequest::new(
+//!     "https://example.com/profile", Default::default(),
 //! ).with_caching(caching);
+//! let mut fetcher = Fetcher::new(executor, request);
 //! let mut batches = fetcher.execute().await?;
 //! while let Some(batch) = batches.next().await {
 //!     for line in batch?.lines() {
@@ -41,12 +43,7 @@
 //! # }
 //! ```
 
-use alloc::{
-    boxed::Box,
-    format,
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::{boxed::Box, format, string::String};
 use asimov_flow::{BatchStream, jsonl_batches_from_chunks};
 use asimov_id::PublicKeyEncoding;
 use asimov_keyring::Keyring;
@@ -59,6 +56,7 @@ use reqwest::{
 use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
+pub use crate::{FetcherRequest, ListerRequest};
 pub use asimov_flow::{BatchOptions, JsonlBatch, JsonlLine, StreamExt};
 pub use asimov_patterns::{
     CachingOptions, FetcherOptions, FilteringOptions, ListerCapabilities, ListerOptions,
@@ -200,55 +198,21 @@ impl Executor {
     }
 }
 
-/// One configured resource fetch. Each execution sends a fresh request.
+/// A configured resource fetch. Each execution sends its [`FetcherRequest`].
 ///
-/// [`CachingOptions`], [`FilteringOptions`], and [`TimingOptions`] are flattened
-/// into the request's `options` object as `max-age`, `jev`, `jq`, and `deadline`.
-/// Durations use human-readable strings. The endpoint applies these options,
-/// including Jev filtering before jq and relative execution deadlines. Unset
-/// fields are omitted. Only unset or `jsonl` output and an empty `other` array
-/// are supported.
+/// The endpoint applies caching, filtering (Jev before jq), and relative
+/// execution deadlines. Only unset or `jsonl` output and an empty `other` array
+/// are supported; other values are rejected before sending the request.
 #[derive(Clone, Debug)]
 pub struct Fetcher {
     executor: Executor,
-    input: String,
-    options: FetcherOptions,
-    caching: CachingOptions,
-    filtering: FilteringOptions,
-    timing: TimingOptions,
+    request: FetcherRequest,
 }
 
 impl Fetcher {
-    pub fn new(executor: Executor, input: impl Into<String>, options: FetcherOptions) -> Self {
-        Self {
-            executor,
-            input: input.into(),
-            options,
-            caching: CachingOptions::default(),
-            filtering: FilteringOptions::default(),
-            timing: TimingOptions::default(),
-        }
-    }
-
-    /// Sets cache freshness options to forward to the endpoint.
-    #[must_use]
-    pub fn with_caching(mut self, options: CachingOptions) -> Self {
-        self.caching = options;
-        self
-    }
-
-    /// Sets output filtering options to forward to the endpoint.
-    #[must_use]
-    pub fn with_filtering(mut self, options: FilteringOptions) -> Self {
-        self.filtering = options;
-        self
-    }
-
-    /// Sets execution timing options to forward to the endpoint.
-    #[must_use]
-    pub fn with_timing(mut self, options: TimingOptions) -> Self {
-        self.timing = options;
-        self
+    /// Binds an owned request to an HTTP executor without sending it.
+    pub fn new(executor: Executor, request: FetcherRequest) -> Self {
+        Self { executor, request }
     }
 }
 
@@ -257,23 +221,9 @@ impl asimov_patterns::Execute<JsonlStream> for Fetcher {
     type Error = Error;
 
     async fn execute(&mut self) -> Result<JsonlStream, Error> {
-        let FetcherOptions { output, other } = &self.options;
+        let FetcherOptions { output, other } = &self.request.options;
         validate_fetcher_options(output.as_deref(), other)?;
-        #[derive(Serialize)]
-        struct Request<'a> {
-            urls: [&'a str; 1],
-            #[serde(skip_serializing_if = "SharedOptions::is_empty")]
-            options: SharedOptions<'a>,
-        }
-        self.executor
-            .post_jsonl(
-                "fetch",
-                &Request {
-                    urls: [&self.input],
-                    options: SharedOptions::new(&self.caching, &self.filtering, &self.timing),
-                },
-            )
-            .await
+        self.executor.post_jsonl("fetch", &self.request).await
     }
 }
 
@@ -284,67 +234,27 @@ impl asimov_patterns::Fetcher<JsonlStream> for Fetcher {}
 /// or impose a separate line cap. Every execution sends a fresh request,
 /// including when the limit is zero. The endpoint validates and applies options.
 ///
-/// All [`ListerOptions`] fields are forwarded in the request's `options` object:
-/// `sort`, `before`, `after`, `offset`, `limit`, `output`, and `other`. Sort keys
-/// are comma-separated with a `-` prefix for descending order. Formats use
-/// `jsonl`, `url`, or the custom format's name. Cursors and literal `other`
-/// arguments retain their spelling and argument boundaries. Unset fields and
-/// an empty `other` array are omitted; explicit zero values are preserved.
-/// [`CachingOptions`], [`FilteringOptions`], and [`TimingOptions`] are flattened
-/// into this object as `max-age`, `jev`, `jq`, and `deadline`. Durations use
-/// human-readable strings. The endpoint applies these options, including Jev
-/// filtering before jq and relative execution deadlines.
+/// [`ListerRequest`] defines the body and its option encoding. The endpoint
+/// applies caching, filtering (Jev before jq), and relative execution deadlines.
 ///
 /// `T` is the sort-key type and `F` the custom output-format type from
 /// [`ListerOptions<T, F>`], both defaulting to [`String`]. Execution uses
 /// [`fmt::Display`] for both key and custom format names. No parsing or Serde
 /// traits are required on either type. Responses retain their original bytes
 /// in line-delimited batches; their format is not validated or transcoded.
-/// Both types must be [`Send`] for the execution trait's sendable future.
+/// Both types must be [`Send`] and [`Sync`] for the sendable execution future.
 /// Use a `Lister` type annotation or `Lister::<String>::new` when the options
 /// do not otherwise determine the generic types.
 #[derive(Clone, Debug)]
 pub struct Lister<T: Clone = String, F = String> {
     executor: Executor,
-    input: String,
-    options: ListerOptions<T, F>,
-    caching: CachingOptions,
-    filtering: FilteringOptions,
-    timing: TimingOptions,
+    request: ListerRequest<T, F>,
 }
 
 impl<T: Clone, F> Lister<T, F> {
-    /// Configures a listing with typed options without sending a request.
-    pub fn new(executor: Executor, input: impl Into<String>, options: ListerOptions<T, F>) -> Self {
-        Self {
-            executor,
-            input: input.into(),
-            options,
-            caching: CachingOptions::default(),
-            filtering: FilteringOptions::default(),
-            timing: TimingOptions::default(),
-        }
-    }
-
-    /// Sets cache freshness options to forward to the endpoint.
-    #[must_use]
-    pub fn with_caching(mut self, options: CachingOptions) -> Self {
-        self.caching = options;
-        self
-    }
-
-    /// Sets output filtering options to forward to the endpoint.
-    #[must_use]
-    pub fn with_filtering(mut self, options: FilteringOptions) -> Self {
-        self.filtering = options;
-        self
-    }
-
-    /// Sets execution timing options to forward to the endpoint.
-    #[must_use]
-    pub fn with_timing(mut self, options: TimingOptions) -> Self {
-        self.timing = options;
-        self
+    /// Binds an owned request with typed options to an HTTP executor.
+    pub fn new(executor: Executor, request: ListerRequest<T, F>) -> Self {
+        Self { executor, request }
     }
 
     /// Operations this HTTP request schema can forward.
@@ -363,126 +273,19 @@ impl<T: Clone, F> Lister<T, F> {
 }
 
 #[async_trait]
-impl<T: Clone + fmt::Display + Send, F: fmt::Display + Send> asimov_patterns::Execute<JsonlStream>
-    for Lister<T, F>
+impl<T: Clone + fmt::Display + Send + Sync, F: fmt::Display + Send + Sync>
+    asimov_patterns::Execute<JsonlStream> for Lister<T, F>
 {
     type Error = Error;
 
     async fn execute(&mut self) -> Result<JsonlStream, Error> {
-        #[derive(Serialize)]
-        struct Options<'a> {
-            #[serde(flatten)]
-            shared: SharedOptions<'a>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            sort: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            before: Option<&'a str>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            after: Option<&'a str>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            offset: Option<usize>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            limit: Option<usize>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            output: Option<String>,
-            #[serde(skip_serializing_if = "<[String]>::is_empty")]
-            other: &'a [String],
-        }
-        #[derive(Serialize)]
-        struct Request<'a> {
-            url: &'a str,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            options: Option<Options<'a>>,
-        }
-        let options = {
-            // Exhaustive destructuring makes newly added option fields a
-            // compile error here until their wire representation is supplied.
-            let ListerOptions {
-                sort,
-                before,
-                after,
-                offset,
-                limit,
-                output,
-                other,
-            } = &self.options;
-            let shared = SharedOptions::new(&self.caching, &self.filtering, &self.timing);
-            let empty = sort.is_none()
-                && before.is_none()
-                && after.is_none()
-                && offset.is_none()
-                && limit.is_none()
-                && output.is_none()
-                && other.is_empty()
-                && shared.is_empty();
-            (!empty).then(|| Options {
-                shared,
-                sort: sort.as_ref().map(|keys| {
-                    keys.keys()
-                        .iter()
-                        .map(|key| {
-                            format!("{}{}", if key.descending() { "-" } else { "" }, key.key())
-                        })
-                        .collect::<Vec<_>>()
-                        .join(",")
-                }),
-                before: before.as_deref(),
-                after: after.as_deref(),
-                offset: *offset,
-                limit: *limit,
-                output: output.as_ref().map(ToString::to_string),
-                other,
-            })
-        };
-        self.executor
-            .post_jsonl(
-                "list",
-                &Request {
-                    url: &self.input,
-                    options,
-                },
-            )
-            .await
+        self.executor.post_jsonl("list", &self.request).await
     }
 }
 
-impl<T: Clone + fmt::Display + Send, F: fmt::Display + Send> asimov_patterns::Lister<JsonlStream>
-    for Lister<T, F>
+impl<T: Clone + fmt::Display + Send + Sync, F: fmt::Display + Send + Sync>
+    asimov_patterns::Lister<JsonlStream> for Lister<T, F>
 {
-}
-
-#[derive(Serialize)]
-struct SharedOptions<'a> {
-    #[serde(rename = "max-age", skip_serializing_if = "Option::is_none")]
-    max_age: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    deadline: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    jev: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    jq: Option<&'a str>,
-}
-
-impl<'a> SharedOptions<'a> {
-    fn new(
-        caching: &CachingOptions,
-        filtering: &'a FilteringOptions,
-        timing: &TimingOptions,
-    ) -> Self {
-        let CachingOptions { max_age } = caching;
-        let FilteringOptions { jev, jq } = filtering;
-        let TimingOptions { deadline } = timing;
-        Self {
-            max_age: max_age.map(|value| humantime::format_duration(value).to_string()),
-            deadline: deadline.map(|value| humantime::format_duration(value).to_string()),
-            jev: jev.as_deref(),
-            jq: jq.as_deref(),
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.max_age.is_none() && self.deadline.is_none() && self.jev.is_none() && self.jq.is_none()
-    }
 }
 
 fn validate_fetcher_options(output: Option<&str>, other: &[String]) -> Result<(), Error> {
