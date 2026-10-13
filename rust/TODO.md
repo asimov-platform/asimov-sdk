@@ -374,9 +374,9 @@ Unless marked reproduced, implementation findings are based on source review.
 
 - [ ] **Make workspace publish dry runs dependency-aware.**
   Internal dependencies in `Cargo.toml` use versions with local
-  `[patch.crates-io]` overrides. During 25.7.2 preparation,
+  `[patch.crates-io]` overrides. During 25.7.3 preparation,
   `cargo publish --workspace --dry-run --allow-dirty --locked` starts with
-  `asimov-account` and cannot resolve unpublished `asimov-core = "^25.7.2"`.
+  `asimov-account` and cannot resolve unpublished `asimov-core = "^25.7.3"`.
   Add release tooling or path/version wiring that supports dependency-ordered
   publishing and pre-publication package verification.
 
