@@ -10,6 +10,12 @@
 //! an executor. The `serde` feature enables JSON serialization and parsing,
 //! including without the `http` or `std` features.
 //!
+//! The opt-in `jcs` feature adds canonical JSON strings and UTF-8 bytes using
+//! [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785). It enables `serde` and
+//! `std`. Canonicalization uses the requests' serialized representation,
+//! including option omission and duration formatting. Lister offsets and limits
+//! must be at most `2^53 - 1` to preserve integer precision.
+//!
 //! The `http` feature provides rustls-backed HTTP with HTTP/2 negotiation and
 //! HTTP/1.1 streaming fallback. The initial fetch/list protocol uses JSON POST
 //! requests and `application/jsonl` responses. The `iroh` feature exposes an empty

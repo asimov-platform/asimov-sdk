@@ -5,6 +5,8 @@ use asimov_patterns::{
     CachingOptions, FetcherOptions, FilteringOptions, ListerOptions, TimingOptions,
 };
 
+#[cfg(feature = "jcs")]
+mod canonicalization;
 #[cfg(feature = "serde")]
 mod serialization;
 

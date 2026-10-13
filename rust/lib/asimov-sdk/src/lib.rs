@@ -63,6 +63,23 @@ pub use asimov_registry as registry;
 #[cfg(feature = "runner")]
 pub use asimov_runner as runner;
 
+/// Remote pattern execution and owned request bodies.
+///
+/// Enable `remote` and `jcs` for RFC 8785 canonical request serialization.
+///
+/// ```
+/// # #[cfg(feature = "jcs")] {
+/// use asimov_sdk::remote::{FetcherRequest, ListerRequest};
+///
+/// let fetch = FetcherRequest::new("example:", Default::default());
+/// assert_eq!(
+///     fetch.to_canonical_json_bytes().unwrap(),
+///     br#"{"urls":["example:"]}"#,
+/// );
+/// let list: ListerRequest = ListerRequest::new("example:", Default::default());
+/// assert_eq!(list.to_canonical_json().unwrap(), r#"{"url":"example:"}"#);
+/// # }
+/// ```
 #[cfg(feature = "remote")]
 pub use asimov_remote as remote;
 

@@ -414,8 +414,9 @@ Unless marked reproduced, implementation findings are based on source review.
   `../.config/readmer/rust/README.md.liquid` (`make -Bn README.md` fails).
   Both `lib/asimov-remote/` and `lib/asimov-telemetry/` lack the
   `examples.md.j2` required by the shared template and generated READMEs;
-  remote also lacks `package.metadata.readme.title`. Remote generation's missing
-  example-template failure was reproduced on 2026-10-13. Restore the inputs.
+  remote also lacks `package.metadata.readme.title`. On 2026-10-13,
+  `rake -B lib/asimov-remote/README.md` reproduced the missing-template error,
+  returned success, and left a blank README. Restore the inputs.
   Per-crate `Rakefile` tasks depend only on the shared Jinja template, omitting
   manifests, local examples, and the package table; they truncate output and
   ignore renderer exit status. Track all inputs, check subprocess status, and

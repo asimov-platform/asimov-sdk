@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - asimov-remote: Standalone `FetcherRequest` and `ListerRequest` with JSON
   serialization and parsing through the `serde` feature
+- asimov-remote, asimov-sdk: Canonical JSON request serialization (RFC 8785)
+  through the opt-in `jcs` feature
 ### Changed
 - asimov-remote: Construct HTTP fetchers and listers from request values; configure
   caching, filtering, and timing on the requests

@@ -91,6 +91,7 @@ telemetry = ["dep:asimov-telemetry"]
 derive = []
 
 # Integrations:
+jcs = ["asimov-remote?/jcs"]
 serde = ["asimov-core?/serde"]
 tokio = ["asimov-flow?/tokio"]
 tracing = ["asimov-core?/tracing", "asimov-installer?/tracing", "asimov-proxy?/tracing"]
