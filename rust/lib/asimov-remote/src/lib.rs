@@ -1,29 +1,37 @@
 // This is free and unencumbered software released into the public domain.
 
-//! Remote implementations of ASIMOV component patterns.
+//! Transport-independent requests and remote ASIMOV execution adapters.
 //!
-//! Configured operations implement [`Execute`]; their live results use the raw
-//! JSONL batches defined in asimov-flow. Local execution belongs to asimov-runner.
-//! This crate has no dependency on a local process executor or social domain API.
+//! # Requests and encodings
 //!
-//! [`FetcherRequest`] and [`ListerRequest`] own request bodies independently of
-//! an executor. The `serde` feature enables JSON serialization and parsing,
-//! including without the `http` or `std` features.
+//! [`FetcherRequest`] and [`ListerRequest`] describe resources and requested
+//! options. They perform no I/O and contain no service address, credentials, or
+//! response-stream configuration. Adapters own transport configuration and
+//! protocol mapping; configured operations implement the shared [`Execute`] trait.
+//!
+//! Request values are available without any features. The `serde` feature adds
+//! JSON serialization and parsing with `no_std` and `alloc` support. These
+//! encodings describe request data, not routing, authentication, or responses.
 //!
 //! The opt-in `jcs` feature adds canonical JSON strings and UTF-8 bytes using
 //! [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785). It enables `serde` and
 //! `std`. Canonicalization uses the requests' serialized representation,
-//! including option omission and duration formatting. Lister offsets and limits
-//! must be at most `2^53 - 1` to preserve integer precision.
+//! including option omission and duration formatting. Only the JCS methods
+//! restrict lister offsets and limits to `2^53 - 1` to preserve integer precision.
+//! Neither encoding feature enables a transport.
 //!
-//! The `http` feature provides rustls-backed HTTP with HTTP/2 negotiation and
-//! HTTP/1.1 streaming fallback. The initial fetch/list protocol uses JSON POST
-//! requests and `application/jsonl` responses. The `iroh` feature exposes an empty
-//! module reserved for the future Iroh/QUIC transport.
+//! # Transports
 //!
-//! Successful startup does not mean completed execution. Consume the returned
-//! stream to EOF to observe body failures. Dropping it cancels further local
-//! consumption, without promising cancellation of work on the remote server.
+//! - `http` enables the HTTP(S) adapters in the `http` module, including their
+//!   endpoint mapping, authentication, option support, and JSONL response streams.
+//! - `iroh` exposes a placeholder module for a future Iroh/QUIC adapter. Its
+//!   execution API and wire protocol are not implemented or specified here.
+//!
+//! Each adapter defines its response types, failures, and execution lifecycle.
+//! The default feature bundle includes `http`, `iroh`, and `serde`; disable
+//! defaults to use only request values or select individual encodings/transports.
+//! Local execution belongs to asimov-runner; domain APIs belong to their own
+//! crates.
 
 #![no_std]
 #![forbid(unsafe_code)]

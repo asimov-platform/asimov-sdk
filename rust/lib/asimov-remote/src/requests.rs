@@ -10,17 +10,24 @@ mod canonicalization;
 #[cfg(feature = "serde")]
 mod serialization;
 
-/// An owned JSON POST body for the `fetch` endpoint.
+/// An owned, transport-independent request to fetch resources.
 ///
-/// With `serde`, this uses `{"urls":[URL],"options":{...}}`. The pattern,
+/// Describes resource URLs and requested options. Construction, parsing, and
+/// serialization perform no I/O and do not validate execution support. An
+/// executor supplies service addressing, credentials, and protocol mapping.
+///
+/// # JSON representation
+///
+/// With `serde`, this uses `{"urls":[URL,...],"options":{...}}`. The pattern,
 /// caching, filtering, and timing options share the nested `options` object;
 /// unset fields and an empty `other` array are omitted. An empty options object
 /// is also omitted. Durations use human-readable strings, retaining subsecond
 /// precision. Explicit zero durations and empty filters are preserved.
 ///
-/// Parsing and serialization do not require an HTTP client or runtime and do not
-/// validate endpoint support. The HTTP fetcher accepts only unset or `jsonl`
-/// output and an empty `other` array.
+/// The `jcs` feature adds canonical JSON serialization of this representation.
+/// Both encoding features are independent of transport selection.
+///
+/// # Examples
 ///
 /// ```
 /// # #[cfg(feature = "serde")] {
@@ -38,14 +45,16 @@ mod serialization;
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct FetcherRequest {
     /// Resource URLs to fetch, in request order.
+    ///
+    /// These identify input resources, independently of the executor's address.
     pub urls: Vec<String>,
-    /// Pattern options flattened into the JSON `options` object.
+    /// Requested fetch behavior and output format.
     pub options: FetcherOptions,
-    /// Cache freshness options flattened into the JSON `options` object.
+    /// Requested cache freshness.
     pub caching: CachingOptions,
-    /// Output filters flattened into the JSON `options` object.
+    /// Requested output filtering.
     pub filtering: FilteringOptions,
-    /// Execution timing options flattened into the JSON `options` object.
+    /// Requested execution timing.
     pub timing: TimingOptions,
 }
 
@@ -59,21 +68,21 @@ impl FetcherRequest {
         }
     }
 
-    /// Sets cache freshness options to forward to the endpoint.
+    /// Sets the requested cache freshness options.
     #[must_use]
     pub fn with_caching(mut self, options: CachingOptions) -> Self {
         self.caching = options;
         self
     }
 
-    /// Sets output filtering options to forward to the endpoint.
+    /// Sets the requested output filtering options.
     #[must_use]
     pub fn with_filtering(mut self, options: FilteringOptions) -> Self {
         self.filtering = options;
         self
     }
 
-    /// Sets execution timing options to forward to the endpoint.
+    /// Sets the requested execution timing options.
     #[must_use]
     pub fn with_timing(mut self, options: TimingOptions) -> Self {
         self.timing = options;
@@ -81,7 +90,13 @@ impl FetcherRequest {
     }
 }
 
-/// An owned JSON POST body for the `list` endpoint.
+/// An owned, transport-independent request to list a collection.
+///
+/// Describes a collection URL and requested options. Construction, parsing, and
+/// serialization perform no I/O and do not validate execution support. An
+/// executor supplies service addressing, credentials, and protocol mapping.
+///
+/// # JSON representation
 ///
 /// With `serde`, this uses `{"url":URL,"options":{...}}`. All [`ListerOptions`]
 /// fields and the shared caching, filtering, and timing options are flattened
@@ -95,6 +110,12 @@ impl FetcherRequest {
 /// [`core::str::FromStr`] with displayable errors. An empty sort string represents
 /// an empty key list. Neither type needs to implement Serde; both default to
 /// [`String`].
+///
+/// The `jcs` feature adds canonical JSON serialization of this representation,
+/// with a safe-integer check on `offset` and `limit` for that encoding. Both
+/// encoding features are independent of transport selection.
+///
+/// # Examples
 ///
 /// ```
 /// # #[cfg(feature = "serde")] {
@@ -112,14 +133,17 @@ impl FetcherRequest {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListerRequest<T: Clone = String, F = String> {
     /// Collection URL to list.
+    ///
+    /// This identifies the input collection, independently of the executor's
+    /// address.
     pub url: String,
-    /// Pattern options flattened into the JSON `options` object.
+    /// Requested listing order, pagination, and output format.
     pub options: ListerOptions<T, F>,
-    /// Cache freshness options flattened into the JSON `options` object.
+    /// Requested cache freshness.
     pub caching: CachingOptions,
-    /// Output filters flattened into the JSON `options` object.
+    /// Requested output filtering.
     pub filtering: FilteringOptions,
-    /// Execution timing options flattened into the JSON `options` object.
+    /// Requested execution timing.
     pub timing: TimingOptions,
 }
 
@@ -145,21 +169,21 @@ impl<T: Clone, F> ListerRequest<T, F> {
         }
     }
 
-    /// Sets cache freshness options to forward to the endpoint.
+    /// Sets the requested cache freshness options.
     #[must_use]
     pub fn with_caching(mut self, options: CachingOptions) -> Self {
         self.caching = options;
         self
     }
 
-    /// Sets output filtering options to forward to the endpoint.
+    /// Sets the requested output filtering options.
     #[must_use]
     pub fn with_filtering(mut self, options: FilteringOptions) -> Self {
         self.filtering = options;
         self
     }
 
-    /// Sets execution timing options to forward to the endpoint.
+    /// Sets the requested execution timing options.
     #[must_use]
     pub fn with_timing(mut self, options: TimingOptions) -> Self {
         self.timing = options;

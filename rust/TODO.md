@@ -97,6 +97,9 @@ Unless marked reproduced, implementation findings are based on source review.
   explicitly, and compile consumer examples for each advertised feature
   independently. For example, `std,credit,serde` does not enable Serde on
   `Credits`, and `std,id,serde` does not enable it on `PublicKey`.
+  The facade's `remote` flag also enables `asimov-remote/http`; introduce explicit
+  transport selection so request-only and future Iroh consumers can use the
+  facade without HTTP dependencies.
 
 - [ ] **Add isolated feature and cross-target coverage to CI.**
   `../.github/workflows/ci.yaml` passes `build_whole_workspace: false`, but bare

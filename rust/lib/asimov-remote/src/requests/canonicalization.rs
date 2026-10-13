@@ -15,6 +15,7 @@ impl FetcherRequest {
     /// Requires `jcs` (which enables `serde` and `std`). Uses the request's
     /// Serde representation, sorting object properties recursively and
     /// preserving array order and Unicode strings. No trailing newline is added.
+    /// This encodes request data without selecting or invoking an executor.
     ///
     /// # Errors
     ///
@@ -59,6 +60,7 @@ impl<T: Clone + fmt::Display, F: fmt::Display> ListerRequest<T, F> {
     /// Serde representation, sorting object properties recursively and
     /// preserving array order and Unicode strings. Sort keys and custom output
     /// formats only need [`fmt::Display`]. No trailing newline is added.
+    /// This encodes request data without selecting or invoking an executor.
     ///
     /// # Errors
     ///

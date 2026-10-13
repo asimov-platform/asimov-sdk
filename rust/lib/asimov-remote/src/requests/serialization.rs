@@ -38,11 +38,11 @@ struct Options<O> {
     timing: TimingOptions,
 }
 
-// Owned on input, borrowed where possible on output. Keeping this wire shape
+// Owned on input, borrowed where possible on output. Keeping this encoding
 // separate from ListerOptions supports Display-only keys and an empty sort.
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
-struct ListerOptionsBody<'a> {
+struct ListerOptionsRepr<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     sort: Option<Cow<'a, str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -120,9 +120,9 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Serialize for ListerRequest<T, F>
         struct Request<'a> {
             url: &'a str,
             #[serde(skip_serializing_if = "Option::is_none")]
-            options: Option<OptionsRef<'a, ListerOptionsBody<'a>>>,
+            options: Option<OptionsRef<'a, ListerOptionsRepr<'a>>>,
         }
-        // Keep this exhaustive so new pattern fields require a wire mapping.
+        // Keep this exhaustive so new pattern fields require an encoding.
         let ListerOptions {
             sort,
             before,
@@ -143,7 +143,7 @@ impl<T: Clone + fmt::Display, F: fmt::Display> Serialize for ListerRequest<T, F>
         Request {
             url: &self.url,
             options: (!empty).then(|| OptionsRef {
-                pattern: ListerOptionsBody {
+                pattern: ListerOptionsRepr {
                     sort: sort.as_ref().map(|keys| {
                         // SortKeys<T> only implements Display for string keys.
                         keys.keys()
@@ -183,10 +183,10 @@ where
         struct Request {
             url: String,
             #[serde(default)]
-            options: Options<ListerOptionsBody<'static>>,
+            options: Options<ListerOptionsRepr<'static>>,
         }
         let Request { url, options } = Request::deserialize(deserializer)?;
-        let ListerOptionsBody {
+        let ListerOptionsRepr {
             sort,
             before,
             after,
