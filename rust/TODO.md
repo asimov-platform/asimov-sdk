@@ -14,17 +14,17 @@ Unless marked reproduced, implementation findings are based on source review.
 ## P1: Data integrity and failure handling
 
 - [ ] **Sign remote HTTP requests with the keyring Ed25519 identity.**
-  In `lib/asimov-remote/src/http.rs::Executor::post_jsonl`, use an RFC 9421
-  profile covering method, target URI, RFC 9530 SHA-256 content digest, and
+  After `lib/asimov-remote/src/http.rs::Executor::prepare_json_request`, apply an
+  RFC 9421 profile covering method, target URI, SHA-256 content digest, and
   semantic/auth headers. Identify keys as ASCII `ed25519:<base58-public-key>`;
   require `tag="asimov-remote-request-v1"`, a 60-second signature lifetime,
   30-second clock tolerance, and at least 128-bit random nonces per attempt.
   Require server-side coverage/algorithm checks, key authorization, and shared,
   atomic replay rejection after verification but before execution. Retain
   consumed nonces through expiry plus clock skew, including across restarts.
-  Serialize bodies once, require HTTPS in production, and control redirects and
-  proxy URI reconstruction. Keep retry idempotency separate from nonces; fail
-  closed on signing/replay-store errors and test tampering and replay races.
+  Require HTTPS in production and define proxy URI reconstruction. Sign each
+  attempt with fresh parameters; keep retry idempotency separate from nonces.
+  Fail closed on signing/replay-store errors and test tampering and replay races.
 
 - [ ] **Validate downloaded manifest paths and module identity before use.**
   In `lib/asimov-installer/src/installer.rs`, `assemble_module` joins unchecked
@@ -243,6 +243,13 @@ Unless marked reproduced, implementation findings are based on source review.
   during a slow download, storage operation, or tool callback.
 
 ## P2: Protocols, execution, and service APIs
+
+- [ ] **Verify remote HTTP response digests with explicit stream semantics.**
+  Add an opt-in RFC 9530 SHA-256 response-verification policy to
+  `asimov-remote/http`. Account for content coding, trailers, and
+  missing/unsupported digests; define whether unverified JSONL can be delivered
+  before EOF.
+  Digest preference headers alone must not imply verified response integrity.
 
 - [ ] **Bound proxy connection, upload, and shutdown lifetimes.**
   `lib/asimov-proxy/src/openai.rs` needs upload deadlines and bounded

@@ -24,6 +24,22 @@
 //! determines support for forwarded options. These are HTTP adapter contracts,
 //! not restrictions on the transport-independent request types.
 //!
+//! # Request integrity
+//!
+//! Every request carries a SHA-256 `Content-Digest` by default, following
+//! [RFC 9530](https://www.rfc-editor.org/rfc/rfc9530). [`DigestOptions`] configures
+//! `Content-Digest`, optional `Repr-Digest`, and optional `Want-Content-Digest` /
+//! `Want-Repr-Digest` preferences, all using SHA-256 exclusively. JSON is
+//! serialized once; digests cover those exact UTF-8 bytes, without HTTP framing.
+//! The complete JSON body is also the request's selected representation.
+//!
+//! Requests are fully prepared before dispatch, providing the integration point
+//! for future [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421) signatures over
+//! the method, target URI, digest fields, and semantic/authentication headers.
+//! Signatures are not yet emitted; digests alone do not authenticate messages.
+//! Redirects are returned as [`Error::Redirect`] instead of being followed with
+//! stale digests or, in the future, signatures. Configure the final service URL.
+//!
 //! # HTTP responses and lifecycle
 //!
 //! Both operations implement [`asimov_patterns::Execute`] with [`JsonlStream`]
@@ -70,11 +86,14 @@ use asimov_keyring::Keyring;
 use async_trait::async_trait;
 use core::fmt;
 use reqwest::{
-    Client, Url,
-    header::{ACCEPT, HeaderValue},
+    Client, Request, Url,
+    header::{ACCEPT, CONTENT_LENGTH, HeaderValue},
 };
 use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
+
+mod digest;
+pub use digest::{DigestOptions, DigestPreference};
 
 /// Transport-independent request types, re-exported for convenience.
 pub use crate::{FetcherRequest, ListerRequest};
@@ -104,18 +123,22 @@ pub enum Error {
     /// An option rejected by this HTTP protocol adapter.
     #[error("the HTTP fetch/list protocol does not support option {0}")]
     UnsupportedOption(&'static str),
+    /// A redirection response, which is never followed automatically.
+    #[error("HTTP redirect ({0}); configure the final service URL")]
+    Redirect(reqwest::StatusCode),
 }
 
 /// Reusable HTTP(S) service configuration. Clones share the connection pool.
 ///
-/// Owns service addressing, bearer authentication, and response batching;
-/// resource URLs and operation options belong to the request values.
+/// Owns service addressing, bearer authentication, request digests, and response
+/// batching; resource URLs and operation options belong to the request values.
 #[derive(Clone)]
 pub struct Executor {
     client: Client,
     base_url: Url,
     api_token: SecretString,
     batching: BatchOptions,
+    digests: DigestOptions,
 }
 
 impl fmt::Debug for Executor {
@@ -123,6 +146,7 @@ impl fmt::Debug for Executor {
         f.debug_struct("HttpExecutor")
             .field("base_url", &self.base_url)
             .field("batching", &self.batching)
+            .field("digests", &self.digests)
             .finish_non_exhaustive()
     }
 }
@@ -142,6 +166,10 @@ impl Executor {
     /// The `User-Agent` is the caller name reported by `agent-detector` at
     /// construction, or `asimov-remote/<version>` if detection yields no valid
     /// HTTP header value.
+    ///
+    /// Requests use [`DigestOptions::default()`]. Redirects are not followed;
+    /// configure the service's final URL so request integrity fields remain
+    /// bound to the prepared request's method, target, and body.
     ///
     /// # Errors
     ///
@@ -169,6 +197,7 @@ impl Executor {
             client: Client::builder()
                 .user_agent(user_agent)
                 .use_rustls_tls()
+                .redirect(reqwest::redirect::Policy::none())
                 .build()?,
             base_url,
             api_token: match api_token {
@@ -179,6 +208,7 @@ impl Executor {
                     .into(),
             },
             batching: BatchOptions::default(),
+            digests: DigestOptions::default(),
         })
     }
 
@@ -194,27 +224,54 @@ impl Executor {
         self
     }
 
+    /// Configures RFC 9530 digest and preference fields for subsequent requests.
+    #[must_use]
+    pub fn with_digests(mut self, options: DigestOptions) -> Self {
+        self.digests = options;
+        self
+    }
+
     /// Serializes a value as JSON and POSTs it to a relative HTTP endpoint.
     ///
     /// Resolves the endpoint under this executor's service base URL and applies
-    /// its bearer authentication and local response batching. The body uses
-    /// ordinary Serde JSON serialization, independently of the `jcs` feature.
+    /// its bearer authentication, digest policy, and local response batching.
+    /// The body uses ordinary Serde JSON serialization, independently of `jcs`.
     /// Response bytes are framed as JSONL without JSON or UTF-8 validation.
     /// The stream owns the response, not a borrow of this executor.
     ///
     /// # Errors
     ///
-    /// Endpoint resolution, request serialization, connection, and HTTP status
-    /// errors are returned directly. Body errors terminate the returned stream
-    /// after any complete buffered records.
+    /// Endpoint resolution, request serialization, connection, redirects, and
+    /// HTTP status errors are returned directly. Body errors terminate the
+    /// returned stream after any complete buffered records.
     pub async fn post_jsonl(
         &self,
         endpoint: &str,
         request: &impl Serialize,
     ) -> Result<JsonlStream, Error> {
+        let request = self.prepare_json_request(endpoint, request)?;
+        let response = self.client.execute(request).await?;
+        if response.status().is_redirection() {
+            return Err(Error::Redirect(response.status()));
+        }
+        let response = response.error_for_status()?;
+        Ok(jsonl_batches_from_chunks(
+            response
+                .bytes_stream()
+                .map(|chunk| chunk.map_err(Error::from)),
+            self.batching,
+        ))
+    }
+
+    /// Finalizes the exact request to dispatch, before any future signing step.
+    fn prepare_json_request(
+        &self,
+        endpoint: &str,
+        request: &impl Serialize,
+    ) -> Result<Request, Error> {
         // Endpoints are relative paths so the configured bearer token is always
         // sent to the configured service, including when a caller supplies a path.
-        let url = self
+        let mut url = self
             .base_url
             .join(endpoint)
             .map_err(|error| Error::InvalidBaseUrl(format!("{error}")))?;
@@ -223,21 +280,30 @@ impl Executor {
                 "endpoint must use the configured origin".into(),
             ));
         }
-        let response = self
+        // Fragments are not part of the HTTP target URI (RFC 9421, section 2.2.2).
+        url.set_fragment(None);
+        let mut request = self
             .client
             .post(url)
             .header(ACCEPT, "application/jsonl")
             .bearer_auth(self.api_token.expose_secret())
             .json(request)
-            .send()
-            .await?
-            .error_for_status()?;
-        Ok(jsonl_batches_from_chunks(
-            response
-                .bytes_stream()
-                .map(|chunk| chunk.map_err(Error::from)),
-            self.batching,
-        ))
+            .build()?;
+        // RequestBuilder::json serializes once into a buffered body. Hash that
+        // body rather than reserializing a possibly stateful Serialize value.
+        let body = request
+            .body()
+            .and_then(reqwest::Body::as_bytes)
+            .expect("a successfully built JSON request has a buffered body");
+        let length = HeaderValue::from(body.len());
+        let digests = self.digests.headers(body);
+        request.headers_mut().insert(CONTENT_LENGTH, length);
+        request.headers_mut().extend(digests);
+        // RFC 9421 signing belongs here, after all covered components are final.
+        // Sign the prepared method/URL/headers, including representation metadata
+        // and authorization; do not reserialize or modify the body afterwards.
+        // Transport-added headers (e.g., User-Agent) are not signing inputs here.
+        Ok(request)
     }
 }
 

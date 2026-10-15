@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 25.7.5 - 2026-10-15
+### Added
+- asimov-remote: RFC 9530 SHA-256 HTTP request digests with
+  configurable representation digests and response-digest preferences
+### Changed
+- asimov-remote: Report HTTP redirects as errors to preserve request integrity
+
 ## 25.7.4 - 2026-10-13
 ### Added
 - asimov-remote: Standalone `FetcherRequest` and `ListerRequest` with JSON

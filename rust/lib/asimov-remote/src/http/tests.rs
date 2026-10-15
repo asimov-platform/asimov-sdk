@@ -14,6 +14,8 @@ use tokio::{
     time::timeout,
 };
 
+mod digest;
+
 const DEADLINE: Duration = Duration::from_secs(5);
 
 type Lister = super::Lister;
@@ -49,20 +51,28 @@ impl fmt::Display for Format {
     }
 }
 
-// A response held open after its first chunk proves the caller receives batches
-// before EOF. The server reads and reports the complete JSON request first.
-async fn http1_server(
-    status: u16,
-    first: &'static [u8],
-    last: &'static [u8],
-) -> (
+type Http1Server = (
     String,
     oneshot::Receiver<String>,
     oneshot::Sender<()>,
     tokio::task::JoinHandle<()>,
-) {
+);
+
+// A response held open after its first chunk proves the caller receives batches
+// before EOF. The server reads and reports the complete JSON request first.
+async fn http1_server(status: u16, first: &'static [u8], last: &'static [u8]) -> Http1Server {
+    http1_server_with_headers(status, "", first, last).await
+}
+
+async fn http1_server_with_headers(
+    status: u16,
+    headers: &str,
+    first: &'static [u8],
+    last: &'static [u8],
+) -> Http1Server {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/api", listener.local_addr().unwrap());
+    let headers = String::from(headers);
     let (request_tx, request_rx) = oneshot::channel();
     let (resume_tx, resume_rx) = oneshot::channel();
     let server = tokio::spawn(async move {
@@ -93,7 +103,7 @@ async fn http1_server(
             .send(String::from_utf8(request).unwrap())
             .unwrap();
         socket.write_all(format!(
-            "HTTP/1.1 {status} Test\r\nContent-Type: application/jsonl\r\nTransfer-Encoding: chunked\r\n\r\n"
+            "HTTP/1.1 {status} Test\r\nContent-Type: application/jsonl\r\nTransfer-Encoding: chunked\r\n{headers}\r\n"
         ).as_bytes()).await.unwrap();
         if !first.is_empty() {
             socket
@@ -237,6 +247,7 @@ async fn patterns_post_authenticated_json_and_stream_raw_batches_before_eof() {
         .unwrap();
         let request = timeout(DEADLINE, request).await.unwrap().unwrap();
         let (headers, body) = request.split_once("\r\n\r\n").unwrap();
+        digest::assert_default_digest(headers, body.as_bytes());
         let headers = headers.to_ascii_lowercase();
         assert!(headers.starts_with(&format!("post /api/{endpoint} http/1.1\r\n")));
         assert!(headers.contains("\r\nauthorization: bearer test-token"));
@@ -684,7 +695,13 @@ async fn http2_requests_can_reuse_the_same_operation() {
                         assert_eq!(request.version(), hyper::Version::HTTP_2);
                         assert_eq!(request.uri().path(), "/fetch");
                         assert_eq!(request.headers()["authorization"], "Bearer token");
+                        assert_eq!(
+                            request.headers().get_all("content-digest").iter().count(),
+                            1
+                        );
+                        let digest = request.headers()["content-digest"].clone();
                         let bytes = request.into_body().collect().await.unwrap().to_bytes();
+                        assert_eq!(digest, digest::sha256_field(&bytes));
                         assert_eq!(
                             serde_json::from_slice::<Value>(&bytes).unwrap(),
                             json!({
