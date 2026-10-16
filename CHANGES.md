@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - asimov-http: Shared SHA-256 digests, Ed25519 HTTP message signatures, and
   streaming header/trailer verification for HTTP/1.1 and HTTP/2
+- asimov-http: Runnable signed client/server examples for HTTP/1.1 and HTTP/2
 - asimov-remote: Opt-in request signing and streaming response verification
 - asimov-remote: RFC 9530 SHA-256 HTTP request digests with
   configurable representation digests and response-digest preferences

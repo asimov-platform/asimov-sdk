@@ -38,10 +38,19 @@ sfv = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 
 [dev-dependencies]
+async-stream.workspace = true
 http-body-util.workspace = true
 hyper = { workspace = true, features = ["client", "server", "http1", "http2"] }
-hyper-util = { workspace = true, features = ["tokio"] }
+hyper-util = { workspace = true, features = ["server-auto", "tokio"] }
 tokio = { workspace = true, features = ["macros", "rt", "net", "sync", "time"] }
+
+[[example]]
+name = "client"
+required-features = ["std"]
+
+[[example]]
+name = "server"
+required-features = ["std"]
 
 [package.metadata.readme]
 title = "ASIMOV.rs: HTTP Integrity"

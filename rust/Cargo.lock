@@ -1226,6 +1226,7 @@ name = "asimov-http"
 version = "25.7.4"
 dependencies = [
  "asimov-protocol",
+ "async-stream",
  "base64 0.23.1",
  "bs58",
  "bytes",

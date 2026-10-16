@@ -11,3 +11,39 @@ assert_eq!(
 The crate rustdoc contains buffered request-signing and streaming
 response-signing examples. See [`DESIGN.md`](DESIGN.md) for verification,
 HTTP/1.1–HTTP/2, and trailer lifecycle contracts.
+
+### Runnable client and server
+
+Run these commands from the workspace's `rust/` directory in two terminals.
+Start the [server](examples/server.rs):
+
+```sh
+cargo run -p asimov-http --example server
+```
+
+Then run the [client](examples/client.rs):
+
+```sh
+cargo run -p asimov-http --example client
+```
+
+The client sends a signed JSON POST. The server verifies the request and emits
+three JSONL records with a short delay between them, followed by `Content-Digest`
+and `Signature` trailers. `Signature-Input` is sent in headers. The client prints
+provisional bytes as they arrive and reports verified completion only at EOF.
+Responses are bound to the originating request's signature.
+
+The same server also provides buffered responses with all integrity fields in
+headers. The client accepts either placement without changing its policy:
+
+```sh
+cargo run -p asimov-http --example client -- --headers
+cargo run -p asimov-http --example client -- --http2
+cargo run -p asimov-http --example client -- --http2 --headers
+```
+
+These examples use fixed demo Ed25519 keys, loopback HTTP, and an in-memory
+nonce cache that resets when the server stops. HTTP/2 uses cleartext prior
+knowledge. The default address is `127.0.0.1:3000`; set
+`ASIMOV_HTTP_EXAMPLE_ADDR` in both terminals to use another address. Both examples
+require the `std` feature.
