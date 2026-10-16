@@ -256,6 +256,52 @@ impl<B: Body<Data = Bytes>> Body for SigningBody<B> {
 /// Data frames are provisional until `is_verified()` becomes true. Dropping the
 /// body, a source error, missing trailers, or an integrity failure never yields
 /// verified completion. A failure is emitted once and the body then terminates.
+///
+/// A policy entry for `"content-digest"` or `"content-digest";tr` restricts
+/// placement to that section. To let the server choose, omit the response's
+/// digest from [`crate::VerificationPolicy::required_components`]. With a
+/// verifier, this adapter still requires a matching SHA-256 digest and a valid
+/// signature covering it in its actual section, checked at EOF.
+///
+/// # Example
+///
+/// Verify a Hyper response against a trusted server key, allowing either digest
+/// location. The sender uses the same key ID and the `response` signature label.
+///
+/// ```no_run
+/// # extern crate alloc;
+/// use alloc::{boxed::Box, vec};
+/// use asimov_http::{
+///     Component, SignatureParams, VerificationPolicy, Verifier, VerifyingKey,
+///     body::VerifyingBody, http::Response, key_id,
+/// };
+/// use http_body_util::BodyExt as _;
+///
+/// async fn verify_response(
+///     response: Response<hyper::body::Incoming>,
+///     server_key: VerifyingKey,
+/// ) -> Result<(), Box<dyn core::error::Error>> {
+///     let policy = VerificationPolicy::new(vec![
+///         Component::new("@status")?,
+///         Component::new("content-type")?,
+///     ]);
+///     let verifier = Verifier::new(
+///         server_key, &key_id(&server_key), "response", policy,
+///     )?;
+///     let mut body = VerifyingBody::response(
+///         response, None, Some(verifier), SignatureParams::now()?,
+///     )?.into_body();
+///
+///     while let Some(frame) = body.frame().await {
+///         if let Ok(data) = frame?.into_data() {
+///             println!("Received {} provisional bytes", data.len());
+///         }
+///     }
+///     // EOF was reached without a transport, digest, or signature error.
+///     assert!(body.is_verified());
+///     Ok(())
+/// }
+/// ```
 pub struct VerifyingBody<B> {
     inner: Pin<Box<B>>,
     hash: Sha256,

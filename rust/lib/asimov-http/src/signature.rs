@@ -341,6 +341,38 @@ impl Signer {
 #[derive(Clone, Debug)]
 pub struct VerificationPolicy {
     /// Components that must be covered, including their exact parameter sets.
+    ///
+    /// `"content-digest"` requires header coverage; `"content-digest";tr`
+    /// requires trailer coverage. Listing both requires both, not either one.
+    /// To let a response choose its digest location, omit its digest from this
+    /// list and use [`crate::body::VerifyingBody`] with a verifier. That adapter
+    /// independently requires a matching SHA-256 digest and signature coverage
+    /// of its actual section. [`Verifier::verify`] alone does not check the body.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # extern crate alloc;
+    /// use alloc::vec;
+    /// use asimov_http::{Component, VerificationPolicy};
+    ///
+    /// // With VerifyingBody, accept the response digest in either section.
+    /// let either = VerificationPolicy::new(vec![
+    ///     Component::new("@status")?,
+    ///     Component::new("content-type")?,
+    /// ]);
+    ///
+    /// // Require header coverage; a trailer-only digest cannot satisfy this.
+    /// let mut in_headers = either.clone();
+    /// in_headers.required_components.push(Component::new("content-digest")?);
+    ///
+    /// // Or require trailer coverage instead. Choose one policy per verifier.
+    /// let mut in_trailers = either;
+    /// in_trailers
+    ///     .required_components
+    ///     .push(Component::trailer("content-digest")?);
+    /// # Ok::<(), asimov_http::Error>(())
+    /// ```
     pub required_components: Vec<Component>,
     /// Required application tag, when set.
     pub required_tag: Option<String>,

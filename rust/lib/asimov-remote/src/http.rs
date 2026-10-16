@@ -266,6 +266,38 @@ impl Executor {
     /// Requires response signatures from the verifier's key and profile, and a
     /// matching SHA-256 content digest in headers or trailers. Batches delivered
     /// before EOF are provisional. Consume to EOF to observe terminal failures.
+    ///
+    /// To let the server choose digest placement per response, omit the response
+    /// digest from [`VerificationPolicy::required_components`]. Requiring
+    /// `"content-digest"` pins it to headers; `"content-digest";tr` pins it to
+    /// trailers. The body verifier independently requires a matching SHA-256
+    /// digest and a valid signature covering it in whichever section contains it.
+    ///
+    /// # Example
+    ///
+    /// Configure a trusted server key and the server's `response` signature
+    /// label, allowing either header or trailer digests:
+    ///
+    /// ```no_run
+    /// # extern crate alloc;
+    /// use alloc::vec;
+    /// use asimov_http::{
+    ///     Component, VerificationPolicy, Verifier, VerifyingKey, key_id,
+    /// };
+    /// use asimov_remote::http::{Error, Executor};
+    ///
+    /// fn client(server_key: VerifyingKey) -> Result<Executor, Error> {
+    ///     let policy = VerificationPolicy::new(vec![
+    ///         Component::new("@status")?,
+    ///         Component::new("content-type")?,
+    ///     ]);
+    ///     let verifier = Verifier::new(
+    ///         server_key, &key_id(&server_key), "response", policy,
+    ///     )?;
+    ///     Ok(Executor::new("https://asimov.social", Some("api-token"))?
+    ///         .with_response_verifier(verifier))
+    /// }
+    /// ```
     #[must_use]
     pub fn with_response_verifier(mut self, verifier: Verifier) -> Self {
         self.response_verifier = Some(verifier);
