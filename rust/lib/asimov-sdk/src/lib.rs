@@ -39,6 +39,11 @@ pub use asimov_flow as flow;
 #[cfg(feature = "id")]
 pub use asimov_id as id;
 
+/// Shared SHA-256 HTTP digests and Ed25519 message signatures.
+/// Enable `std` for HTTP field processing and streaming body adapters.
+#[cfg(feature = "http")]
+pub use asimov_http as http;
+
 #[cfg(feature = "installer")]
 pub use asimov_installer as installer;
 

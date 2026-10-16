@@ -15,6 +15,7 @@ use tokio::{
 };
 
 mod digest;
+mod signature;
 
 const DEADLINE: Duration = Duration::from_secs(5);
 

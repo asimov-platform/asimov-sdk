@@ -160,6 +160,17 @@
   },
   {
     "package": {
+      "name": "asimov-http",
+      "description": "HTTP message integrity with SHA-256 digests and Ed25519 signatures",
+      "metadata": {
+        "readme": {
+          "title": "ASIMOV.rs: HTTP Integrity"
+        }
+      }
+    }
+  },
+  {
+    "package": {
       "name": "asimov-huggingface",
       "readme": true,
       "categories": [],

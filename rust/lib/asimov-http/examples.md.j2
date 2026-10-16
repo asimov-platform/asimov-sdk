@@ -1,0 +1,13 @@
+```rust
+use asimov_http::ContentDigest;
+
+let digest = ContentDigest::new(b"abc");
+assert_eq!(
+    digest.to_field_value(),
+    "sha-256=:ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=:",
+);
+```
+
+The crate rustdoc contains buffered request-signing and streaming
+response-signing examples. See [`DESIGN.md`](DESIGN.md) for verification,
+HTTP/1.1–HTTP/2, and trailer lifecycle contracts.

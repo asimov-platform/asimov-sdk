@@ -28,6 +28,14 @@ for [trustworthy neurosymbolic machine intelligence].
 
 ## ✨ Features
 
+{% if package.name == "asimov-http" -%}
+- Computes and verifies RFC 9530 SHA-256 content digests.
+- Signs and verifies RFC 9421 messages with protocol Ed25519 keys.
+- Supports headers, trailers, HTTP/1.1, and HTTP/2.
+- Streams response bodies with verification at EOF.
+- Provides runtime-independent HTTP body adapters for Hyper and Axum.
+- Supports `no_std` digest hashing and encoding.
+{% else -%}
 - Defines [flow-based] [program patterns] for refining data into knowledge.
 - Implements a [module system] enabling an ecosystem of [modules].
 - Enables dataflow systems through reusable components called blocks.
@@ -35,6 +43,7 @@ for [trustworthy neurosymbolic machine intelligence].
 - Built on the dataflow primitives provided by the [Async-Flow] crate.
 - Supports opting out of any feature using comprehensive feature flags.
 - Adheres to the Rust API Guidelines in its [naming conventions].
+{% endif -%}
 - Cuts red tape: 100% free and unencumbered public domain software.
 
 ## 🛠️ Prerequisites
@@ -70,6 +79,8 @@ Alternatively, enable only specific features:
 [dependencies]
 {%- if package.name == "asimov-sdk" %}
 asimov = { package = "asimov-sdk", version = "25", default-features = false, features = ["tracing"] }
+{%- elif package.name == "asimov-http" %}
+asimov-http = { version = "25", default-features = false }
 {%- else %}
 {{ package.name }} = { version = "25", default-features = false, features = ["tracing"] }
 {%- endif %}
@@ -89,6 +100,11 @@ asimov = { package = "asimov-sdk", version = "25", default-features = false, fea
 
 ### Glossary
 
+{% if package.name == "asimov-http" -%}
+- **Content digest**: A hash of the exact content bytes, excluding HTTP framing.
+- **Signature base**: The ordered HTTP components and parameters signed by a key.
+- **Trailers**: HTTP fields delivered after the body, verified at stream EOF.
+{% else -%}
 - **System**: A collection of blocks that are connected together.
   Systems are the top-level entities in dataflow programs.
 
@@ -103,6 +119,7 @@ asimov = { package = "asimov-sdk", version = "25", default-features = false, fea
   to port. Any Rust type that implements the `Send + Sync + 'static` traits can
   be used as a message.
 
+{% endif -%}
 ## 👨‍💻 Development
 
 ```bash

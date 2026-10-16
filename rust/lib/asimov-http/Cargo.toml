@@ -1,0 +1,51 @@
+# See: https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package]
+name = "asimov-http"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "HTTP message integrity with SHA-256 digests and Ed25519 signatures"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+
+[features]
+default = ["all", "std"]
+all = []
+std = [
+    "base64/std", "sha2/std", "dep:thiserror", "thiserror/std", "dep:asimov-protocol",
+    "asimov-protocol/std", "dep:bs58", "dep:bytes", "bytes/std",
+    "dep:getrandom", "dep:http", "dep:http-body", "dep:sfv", "dep:url",
+    "url/std",
+]
+
+[dependencies]
+base64 = { workspace = true, features = ["alloc"] }
+sha2.workspace = true
+thiserror = { workspace = true, optional = true }
+asimov-protocol = { workspace = true, optional = true }
+bs58 = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+getrandom = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+http-body = { workspace = true, optional = true }
+sfv = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+
+[dev-dependencies]
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["client", "server", "http1", "http2"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+tokio = { workspace = true, features = ["macros", "rt", "net", "sync", "time"] }
+
+[package.metadata.readme]
+title = "ASIMOV.rs: HTTP Integrity"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

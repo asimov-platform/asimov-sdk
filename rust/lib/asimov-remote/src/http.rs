@@ -33,12 +33,17 @@
 //! serialized once; digests cover those exact UTF-8 bytes, without HTTP framing.
 //! The complete JSON body is also the request's selected representation.
 //!
-//! Requests are fully prepared before dispatch, providing the integration point
-//! for future [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421) signatures over
-//! the method, target URI, digest fields, and semantic/authentication headers.
-//! Signatures are not yet emitted; digests alone do not authenticate messages.
-//! Redirects are returned as [`Error::Redirect`] instead of being followed with
-//! stale digests or, in the future, signatures. Configure the final service URL.
+//! [`Executor::with_signing_key`] enables RFC 9421 Ed25519 signatures using an
+//! `asimov_protocol::SecretKey`. Each execution uses a fresh nonce and a
+//! 60-second validity window. The shared asimov-http request profile covers the
+//! method, target URI, credentials, and semantic headers. Digests alone do not
+//! authenticate messages. Redirects return [`Error::Redirect`]; configure the
+//! final service URL.
+//!
+//! [`Executor::with_response_verifier`] enables frame-preserving digest and
+//! signature verification, including trailers. JSONL batches are provisional
+//! until EOF; an integrity failure is a terminal stream error. Validation time
+//! is response-header receipt. Content coding is not automatically decoded.
 //!
 //! # HTTP responses and lifecycle
 //!
@@ -81,6 +86,10 @@
 
 use alloc::{boxed::Box, format, string::String};
 use asimov_flow::{BatchStream, jsonl_batches_from_chunks};
+use asimov_http::{
+    Component, Message, REQUEST_SIGNATURE_TAG, SignatureInput, SignatureParams, Signer,
+    VerificationPolicy,
+};
 use asimov_id::PublicKeyEncoding;
 use asimov_keyring::Keyring;
 use async_trait::async_trait;
@@ -92,8 +101,7 @@ use reqwest::{
 use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
-mod digest;
-pub use digest::{DigestOptions, DigestPreference};
+pub use asimov_http::{DigestOptions, DigestPreference, SecretKey, Verifier};
 
 /// Transport-independent request types, re-exported for convenience.
 pub use crate::{FetcherRequest, ListerRequest};
@@ -126,6 +134,9 @@ pub enum Error {
     /// A redirection response, which is never followed automatically.
     #[error("HTTP redirect ({0}); configure the final service URL")]
     Redirect(reqwest::StatusCode),
+    /// HTTP digest/signature construction or terminal verification failure.
+    #[error(transparent)]
+    Integrity(#[from] asimov_http::Error),
 }
 
 /// Reusable HTTP(S) service configuration. Clones share the connection pool.
@@ -139,6 +150,8 @@ pub struct Executor {
     api_token: SecretString,
     batching: BatchOptions,
     digests: DigestOptions,
+    signing_key: Option<SecretKey>,
+    response_verifier: Option<Verifier>,
 }
 
 impl fmt::Debug for Executor {
@@ -147,6 +160,8 @@ impl fmt::Debug for Executor {
             .field("base_url", &self.base_url)
             .field("batching", &self.batching)
             .field("digests", &self.digests)
+            .field("signing", &self.signing_key.is_some())
+            .field("response_verification", &self.response_verifier.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -198,6 +213,12 @@ impl Executor {
                 .user_agent(user_agent)
                 .use_rustls_tls()
                 .redirect(reqwest::redirect::Policy::none())
+                // Digests cover content-coded bytes. Disable decoding even if
+                // another workspace dependency enables reqwest compression.
+                .no_gzip()
+                .no_brotli()
+                .no_deflate()
+                .no_zstd()
                 .build()?,
             base_url,
             api_token: match api_token {
@@ -209,6 +230,8 @@ impl Executor {
             },
             batching: BatchOptions::default(),
             digests: DigestOptions::default(),
+            signing_key: None,
+            response_verifier: None,
         })
     }
 
@@ -231,6 +254,24 @@ impl Executor {
         self
     }
 
+    /// Enables Ed25519 signing with an explicitly supplied protocol identity.
+    /// Each request receives fresh signature parameters. SHA-256 content digests
+    /// must remain enabled. This does not change the configured bearer token.
+    #[must_use]
+    pub fn with_signing_key(mut self, key: SecretKey) -> Self {
+        self.signing_key = Some(key);
+        self
+    }
+
+    /// Requires response signatures from the verifier's key and profile, and a
+    /// matching SHA-256 content digest in headers or trailers. Batches delivered
+    /// before EOF are provisional. Consume to EOF to observe terminal failures.
+    #[must_use]
+    pub fn with_response_verifier(mut self, verifier: Verifier) -> Self {
+        self.response_verifier = Some(verifier);
+        self
+    }
+
     /// Serializes a value as JSON and POSTs it to a relative HTTP endpoint.
     ///
     /// Resolves the endpoint under this executor's service base URL and applies
@@ -250,11 +291,40 @@ impl Executor {
         request: &impl Serialize,
     ) -> Result<JsonlStream, Error> {
         let request = self.prepare_json_request(endpoint, request)?;
+        let request_context = if self.response_verifier.is_some() {
+            Some(Message::request(
+                request.method().clone(),
+                request.url().as_str(),
+                request.headers().clone(),
+            )?)
+        } else {
+            None
+        };
         let response = self.client.execute(request).await?;
         if response.status().is_redirection() {
             return Err(Error::Redirect(response.status()));
         }
         let response = response.error_for_status()?;
+        if let Some(verifier) = &self.response_verifier {
+            use asimov_http::body::{BodyError, VerifyingBody};
+            use http_body_util::BodyExt as _;
+            let response: asimov_http::http::Response<reqwest::Body> = response.into();
+            let response = VerifyingBody::response(
+                response,
+                request_context,
+                Some(verifier.clone()),
+                SignatureParams::now()?,
+            )?;
+            return Ok(jsonl_batches_from_chunks(
+                response.into_body().into_data_stream().map(|chunk| {
+                    chunk.map_err(|error| match error {
+                        BodyError::Inner(error) => Error::Http(error),
+                        BodyError::Integrity(error) => Error::Integrity(error),
+                    })
+                }),
+                self.batching,
+            ));
+        }
         Ok(jsonl_batches_from_chunks(
             response
                 .bytes_stream()
@@ -263,7 +333,7 @@ impl Executor {
         ))
     }
 
-    /// Finalizes the exact request to dispatch, before any future signing step.
+    /// Finalizes and optionally signs the exact request to dispatch.
     fn prepare_json_request(
         &self,
         endpoint: &str,
@@ -299,10 +369,41 @@ impl Executor {
         let digests = self.digests.headers(body);
         request.headers_mut().insert(CONTENT_LENGTH, length);
         request.headers_mut().extend(digests);
-        // RFC 9421 signing belongs here, after all covered components are final.
-        // Sign the prepared method/URL/headers, including representation metadata
-        // and authorization; do not reserialize or modify the body afterwards.
-        // Transport-added headers (e.g., User-Agent) are not signing inputs here.
+        if self.response_verifier.is_some() {
+            request
+                .headers_mut()
+                .insert(reqwest::header::TE, HeaderValue::from_static("trailers"));
+            request
+                .headers_mut()
+                .insert(reqwest::header::CONNECTION, HeaderValue::from_static("te"));
+        }
+        if let Some(key) = &self.signing_key {
+            if !self.digests.content {
+                return Err(asimov_http::Error::Policy("signing requires a content digest").into());
+            }
+            let mut components = VerificationPolicy::request().required_components;
+            for name in [
+                "content-encoding",
+                "repr-digest",
+                "want-content-digest",
+                "want-repr-digest",
+            ] {
+                if request.headers().contains_key(name) {
+                    components.push(Component::new(name)?);
+                }
+            }
+            let input = SignatureInput::new(
+                components,
+                SignatureParams::fresh(&key.public(), REQUEST_SIGNATURE_TAG)?,
+            )?;
+            let signer = Signer::new(key.clone(), "asimov", input)?;
+            let message = Message::request(
+                request.method().clone(),
+                request.url().as_str(),
+                request.headers().clone(),
+            )?;
+            signer.sign(&message)?.append_to(request.headers_mut())?;
+        }
         Ok(request)
     }
 }

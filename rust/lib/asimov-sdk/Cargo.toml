@@ -29,6 +29,7 @@ all = [
     "directory",
     "env",
     "flow",
+    "http",
     "id",
     "installer",
     "kb",
@@ -52,6 +53,7 @@ std = [
     "asimov-directory?/fs",
     "asimov-env?/std",
     "asimov-flow?/std",
+    "asimov-http?/std",
     "asimov-id?/std",
     "asimov-installer?/std",
     "asimov-kb?/std",
@@ -74,6 +76,7 @@ credit = ["dep:asimov-credit"]
 directory = ["dep:asimov-directory"]
 env = ["dep:asimov-env"]
 flow = ["dep:asimov-flow"]
+http = ["dep:asimov-http"]
 id = ["dep:asimov-id"]
 installer = ["dep:asimov-installer"]
 kb = ["dep:asimov-kb"]
@@ -103,6 +106,7 @@ asimov-credit = { workspace = true, optional = true }
 asimov-directory = { workspace = true, optional = true }
 asimov-env = { workspace = true, optional = true }
 asimov-flow = { workspace = true, optional = true }
+asimov-http = { workspace = true, optional = true }
 asimov-id = { workspace = true, optional = true }
 asimov-installer = { workspace = true, optional = true }
 asimov-kb = { workspace = true, optional = true }
