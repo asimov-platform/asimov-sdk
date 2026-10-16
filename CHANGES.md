@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configurable representation digests and response-digest preferences
 ### Changed
 - asimov-remote: Report HTTP redirects as errors to preserve request integrity
+### Fixed
+- asimov-installer: Bump the zip dependency due to security advisories
 
 ## 25.7.4 - 2026-10-13
 ### Added

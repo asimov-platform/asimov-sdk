@@ -251,7 +251,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 turso = { version = "0.4", default-features = false }
 url = { version = "2.5", default-features = false }
 whoami = { version = "2.1", default-features = false }
-zip = { version = "8", default-features = false }
+zip = { version = "9.0.1", default-features = false }
 
 [patch.crates-io]
 asimov-account = { path = "lib/asimov-account" }
