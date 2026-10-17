@@ -242,7 +242,7 @@ Unless marked reproduced, implementation findings are based on source review.
 ## P2: Protocols, execution, and service APIs
 
 - [ ] **Honor common native proxy exclusions and protocol maps.**
-  Reqwest 0.12/hyper-util 0.1.21 omit macOS bypass exceptions and Windows
+  Reqwest 0.13.5/hyper-util 0.1.21 omit macOS bypass exceptions and Windows
   per-protocol `ProxyServer` maps and `<local>` exclusions. A local matcher probe
   on 2026-10-17 reproduced no proxy for `http=host:8080;https=host:8443` and a
   proxied single-label host with `<local>` exclusions. Without an `ALL_PROXY`
@@ -261,8 +261,7 @@ Unless marked reproduced, implementation findings are based on source review.
     both `Authorization` and `Proxy-Authorization`; HTTP-only interception sets
     only `Authorization`. Do not copy its header example into service requests.
   - `iroh-proxy-utils` 0.3.0 bridges HTTP/TCP over Iroh QUIC; it does not discover
-    corporate proxies. Its mandatory reqwest 0.13 dependency would coexist with
-    our 0.12 client. Assess it for future Iroh transport work instead.
+    corporate proxies. Assess it for future Iroh transport work instead.
   - `proxy_cfg` 0.4.2 reads the relevant macOS/Windows static settings, but local
     probes reproduced unsupported CIDR/IP-wildcard exclusions, treating IPv6
     literals as simple hostnames, and lowercasing proxy credentials. Its built-in
@@ -293,8 +292,8 @@ Unless marked reproduced, implementation findings are based on source review.
   Validate proxy schemes/endpoints before installing `Proxy::custom` and apply
   exclusions inside the callback: local HTTP probes reproduced ignored attached
   `.no_proxy(...)` and direct fallback for invalid callback URLs in reqwest
-  0.12.28. The ten isolated probes above ran on macOS with Rust 1.97.1; they do
-  not establish native Windows behavior.
+  0.13.5. The isolated probes above ran on macOS with Rust 1.97.1; they do not
+  establish native Windows behavior.
 
   Track [hyper-util's merged Windows-map fix][hyper-util-win-map] (unreleased
   after 0.1.21) and [open bypass-macro fix][hyper-util-win-bypass]. Source review
@@ -302,7 +301,7 @@ Unless marked reproduced, implementation findings are based on source review.
   URL and emits `socks://`, which 0.1.21's matcher rejects; review/correct those
   semantics before adopting it. PAC/WPAD needs separate asynchronous resolution,
   deadlines, and ordered fallback handling; `Proxy::custom` is synchronous,
-  receives only scheme/authority in reqwest 0.12.28, returns one optional
+  receives only scheme/authority in reqwest 0.13.5, returns one optional
   endpoint, and cannot report resolution errors.
 
 - [ ] **Exercise remote DNS/proxy routing end to end before release.**

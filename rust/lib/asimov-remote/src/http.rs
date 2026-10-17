@@ -872,7 +872,7 @@ fn client_builder(timeouts: TimeoutOptions) -> Result<reqwest::ClientBuilder, Er
         .user_agent(user_agent)
         // Keep system DNS even if another dependency enables Hickory.
         .no_hickory_dns()
-        .use_preconfigured_tls(tls_config()?)
+        .tls_backend_preconfigured(tls_config()?)
         .redirect(reqwest::redirect::Policy::none())
         // Digests cover content-coded bytes. Disable decoding even if
         // another workspace dependency enables reqwest compression.

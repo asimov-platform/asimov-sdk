@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and total-operation timeouts with timeout classification
 - asimov-social: Accept a configured remote executor for transport policy
 ### Changed
+- Upgrade HTTP clients to reqwest 0.13 and Hyper 1.12; caller-supplied reqwest
+  clients must use 0.13
+- Cloud, installer, module-index, and telemetry HTTP clients use platform TLS
+  certificate verification
 - asimov-remote: Use platform TLS certificate verification; Linux/BSD require
   system or explicitly configured CA certificates
 - asimov-remote: Default to 10-second connection and 60-second header/body-idle

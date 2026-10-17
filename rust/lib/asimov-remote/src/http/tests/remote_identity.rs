@@ -116,7 +116,7 @@ where
         config_client
             .dangerous()
             .set_certificate_verifier(Arc::new(verifier));
-        client = client.use_preconfigured_tls(config_client);
+        client = client.tls_backend_preconfigured(config_client);
         Some(TlsAcceptor::from(Arc::new(config)))
     } else {
         if version == Version::HTTP_2 {
@@ -291,7 +291,7 @@ async fn tls_rejects_untrusted_certificates_and_hostname_mismatches() {
         } else {
             fixture.executor.client = Client::builder()
                 .no_proxy()
-                .use_preconfigured_tls(tls_config().unwrap())
+                .tls_backend_preconfigured(tls_config().unwrap())
                 .build()
                 .unwrap();
         }
