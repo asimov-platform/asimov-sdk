@@ -209,7 +209,9 @@ impl Executor {
     ///
     /// Proxy selection honors `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and
     /// `NO_PROXY` (including lowercase variants), with native proxy settings as
-    /// a fallback on macOS and Windows.
+    /// a fallback on macOS and Windows. Use a `socks5h://` proxy URL, such as
+    /// `ALL_PROXY=socks5h://127.0.0.1:1080`, to resolve destination hostnames at
+    /// the proxy. The `socks5://` scheme resolves them locally.
     ///
     /// The `User-Agent` is the caller name reported by `agent-detector` at
     /// construction, or `asimov-remote/<version>` if detection yields no valid

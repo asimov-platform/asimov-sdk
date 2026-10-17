@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - asimov-remote: Cached remote public-key discovery and automatic response
   verification using the operation's HTTP connection pool
+- asimov-remote: SOCKS proxy support with proxy-side DNS via `socks5h://`
 ### Fixed
 - asimov-remote: Verify the `asimov` response signature label used by Relay
 - asimov-remote: Honor native HTTP proxy settings on macOS and Windows
