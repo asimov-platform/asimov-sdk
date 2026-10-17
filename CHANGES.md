@@ -10,9 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-remote: Cached remote public-key discovery and automatic response
   verification using the operation's HTTP connection pool
 - asimov-remote: SOCKS proxy support with proxy-side DNS via `socks5h://`
+- asimov-remote: Configurable connection, response-header, body-idle, discovery,
+  and total-operation timeouts with timeout classification
+- asimov-social: Accept a configured remote executor for transport policy
 ### Changed
 - asimov-remote: Use platform TLS certificate verification; Linux/BSD require
   system or explicitly configured CA certificates
+- asimov-remote: Default to 10-second connection and 60-second header/body-idle
+  limits; progressing streams have no total time limit
 ### Fixed
 - asimov-remote: Verify the `asimov` response signature label used by Relay
 - asimov-remote: Honor native HTTP proxy settings on macOS and Windows

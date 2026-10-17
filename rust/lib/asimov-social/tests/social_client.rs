@@ -7,7 +7,7 @@ extern crate alloc;
 use alloc::{format, string::String, vec, vec::Vec};
 use asimov_remote::{
     FetcherRequest,
-    http::{BatchOptions, OutputFormat, StreamExt},
+    http::{BatchOptions, Executor, OutputFormat, StreamExt, TimeoutOptions, TimeoutPhase},
 };
 use asimov_social::{
     FetchRequest, FetchRequestOptions, ListRequest, ListRequestOptions, SocialClient,
@@ -149,6 +149,41 @@ async fn client_forwards_shared_requests_and_preserves_response_bytes() {
         assert_response(stream).await;
         server.await.unwrap();
     }
+}
+
+#[tokio::test]
+async fn configured_executor_applies_transport_timeouts() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut bytes = [0; 1024];
+        while socket.read(&mut bytes).await.unwrap_or(0) != 0 {}
+    });
+    let executor = Executor::new_with_timeouts(
+        url,
+        Some("token"),
+        TimeoutOptions {
+            response_headers: Some(Duration::from_millis(200)),
+            ..TimeoutOptions::default()
+        },
+    )
+    .unwrap();
+    let client = SocialClient::from(executor);
+    let error = timeout(
+        DEADLINE,
+        client.fetch(FetchRequest {
+            urls: vec!["example:profile".into()],
+            ..Default::default()
+        }),
+    )
+    .await
+    .unwrap()
+    .err()
+    .unwrap();
+    assert!(error.is_timeout());
+    assert_eq!(error.timeout_phase(), Some(TimeoutPhase::ResponseHeaders));
+    timeout(DEADLINE, task).await.unwrap().unwrap();
 }
 
 #[tokio::test]

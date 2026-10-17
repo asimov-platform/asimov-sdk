@@ -17,6 +17,7 @@ use tokio::{
 mod digest;
 mod remote_identity;
 mod signature;
+mod timeouts;
 
 const DEADLINE: Duration = Duration::from_secs(5);
 

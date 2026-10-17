@@ -2,7 +2,7 @@
 
 //! Private, origin-scoped discovery using the executor's connection pool.
 
-use super::{Error, PublicKey, Verifier};
+use super::{Error, PublicKey, StreamExt, TimeoutOptions, TimeoutPhase, Verifier, timeouts};
 use alloc::{boxed::Box, format, string::String, sync::Arc, vec, vec::Vec};
 use asimov_http::{Component, VerificationPolicy, VerifyingKey, key_id};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -44,15 +44,45 @@ struct CachedIdentity {
 }
 
 impl RemoteIdentityCache {
-    pub(super) async fn public_key(&self, client: &Client, url: &Url) -> Result<PublicKey, Error> {
-        Ok(self.get(client, url).await?.public_key)
+    pub(super) async fn public_key(
+        &self,
+        client: &Client,
+        url: &Url,
+        timeouts: TimeoutOptions,
+    ) -> Result<PublicKey, Error> {
+        Ok(self.get(client, url, timeouts).await?.public_key)
     }
 
-    pub(super) async fn verifier(&self, client: &Client, url: &Url) -> Result<Verifier, Error> {
-        Ok(self.get(client, url).await?.verifier.clone())
+    pub(super) async fn verifier(
+        &self,
+        client: &Client,
+        url: &Url,
+        timeouts: TimeoutOptions,
+    ) -> Result<Verifier, Error> {
+        Ok(self.get(client, url, timeouts).await?.verifier.clone())
     }
 
-    async fn get(&self, client: &Client, url: &Url) -> Result<Arc<CachedIdentity>, Error> {
+    async fn get(
+        &self,
+        client: &Client,
+        url: &Url,
+        timeouts: TimeoutOptions,
+    ) -> Result<Arc<CachedIdentity>, Error> {
+        timeouts::limit(
+            timeouts.discovery,
+            TimeoutPhase::Discovery,
+            self.get_inner(client, url, timeouts),
+        )
+        .await
+        .map_err(|error| Error::RemoteKey(Arc::new(error)))?
+    }
+
+    async fn get_inner(
+        &self,
+        client: &Client,
+        url: &Url,
+        timeouts: TimeoutOptions,
+    ) -> Result<Arc<CachedIdentity>, Error> {
         let lookup = {
             let mut slot = self.lookup.lock().await;
             let previous = match slot.as_ref().and_then(|lookup| lookup.result.get()) {
@@ -83,7 +113,7 @@ impl RemoteIdentityCache {
         let result = lookup
             .result
             .get_or_init(|| async {
-                discover(client, url, lookup.previous.as_deref())
+                discover(client, url, lookup.previous.as_deref(), timeouts)
                     .await
                     .map(Arc::new)
                     .map_err(Arc::from)
@@ -106,21 +136,24 @@ async fn discover(
     client: &Client,
     base_url: &Url,
     previous: Option<&CachedIdentity>,
+    timeouts: TimeoutOptions,
 ) -> Result<CachedIdentity, Box<Failure>> {
     // Origin serialization discards path prefixes and URL credentials.
     let url = format!(
         "{}/.well-known/jwks.json",
         base_url.origin().ascii_serialization()
     );
-    let mut request = client
-        .get(url)
-        .header(header::ACCEPT, "application/json")
-        .timeout(Duration::from_secs(30));
+    let mut request = client.get(url).header(header::ACCEPT, "application/json");
     if let Some(etag) = previous.and_then(|cached| cached.etag.as_ref()) {
         request = request.header(header::IF_NONE_MATCH, etag.clone());
     }
     let started = Instant::now();
-    let mut response = request.send().await?;
+    let response = timeouts::limit(
+        timeouts.response_headers,
+        TimeoutPhase::ResponseHeaders,
+        request.send(),
+    )
+    .await??;
     let unchanged = response.status() == StatusCode::NOT_MODIFIED;
     if !response.status().is_success() && !unchanged {
         return Err(format!(
@@ -169,8 +202,16 @@ async fn discover(
         return Err("remote identity response exceeds 64 KiB".into());
     }
     let mut bytes = Vec::new();
+    let mut chunks = timeouts::TimedStream::new(
+        response
+            .bytes_stream()
+            .map(|chunk| chunk.map_err(Error::from)),
+        timeouts.body_idle,
+        None,
+    );
     // Consume to EOF so HTTP/1.1 can reuse this connection for the operation.
-    while let Some(chunk) = response.chunk().await? {
+    while let Some(chunk) = chunks.next().await {
+        let chunk = chunk?;
         if chunk.len() > MAX_BYTES - bytes.len() {
             return Err("remote identity response exceeds 64 KiB".into());
         }

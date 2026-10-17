@@ -56,7 +56,7 @@ rcgen = { workspace = true, features = ["crypto", "ring"] }
 serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "sync", "test-util", "time"] }
 tokio-rustls.workspace = true
 whoami = { workspace = true, features = ["std"] }
 

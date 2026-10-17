@@ -311,6 +311,85 @@ async fn tls_rejects_untrusted_certificates_and_hostname_mismatches() {
 }
 
 #[tokio::test]
+async fn discovery_timeout_can_retry_without_using_an_incomplete_identity() {
+    let discoveries = Arc::new(AtomicUsize::new(0));
+    let count = discoveries.clone();
+    let mut fixture = fixture(Version::HTTP_11, false, move |request| {
+        let attempt = count.fetch_add(1, Ordering::SeqCst);
+        async move {
+            assert_eq!(request.method(), "GET");
+            if attempt == 0 {
+                core::future::pending::<()>().await;
+            }
+            metadata(&SecretKey::from_bytes(&[42; 32]), "max-age=300")
+        }
+    })
+    .await;
+    fixture.executor.timeouts.discovery = Some(Duration::from_millis(200));
+    let error = timeout(DEADLINE, fixture.executor.remote_public_key())
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert!(error.is_timeout());
+    assert_eq!(error.timeout_phase(), Some(TimeoutPhase::Discovery));
+    let key = timeout(DEADLINE, fixture.executor.remote_public_key())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        key,
+        PublicKey::from(*SecretKey::from_bytes(&[42; 32]).public().as_bytes())
+    );
+    assert_eq!(fixture.executor.remote_public_key().await.unwrap(), key);
+    assert_eq!(discoveries.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn total_budget_includes_discovery_and_headers_but_not_standalone_lookups() {
+    let discoveries = Arc::new(AtomicUsize::new(0));
+    let operations = Arc::new(AtomicUsize::new(0));
+    let (gets, posts) = (discoveries.clone(), operations.clone());
+    let mut fixture = fixture(Version::HTTP_11, false, move |request| {
+        let (gets, posts) = (gets.clone(), posts.clone());
+        async move {
+            if request.method() == "POST" {
+                posts.fetch_add(1, Ordering::SeqCst);
+                core::future::pending::<()>().await;
+            }
+            if gets.fetch_add(1, Ordering::SeqCst) == 0 {
+                core::future::pending::<()>().await;
+            }
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            metadata(&SecretKey::from_bytes(&[42; 32]), "max-age=300")
+        }
+    })
+    .await;
+    fixture.executor.timeouts.total = Some(Duration::from_millis(200));
+    fixture.executor.timeouts.discovery = Some(Duration::from_secs(2));
+    let error = timeout(DEADLINE, fixture.executor.post_jsonl("fetch", &json!({})))
+        .await
+        .unwrap()
+        .err()
+        .unwrap();
+    assert!(error.is_timeout());
+    assert_eq!(error.timeout_phase(), Some(TimeoutPhase::Total));
+    assert_eq!(operations.load(Ordering::SeqCst), 0);
+    timeout(DEADLINE, fixture.executor.remote_public_key())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(discoveries.load(Ordering::SeqCst), 2);
+    let error = timeout(DEADLINE, fixture.executor.post_jsonl("fetch", &json!({})))
+        .await
+        .unwrap()
+        .err()
+        .unwrap();
+    assert_eq!(error.timeout_phase(), Some(TimeoutPhase::Total));
+    assert_eq!(operations.load(Ordering::SeqCst), 1);
+    assert_eq!(discoveries.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
 async fn clones_share_in_flight_discovery() {
     let discoveries = Arc::new(AtomicUsize::new(0));
     let count = discoveries.clone();

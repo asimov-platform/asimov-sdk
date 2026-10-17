@@ -92,10 +92,46 @@
 //!
 //! ## Transport deadlines
 //!
-//! Operation requests have no configured connect, read, or total timeout;
-//! remote-key discovery sets a 30-second request timeout. [`TimingOptions`]
-//! describe remote execution limits, not local transport deadlines.
-//! OS-controlled blocking work may outlive cancellation or delay timeouts.
+//! [`Executor::new`] uses [`TimeoutOptions::default()`]. Configure a different
+//! policy with [`Executor::new_with_timeouts`]; `None` disables a limit.
+//!
+//! | Budget | Default | Scope |
+//! | --- | --- | --- |
+//! | Connection | 10 s | DNS, TCP, proxy negotiation, and TLS on new connections |
+//! | Response headers | 60 s | Dispatch, including connection and JSON upload |
+//! | Body inactivity | 60 s | Waiting for nonempty body data, trailers, or EOF |
+//! | Identity discovery | 30 s | Shared-lookup wait through complete key body |
+//! | Total operation | Disabled | Preparation/discovery through body EOF |
+//!
+//! The header budget is absolute, so partial headers or upload progress cannot
+//! extend it. It ends when headers arrive and does not cap a streaming response.
+//! Body inactivity resets on nonempty data and when the caller resumes after a
+//! delivered batch; empty chunks do not reset it. Slow downstream processing is
+//! not counted as network inactivity. An optional total deadline does include
+//! downstream pauses. Complete buffered records precede a terminal body timeout;
+//! an incomplete trailing record is discarded. Polling is required to observe
+//! body expiry, and healthy streams have no default lifetime limit.
+//!
+//! Connection/header/body limits also apply during identity discovery, with an
+//! additional per-caller discovery budget covering shared lookup waits and its
+//! entire body. Failed or timed-out lookups can be retried on a later call and
+//! never supply partial or stale keys. A total operation deadline includes
+//! automatic discovery; standalone [`Executor::remote_public_key`] calls use
+//! the discovery budget instead.
+//!
+//! [`Error::is_timeout`] recognizes transport and discovery timeouts;
+//! [`Error::timeout_phase`] identifies the budget when available. Connection
+//! failures retain their reqwest error; discovery errors retain the
+//! [`Error::RemoteKey`] wrapper. Other adapter deadlines use [`Error::Timeout`].
+//! The adapter does not retry timeouts. A timed-out POST may have been accepted
+//! by the service; local cancellation does not guarantee cancellation of work.
+//!
+//! All enforcement is cooperative and requires a Tokio runtime with time
+//! enabled. Synchronous serialization or native certificate verification cannot
+//! be preempted, and a running `getaddrinfo` worker may outlive cancellation.
+//! Client construction and native-verifier initialization are synchronous and
+//! outside request budgets. [`TimingOptions`] are remote execution requests,
+//! independent of these local transport limits.
 //!
 //! [rustls-platform-verifier]: https://docs.rs/rustls-platform-verifier
 //!
@@ -181,7 +217,7 @@
 //! ```
 
 use alloc::{boxed::Box, format, string::String, sync::Arc};
-use asimov_flow::{BatchStream, jsonl_batches_from_chunks};
+use asimov_flow::BatchStream;
 use asimov_http::{
     Component, Message, REQUEST_SIGNATURE_TAG, SignatureInput, SignatureParams, Signer,
     VerificationPolicy,
@@ -189,7 +225,7 @@ use asimov_http::{
 use asimov_id::PublicKeyEncoding;
 use asimov_keyring::Keyring;
 use async_trait::async_trait;
-use core::fmt;
+use core::{fmt, time::Duration};
 use reqwest::{
     Client, Request, Url,
     header::{ACCEPT, CONTENT_LENGTH, HeaderValue},
@@ -203,6 +239,8 @@ pub use asimov_id::PublicKey;
 
 mod remote_identity;
 use remote_identity::RemoteIdentityCache;
+mod timeouts;
+pub use timeouts::{TimeoutOptions, TimeoutPhase};
 
 /// Transport-independent request types, re-exported for convenience.
 pub use crate::{FetcherRequest, ListerRequest};
@@ -226,6 +264,17 @@ pub enum Error {
     /// TLS configuration or platform certificate verifier initialization failure.
     #[error("failed to configure TLS: {0}")]
     Tls(#[from] rustls::Error),
+    /// A configured local deadline expired. The remote may have accepted work.
+    #[error("HTTP {phase} timed out after {duration:?}")]
+    Timeout {
+        /// The budget that expired.
+        phase: TimeoutPhase,
+        /// The configured limit.
+        duration: Duration,
+    },
+    /// A timeout is zero or cannot be represented by the monotonic clock.
+    #[error("HTTP {0} timeout must be nonzero and fit the monotonic clock")]
+    InvalidTimeout(TimeoutPhase),
     /// Failure to load the local identity used for the HTTP bearer credential.
     #[error("failed to load local public key: {0}")]
     Keyring(#[from] asimov_keyring::KeyringError),
@@ -244,6 +293,41 @@ pub enum Error {
     /// Remote identity discovery or revalidation failed.
     #[error("failed to discover remote public key: {0}")]
     RemoteKey(#[source] Arc<dyn core::error::Error + Send + Sync>),
+}
+
+impl Error {
+    /// Whether this error or its discovery/transport source is a timeout.
+    pub fn is_timeout(&self) -> bool {
+        match self {
+            Self::Timeout { .. } => true,
+            Self::Http(error) => error.is_timeout(),
+            Self::RemoteKey(error) => {
+                error.downcast_ref::<Self>().is_some_and(Self::is_timeout)
+                    || error
+                        .downcast_ref::<reqwest::Error>()
+                        .is_some_and(reqwest::Error::is_timeout)
+            },
+            _ => false,
+        }
+    }
+
+    /// Identifies an adapter deadline or reqwest connection timeout, including
+    /// within [`Error::RemoteKey`]. Other transport timeouts may have no phase;
+    /// use [`Self::is_timeout`] to recognize those too.
+    pub fn timeout_phase(&self) -> Option<TimeoutPhase> {
+        fn connection(error: &reqwest::Error) -> Option<TimeoutPhase> {
+            (error.is_timeout() && error.is_connect()).then_some(TimeoutPhase::Connect)
+        }
+        match self {
+            Self::Timeout { phase, .. } => Some(*phase),
+            Self::Http(error) => connection(error),
+            Self::RemoteKey(error) => error
+                .downcast_ref::<Self>()
+                .and_then(Self::timeout_phase)
+                .or_else(|| error.downcast_ref::<reqwest::Error>().and_then(connection)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Default)]
@@ -271,6 +355,7 @@ pub struct Executor {
     base_url: Url,
     api_token: SecretString,
     batching: BatchOptions,
+    timeouts: TimeoutOptions,
     digests: DigestOptions,
     signing_key: Option<SecretKey>,
     response_verification: ResponseVerification,
@@ -282,6 +367,7 @@ impl fmt::Debug for Executor {
         f.debug_struct("HttpExecutor")
             .field("base_url", &self.base_url)
             .field("batching", &self.batching)
+            .field("timeouts", &self.timeouts)
             .field("digests", &self.digests)
             .field("signing", &self.signing_key.is_some())
             .field(
@@ -317,6 +403,8 @@ impl Executor {
     /// Requests use [`DigestOptions::default()`]. Redirects are not followed;
     /// configure the service's final URL so request integrity fields remain
     /// bound to the prepared request's method, target, and body.
+    /// Uses [`TimeoutOptions::default()`]; select other limits with
+    /// [`Self::new_with_timeouts`].
     ///
     /// # Errors
     ///
@@ -324,6 +412,39 @@ impl Executor {
     /// ([`Error::Tls`]), HTTP client setup, or failure to read or initialize the
     /// local identity when no token is given.
     pub fn new(base_url: impl AsRef<str>, api_token: Option<&str>) -> Result<Self, Error> {
+        Self::new_with_timeouts(base_url, api_token, TimeoutOptions::default())
+    }
+
+    /// Configures a new HTTP client with explicit local transport timeouts.
+    ///
+    /// All other settings follow [`Self::new`]. Clones share this client's
+    /// connection pool, identity cache, and timeout policy. Existing streams
+    /// retain the policy of the executor that created them.
+    ///
+    /// ```no_run
+    /// use asimov_remote::http::{Executor, TimeoutOptions};
+    /// use core::time::Duration;
+    /// let options = TimeoutOptions {
+    ///     response_headers: Some(Duration::from_secs(120)),
+    ///     body_idle: Some(Duration::from_secs(300)),
+    ///     ..TimeoutOptions::default()
+    /// };
+    /// let executor = Executor::new_with_timeouts(
+    ///     "https://asimov.social", Some("api-token"), options,
+    /// )?;
+    /// # Ok::<(), asimov_remote::http::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidTimeout`] for zero or overflowing limits, plus
+    /// the URL, TLS, HTTP setup, and local identity errors of [`Self::new`].
+    pub fn new_with_timeouts(
+        base_url: impl AsRef<str>,
+        api_token: Option<&str>,
+        timeouts: TimeoutOptions,
+    ) -> Result<Self, Error> {
+        timeouts.validate()?;
         let mut base_url = Url::parse(base_url.as_ref())
             .map_err(|error| Error::InvalidBaseUrl(format!("{error}")))?;
         if !matches!(base_url.scheme(), "http" | "https") || base_url.host_str().is_none() {
@@ -336,25 +457,8 @@ impl Executor {
         }
         base_url.set_query(None);
         base_url.set_fragment(None);
-        let user_agent = agent_detector::agent_name()
-            .and_then(|name| HeaderValue::try_from(name).ok())
-            .unwrap_or_else(|| {
-                HeaderValue::from_static(concat!("asimov-remote/", env!("CARGO_PKG_VERSION")))
-            });
         Ok(Self {
-            client: Client::builder()
-                .user_agent(user_agent)
-                // Keep system DNS even if another dependency enables Hickory.
-                .no_hickory_dns()
-                .use_preconfigured_tls(tls_config()?)
-                .redirect(reqwest::redirect::Policy::none())
-                // Digests cover content-coded bytes. Disable decoding even if
-                // another workspace dependency enables reqwest compression.
-                .no_gzip()
-                .no_brotli()
-                .no_deflate()
-                .no_zstd()
-                .build()?,
+            client: client_builder(timeouts)?.build()?,
             base_url,
             api_token: match api_token {
                 Some(token) => SecretString::from(token),
@@ -364,6 +468,7 @@ impl Executor {
                     .into(),
             },
             batching: BatchOptions::default(),
+            timeouts,
             digests: DigestOptions::default(),
             signing_key: None,
             response_verification: ResponseVerification::Disabled,
@@ -374,6 +479,11 @@ impl Executor {
     /// Returns the HTTP service base URL used for endpoint resolution.
     pub fn base_url(&self) -> &Url {
         &self.base_url
+    }
+
+    /// Returns this executor's local transport timeout policy.
+    pub fn timeouts(&self) -> TimeoutOptions {
+        self.timeouts
     }
 
     /// Returns the remote service's validated Ed25519 public key.
@@ -390,10 +500,12 @@ impl Executor {
     /// # Errors
     ///
     /// Returns [`Error::RemoteKey`] if discovery fails, redirects, exceeds its
-    /// 30-second or 64-KiB limit, or does not identify exactly one eligible key.
+    /// configured timeout (30 seconds by default) or 64-KiB limit, or does not
+    /// identify exactly one eligible key. [`Error::is_timeout`] and
+    /// [`Error::timeout_phase`] inspect timeouts through the discovery wrapper.
     pub async fn remote_public_key(&self) -> Result<PublicKey, Error> {
         self.remote_identity
-            .public_key(&self.client, &self.base_url)
+            .public_key(&self.client, &self.base_url, self.timeouts)
             .await
     }
 
@@ -485,39 +597,59 @@ impl Executor {
     /// The body uses ordinary Serde JSON serialization, independently of `jcs`.
     /// Response bytes are framed as JSONL without JSON or UTF-8 validation.
     /// The stream owns the response, not a borrow of this executor.
+    /// Local deadlines follow [`TimeoutOptions`]. The header budget starts at
+    /// dispatch, after request preparation and any identity discovery; the
+    /// optional total budget starts when this future is first polled.
     ///
     /// # Errors
     ///
     /// Endpoint resolution, request serialization, connection, redirects, and
-    /// HTTP status errors are returned directly. Body errors terminate the
-    /// returned stream after any complete buffered records.
+    /// HTTP status errors are returned directly. Body errors, including idle or
+    /// total timeouts, terminate the stream after any complete buffered records.
+    /// Timeouts do not retry the POST or establish whether remote work completed.
     pub async fn post_jsonl(
         &self,
         endpoint: &str,
         request: &impl Serialize,
     ) -> Result<JsonlStream, Error> {
-        let mut request = self.prepare_json_request(endpoint, request)?;
-        let verifier = match &self.response_verification {
-            ResponseVerification::Disabled => None,
-            ResponseVerification::Explicit(verifier) => Some(verifier.clone()),
-            ResponseVerification::Remote => Some(
-                self.remote_identity
-                    .verifier(&self.client, &self.base_url)
-                    .await?,
-            ),
+        let total = timeouts::Deadline::new(self.timeouts.total, TimeoutPhase::Total)?;
+        let startup = async {
+            let mut request = self.prepare_json_request(endpoint, request)?;
+            if let Some(total) = total {
+                total.check()?;
+            }
+            let verifier = match &self.response_verification {
+                ResponseVerification::Disabled => None,
+                ResponseVerification::Explicit(verifier) => Some(verifier.clone()),
+                ResponseVerification::Remote => Some(
+                    self.remote_identity
+                        .verifier(&self.client, &self.base_url, self.timeouts)
+                        .await?,
+                ),
+            };
+            // Discovery can involve network I/O. Sign only once ready to dispatch.
+            self.sign_request(&mut request)?;
+            let request_context = if verifier.is_some() {
+                Some(Message::request(
+                    request.method().clone(),
+                    request.url().as_str(),
+                    request.headers().clone(),
+                )?)
+            } else {
+                None
+            };
+            if let Some(total) = total {
+                total.check()?;
+            }
+            let response = timeouts::limit(
+                self.timeouts.response_headers,
+                TimeoutPhase::ResponseHeaders,
+                self.client.execute(request),
+            )
+            .await??;
+            Ok::<_, Error>((response, verifier, request_context))
         };
-        // Discovery can involve network I/O. Sign only once ready to dispatch.
-        self.sign_request(&mut request)?;
-        let request_context = if verifier.is_some() {
-            Some(Message::request(
-                request.method().clone(),
-                request.url().as_str(),
-                request.headers().clone(),
-            )?)
-        } else {
-            None
-        };
-        let response = self.client.execute(request).await?;
+        let (response, verifier, request_context) = timeouts::until(total, startup).await??;
         if response.status().is_redirection() {
             return Err(Error::Redirect(response.status()));
         }
@@ -532,7 +664,7 @@ impl Executor {
                 Some(verifier),
                 SignatureParams::now()?,
             )?;
-            return Ok(jsonl_batches_from_chunks(
+            return Ok(timeouts::batches(
                 response.into_body().into_data_stream().map(|chunk| {
                     chunk.map_err(|error| match error {
                         BodyError::Inner(error) => Error::Http(error),
@@ -540,13 +672,17 @@ impl Executor {
                     })
                 }),
                 self.batching,
+                self.timeouts.body_idle,
+                total,
             ));
         }
-        Ok(jsonl_batches_from_chunks(
+        Ok(timeouts::batches(
             response
                 .bytes_stream()
                 .map(|chunk| chunk.map_err(Error::from)),
             self.batching,
+            self.timeouts.body_idle,
+            total,
         ))
     }
 
@@ -724,6 +860,32 @@ impl<T: Clone + fmt::Display + Send + Sync, F: fmt::Display + Send + Sync>
 impl<T: Clone + fmt::Display + Send + Sync, F: fmt::Display + Send + Sync>
     asimov_patterns::Lister<JsonlStream> for Lister<T, F>
 {
+}
+
+fn client_builder(timeouts: TimeoutOptions) -> Result<reqwest::ClientBuilder, Error> {
+    let user_agent = agent_detector::agent_name()
+        .and_then(|name| HeaderValue::try_from(name).ok())
+        .unwrap_or_else(|| {
+            HeaderValue::from_static(concat!("asimov-remote/", env!("CARGO_PKG_VERSION")))
+        });
+    let mut builder = Client::builder()
+        .user_agent(user_agent)
+        // Keep system DNS even if another dependency enables Hickory.
+        .no_hickory_dns()
+        .use_preconfigured_tls(tls_config()?)
+        .redirect(reqwest::redirect::Policy::none())
+        // Digests cover content-coded bytes. Disable decoding even if
+        // another workspace dependency enables reqwest compression.
+        .no_gzip()
+        .no_brotli()
+        .no_deflate()
+        .no_zstd();
+    if let Some(connect) = timeouts.connect {
+        builder = builder.connect_timeout(connect);
+    }
+    // Header and body budgets are enforced separately below reqwest's API:
+    // its read_timeout also limits headers, and timeout caps the entire body.
+    Ok(builder)
 }
 
 fn tls_config() -> Result<rustls::ClientConfig, rustls::Error> {

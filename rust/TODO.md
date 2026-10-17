@@ -241,6 +241,22 @@ Unless marked reproduced, implementation findings are based on source review.
 
 ## P2: Protocols, execution, and service APIs
 
+- [ ] **Honor common native proxy exclusions and protocol maps.**
+  Reqwest 0.12/hyper-util 0.1.21 omit macOS bypass exceptions and Windows
+  per-protocol `ProxyServer` maps and `<local>` exclusions. A local matcher probe
+  on 2026-10-17 reproduced no proxy for `http=host:8080;https=host:8443` and a
+  proxied single-label host with `<local>` exclusions. Without an `ALL_PROXY`
+  fallback, an ignored map permits a direct connection. Prefer upstream fixes or
+  a focused adapter, with native configuration fixtures. PAC/WPAD is a separate
+  integration decision; retain the documented limitation until supported.
+
+- [ ] **Exercise remote DNS/proxy routing end to end before release.**
+  `lib/asimov-remote/src/http/tests/remote_identity.rs` explicitly disables proxies
+  in TLS fixtures. Add local HTTP forwarding/CONNECT, HTTPS-proxy, SOCKS5h
+  unresolved `.invalid` destination, and `NO_PROXY` cases. Verify proxy/service
+  credential separation and TLS verification through successful tunnels.
+  Isolate environment settings in subprocesses; avoid public DNS.
+
 - [ ] **Expose explicit additional TLS roots for remote HTTPS.**
   Add constructor/builder support for custom CA certificates alongside platform
   verification in `lib/asimov-remote/src/http.rs`. macOS/Windows use native trust
@@ -330,14 +346,10 @@ Unless marked reproduced, implementation findings are based on source review.
   memory/disk state on failure. Test corrupt files, unwritable directories, and
   concurrent updates without a process-global singleton.
 
-- [ ] **Offer bounded transport resources and configurable HTTP clients.**
+- [ ] **Bound transport buffers and configure cloud HTTP calls.**
   `lib/asimov-flow/src/jsonl.rs` has no line-size ceiling; runner buffers stderr
   and byte-oriented captured output without bounds. Add opt-in limits that
-  preserve framing and terminal-error ordering. `lib/asimov-remote/src/http.rs`
-  owns a hardcoded client with no connect/read timeout configuration; expose
-  client/transport policy independently of the server-side `TimingOptions`.
-  Bound connection setup (DNS, TCP, proxy, TLS) separately from streaming bodies;
-  a running `getaddrinfo` worker can outlive cancellation of the waiting future.
+  preserve framing and terminal-error ordering.
   Apply reusable client/timeout configuration to cloud account balance calls.
 
 - [ ] **Correct KB GraphQL scalar registration and validation.**
@@ -372,21 +384,11 @@ Unless marked reproduced, implementation findings are based on source review.
 
 ## P3: Design, coverage, and maintenance
 
-- [ ] **Confirm native Windows TLS verification.**
-  Verify the existing Windows CI test job for the platform-verifier change
-  `ed18fac`, including trusted TLS/ALPN, hostname mismatch, and unknown-CA cases.
-  No CI run for that commit was available at review on 2026-10-17.
-
-- [ ] **Cover remote DNS/proxy routing with local fixtures.**
-  Add a SOCKS5h fixture for `lib/asimov-remote/` that receives an
-  unresolved `.invalid` destination hostname; cover direct `NO_PROXY` routing
-  without changing the process-global environment or consulting public DNS.
-
-- [ ] **Extend remote native-proxy interoperability coverage.**
-  Reqwest 0.12/hyper-util 0.1.21 omit macOS bypass exceptions and PAC/WPAD.
-  Windows `ProxyServer` is treated as one URL rather than a per-protocol map,
-  and its `<local>` bypass token is not implemented. Cover these native settings
-  with platform fixtures and pursue upstream support where needed.
+- [ ] **Expose per-executor proxy selection and configuration errors.**
+  Support automatic, direct, and explicitly configured proxy modes without
+  process-global environment changes. A local hyper-util 0.1.21 matcher probe
+  on 2026-10-17 reproduced silently ignoring an unsupported proxy URL scheme;
+  explicitly supplied proxy URLs should report configuration errors.
 
 - [ ] **Overlap remote identity refresh with HTTP/2 operations.**
   Coordinate connection readiness before multiplexing discovery and execution;
@@ -460,6 +462,9 @@ Unless marked reproduced, implementation findings are based on source review.
   Add `RUSTDOCFLAGS="-D warnings"` default/all-features documentation builds to
   CI. Prioritize missing error, persistence, and feature-availability docs on
   the public registry, installer, protocol, credit, and snapshot APIs.
+  Resolve two `redundant_explicit_links` diagnostics in default asimov-social
+  docs (reproduced with Rust 1.99.1); they are absent with
+  `--no-default-features --features client`.
 
 - [ ] **Establish a clean Clippy baseline in small crate-local patches.**
   The strict workspace check fails in credit, env, flow, huggingface, id, kb,

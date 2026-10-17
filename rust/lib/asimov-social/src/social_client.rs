@@ -14,6 +14,9 @@ pub use asimov_remote::http::{Error as SocialClientError, JsonlStream as SocialR
 
 /// A domain-specific façade over ASIMOV's remote HTTP transport.
 /// Responses contain raw JSONL batches, preserving bytes and line endings.
+/// Uses the remote client's production timeout defaults. To customize local
+/// deadlines, construct an [`Executor`] with [`Executor::new_with_timeouts`]
+/// and convert it using [`SocialClient::from`].
 ///
 /// ```no_run
 /// use asimov_social::{FetchRequest, SocialClient, SocialClientError};
@@ -36,6 +39,14 @@ pub use asimov_remote::http::{Error as SocialClientError, JsonlStream as SocialR
 #[derive(Clone, Debug)]
 pub struct SocialClient {
     executor: Executor,
+}
+
+impl From<Executor> for SocialClient {
+    /// Uses an executor configured with custom transport timeouts or other
+    /// HTTP policy. Its service URL, credentials, and connection pool are kept.
+    fn from(executor: Executor) -> Self {
+        Self { executor }
+    }
 }
 
 impl SocialClient {

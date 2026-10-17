@@ -97,7 +97,7 @@ impl Body for Gated {
 #[tokio::test]
 async fn reqwest_verifies_streamed_trailers_over_http1_and_http2() {
     for version in [Version::HTTP_11, Version::HTTP_2] {
-        for tamper in [false, true] {
+        for (tamper, stall) in [(false, false), (true, false), (false, true)] {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let address = listener.local_addr().unwrap();
             let client_key = SecretKey::from_bytes(&[1; 32]);
@@ -123,12 +123,29 @@ async fn reqwest_verifies_streamed_trailers_over_http1_and_http2() {
                 VerificationPolicy::request(),
             )
             .unwrap();
-            let mut executor = Executor::new(format!("http://{address}/api"), Some("token"))
-                .unwrap()
-                .with_signing_key(client_key)
-                .with_response_verifier(verifier);
+            let options = TimeoutOptions {
+                body_idle: Some(if stall {
+                    Duration::from_millis(200)
+                } else {
+                    Duration::from_secs(60)
+                }),
+                ..TimeoutOptions::default()
+            };
+            let mut executor = Executor::new_with_timeouts(
+                format!("http://{address}/api"),
+                Some("token"),
+                options,
+            )
+            .unwrap()
+            .with_signing_key(client_key)
+            .with_response_verifier(verifier);
             if version == Version::HTTP_2 {
-                executor.client = Client::builder().http2_prior_knowledge().build().unwrap();
+                executor.client = client_builder(options)
+                    .unwrap()
+                    .no_proxy()
+                    .http2_prior_knowledge()
+                    .build()
+                    .unwrap();
             }
             let (resume, gate) = oneshot::channel();
             let gate = Arc::new(std::sync::Mutex::new(Some(gate)));
@@ -194,15 +211,13 @@ async fn reqwest_verifies_streamed_trailers_over_http1_and_http2() {
                     }
                 });
                 if version == Version::HTTP_2 {
-                    hyper::server::conn::http2::Builder::new(TokioExecutor::new())
+                    let _ = hyper::server::conn::http2::Builder::new(TokioExecutor::new())
                         .serve_connection(TokioIo::new(socket), service)
-                        .await
-                        .unwrap();
+                        .await;
                 } else {
-                    hyper::server::conn::http1::Builder::new()
+                    let _ = hyper::server::conn::http1::Builder::new()
                         .serve_connection(TokioIo::new(socket), service)
-                        .await
-                        .unwrap();
+                        .await;
                 }
             });
             let mut stream = timeout(
@@ -218,7 +233,9 @@ async fn reqwest_verifies_streamed_trailers_over_http1_and_http2() {
                 .unwrap()
                 .unwrap();
             assert_eq!(first.lines().collect::<Vec<_>>(), [b"{}\n".as_slice()]);
-            resume.send(()).unwrap();
+            if !stall {
+                resume.send(()).unwrap();
+            }
             let mut failed = false;
             let mut last = Vec::new();
             while let Some(batch) = timeout(DEADLINE, stream.next()).await.unwrap() {
@@ -228,15 +245,29 @@ async fn reqwest_verifies_streamed_trailers_over_http1_and_http2() {
                             last.extend_from_slice(line);
                         }
                     },
-                    Err(Error::Integrity(_)) => {
+                    Err(Error::Integrity(_)) if tamper => {
                         assert!(!failed);
+                        failed = true;
+                    },
+                    Err(error)
+                        if stall && error.timeout_phase() == Some(TimeoutPhase::BodyIdle) =>
+                    {
+                        assert!(!failed);
+                        assert!(error.is_timeout());
                         failed = true;
                     },
                     Err(other) => panic!("unexpected error: {other}"),
                 }
             }
-            assert_eq!(last, b"[]\n");
-            assert_eq!(failed, tamper);
+            assert_eq!(
+                last,
+                if stall {
+                    b"".as_slice()
+                } else {
+                    b"[]\n".as_slice()
+                }
+            );
+            assert_eq!(failed, tamper || stall);
             server.abort();
             let _ = server.await;
         }
