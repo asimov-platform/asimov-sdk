@@ -336,6 +336,8 @@ Unless marked reproduced, implementation findings are based on source review.
   preserve framing and terminal-error ordering. `lib/asimov-remote/src/http.rs`
   owns a hardcoded client with no connect/read timeout configuration; expose
   client/transport policy independently of the server-side `TimingOptions`.
+  Bound connection setup (DNS, TCP, proxy, TLS) separately from streaming bodies;
+  a running `getaddrinfo` worker can outlive cancellation of the waiting future.
   Apply reusable client/timeout configuration to cloud account balance calls.
 
 - [ ] **Correct KB GraphQL scalar registration and validation.**
@@ -375,11 +377,16 @@ Unless marked reproduced, implementation findings are based on source review.
   `ed18fac`, including trusted TLS/ALPN, hostname mismatch, and unknown-CA cases.
   No CI run for that commit was available at review on 2026-10-17.
 
-- [ ] **Pin remote HTTP DNS to the system resolver.**
-  `lib/asimov-remote/src/http.rs` currently inherits reqwest's resolver default.
-  Add `no_hickory_dns()` to preserve system resolution if another consumer enables
-  reqwest's `hickory-dns` feature. Document the blocking-worker `getaddrinfo` path,
-  proxy/destination lookup split, and reliance on OS caching and resolver policy.
+- [ ] **Cover remote DNS/proxy routing with local fixtures.**
+  Add a SOCKS5h fixture for `lib/asimov-remote/` that receives an
+  unresolved `.invalid` destination hostname; cover direct `NO_PROXY` routing
+  without changing the process-global environment or consulting public DNS.
+
+- [ ] **Extend remote native-proxy interoperability coverage.**
+  Reqwest 0.12/hyper-util 0.1.21 omit macOS bypass exceptions and PAC/WPAD.
+  Windows `ProxyServer` is treated as one URL rather than a per-protocol map,
+  and its `<local>` bypass token is not implemented. Cover these native settings
+  with platform fixtures and pursue upstream support where needed.
 
 - [ ] **Overlap remote identity refresh with HTTP/2 operations.**
   Coordinate connection readiness before multiplexing discovery and execution;

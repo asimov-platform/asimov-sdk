@@ -24,6 +24,8 @@
 //!
 //! - `http` enables the HTTP(S) adapters in the `http` module, including their
 //!   endpoint mapping, authentication, option support, and JSONL response streams.
+//!   Its module documentation describes system DNS, proxy selection, and TLS
+//!   trust policy.
 //! - `iroh` exposes a placeholder module for a future Iroh/QUIC adapter. Its
 //!   execution API and wire protocol are not implemented or specified here.
 //!

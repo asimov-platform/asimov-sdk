@@ -7,6 +7,98 @@
 //! verification, HTTP/2 negotiation, and HTTP/1.1 streaming fallback. Plain HTTP
 //! is also accepted for development.
 //!
+//! # Network configuration
+//!
+//! Execution and remote-key discovery share the executor's HTTP client. The
+//! following settings apply to the remote service and its proxy. Resource URLs
+//! inside request bodies are inputs to that service.
+//!
+//! ## DNS
+//!
+//! Local name resolution is explicitly pinned to the system resolver, even
+//! when another dependency enables reqwest's `hickory-dns` feature.
+//! Reqwest/Hyper run `std::net::ToSocketAddrs` on Tokio's blocking pool,
+//! calling libc/libSystem `getaddrinfo()` on Unix/macOS or Winsock
+//! `getaddrinfo()` on Windows. Hosts files, search domains, VPN/split-DNS
+//! rules, and any DNS transport or caching follow platform resolver policy.
+//!
+//! There is no SDK DNS cache, custom nameserver, or application-level DoH/DoT
+//! resolver. Lookups occur when connecting; pooled connections can be reused
+//! without another lookup. Cancelling a pending request stops waiting for DNS,
+//! but cannot interrupt an already-running blocking `getaddrinfo()` call.
+//!
+//! ## Proxies and destination lookup
+//!
+//! Reqwest snapshots automatic proxy configuration at [`Executor::new`].
+//! Create a new executor after changing it. Uppercase environment variables
+//! are checked before their lowercase variants:
+//!
+//! - `HTTP_PROXY` and `HTTPS_PROXY` select proxies by the **destination**
+//!   scheme. The proxy URL's scheme selects HTTP(S) or SOCKS transport.
+//! - On macOS/Windows, supported native static proxy settings fill empty
+//!   per-scheme settings. A usable per-scheme setting, including a native one,
+//!   takes precedence over the `ALL_PROXY` fallback.
+//! - `NO_PROXY` bypasses proxying for matching URL hosts. It accepts
+//!   comma-separated domains/subdomains, IP literals/CIDRs, or `*` (all hosts).
+//!   Matching happens before DNS; a CIDR rule does not resolve hostname URLs to
+//!   test their IPs.
+//!
+//! Native integration reads macOS static HTTP/HTTPS settings and the current
+//! user's Windows Internet Settings. Windows `ProxyOverride` fills an empty
+//! `NO_PROXY` setting. Reqwest's current integration does not support PAC/WPAD,
+//! macOS native bypass exceptions, Windows per-protocol `ProxyServer` maps, or
+//! the Windows `<local>` bypass token. Use explicit proxy URLs and `NO_PROXY`
+//! for those configurations; configure SOCKS using environment URLs. In CGI
+//! environments (`REQUEST_METHOD` is set), automatic proxy selection is
+//! disabled.
+//!
+//! | Route | Destination hostname resolution |
+//! | --- | --- |
+//! | Direct, including a `NO_PROXY` match | Local system resolver |
+//! | HTTP/HTTPS proxy | Proxy; HTTPS destinations use `CONNECT` |
+//! | `socks4://` or `socks5://` proxy | Local system resolver |
+//! | `socks4a://` or `socks5h://` proxy | Proxy |
+//!
+//! A proxy's own hostname is still resolved locally; IP literals require no DNS
+//! lookup. For example, `HTTPS_PROXY=socks5h://127.0.0.1:1080` delegates HTTPS
+//! destination lookup to that SOCKS proxy. TLS still validates the original
+//! destination hostname through the tunnel.
+//!
+//! ## TLS and trust stores
+//!
+//! TLS uses Rustls's safe default TLS 1.2/1.3 versions and advertises `h2`
+//! and `http/1.1` through ALPN. The process-default Rustls crypto provider is
+//! used if installed, otherwise Ring. No client TLS certificate is configured.
+//! Server certificates are checked by [rustls-platform-verifier]:
+//!
+//! - **macOS/Windows:** native certificate verification and trust settings,
+//!   including platform chain-building and revocation policy. `SSL_CERT_FILE`
+//!   and `SSL_CERT_DIR` are not read on these platforms.
+//! - **Linux/BSD:** WebPKI verification with system CA certificates.
+//!   `SSL_CERT_FILE` and/or `SSL_CERT_DIR` replace the native CA locations.
+//!   Client construction requires at least one usable CA and reports failures
+//!   as [`Error::Tls`]. Roots are snapshotted; recreate the executor after
+//!   changing them. This backend does not perform revocation checks.
+//!
+//! Bundled Mozilla roots are not added. Certificate verification checks the
+//! chain, hostname, and validity dates using the system clock. Pooled
+//! connections are not revalidated for each request. HTTPS proxies use this
+//! TLS configuration to validate the proxy certificate too. Other platforms'
+//! setup requirements are described by [rustls-platform-verifier].
+//!
+//! Native verification may fetch certificates or revocation information through
+//! OS networking, with its own DNS/proxy policy. Those fetches do not use this
+//! client's proxy connector, including its SOCKS5h destination-DNS behavior.
+//!
+//! ## Transport deadlines
+//!
+//! Operation requests have no configured connect, read, or total timeout;
+//! remote-key discovery sets a 30-second request timeout. [`TimingOptions`]
+//! describe remote execution limits, not local transport deadlines.
+//! OS-controlled blocking work may outlive cancellation or delay timeouts.
+//!
+//! [rustls-platform-verifier]: https://docs.rs/rustls-platform-verifier
+//!
 //! # HTTP request mapping
 //!
 //! [`Fetcher`] POSTs a [`FetcherRequest`] to the service's `fetch` endpoint.
@@ -212,24 +304,11 @@ impl Executor {
     /// ASIMOV prefix. The token is stored in a [`SecretString`], which zeroizes
     /// its storage on drop.
     ///
-    /// Proxy selection honors `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and
-    /// `NO_PROXY` (including lowercase variants), with native proxy settings as
-    /// a fallback on macOS and Windows. Use a `socks5h://` proxy URL, such as
-    /// `ALL_PROXY=socks5h://127.0.0.1:1080`, to resolve destination hostnames at
-    /// the proxy. The `socks5://` scheme resolves them locally.
+    /// Uses system DNS, automatic HTTP(S)/SOCKS proxy selection, and platform
+    /// TLS certificate verification. See the [network configuration] for
+    /// resolver APIs, proxy/DNS routing, CA sources, and deadlines.
     ///
-    /// TLS certificates use native verification on macOS/Windows and WebPKI
-    /// with system CA certificates on Linux/BSD. Linux/BSD honor `SSL_CERT_FILE`
-    /// and `SSL_CERT_DIR`; at least one usable CA is required at construction.
-    /// These roots are snapshotted; recreate the executor after changing them.
-    /// macOS/Windows use native trust settings rather than those environment
-    /// variables. Bundled Mozilla roots are not added to the verifier.
-    ///
-    /// Native verification may fetch certificates or revocation information
-    /// using OS networking, independently of this client's proxy settings.
-    /// See [rustls-platform-verifier] for other platforms' setup requirements.
-    ///
-    /// [rustls-platform-verifier]: https://docs.rs/rustls-platform-verifier
+    /// [network configuration]: self#network-configuration
     ///
     /// The `User-Agent` is the caller name reported by `agent-detector` at
     /// construction, or `asimov-remote/<version>` if detection yields no valid
@@ -265,6 +344,8 @@ impl Executor {
         Ok(Self {
             client: Client::builder()
                 .user_agent(user_agent)
+                // Keep system DNS even if another dependency enables Hickory.
+                .no_hickory_dns()
                 .use_preconfigured_tls(tls_config()?)
                 .redirect(reqwest::redirect::Policy::none())
                 // Digests cover content-coded bytes. Disable decoding even if
