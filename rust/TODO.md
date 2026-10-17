@@ -370,6 +370,11 @@ Unless marked reproduced, implementation findings are based on source review.
 
 ## P3: Design, coverage, and maintenance
 
+- [ ] **Confirm native Windows TLS verification.**
+  Verify the existing Windows CI test job for the platform-verifier change
+  `ed18fac`, including trusted TLS/ALPN, hostname mismatch, and unknown-CA cases.
+  No CI run for that commit was available at review on 2026-10-17.
+
 - [ ] **Pin remote HTTP DNS to the system resolver.**
   `lib/asimov-remote/src/http.rs` currently inherits reqwest's resolver default.
   Add `no_hickory_dns()` to preserve system resolution if another consumer enables
