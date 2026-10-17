@@ -87,7 +87,7 @@ async fn main() -> Result<(), BoxError> {
     }
     println!("Received {:?} response", response.version());
     let key = common::server_key().public();
-    let verifier = Verifier::new(key, &key_id(&key), "response", common::response_policy()?)?;
+    let verifier = Verifier::new(key, &key_id(&key), "asimov", common::response_policy()?)?;
     let mut body = VerifyingBody::response(
         response,
         Some(context),

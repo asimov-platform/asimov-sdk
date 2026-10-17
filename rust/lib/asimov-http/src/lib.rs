@@ -61,7 +61,7 @@
 //!     Component::new("content-type")?,
 //!     Component::trailer("content-digest")?,
 //! ], SignatureParams::fresh(&key.public(), "example-response")?)?;
-//! let signer = Signer::new(key, "response", input)?;
+//! let signer = Signer::new(key, "asimov", input)?;
 //! // Any http_body::Body<Data = Bytes> works, including an unbounded stream.
 //! let response = Response::builder()
 //!     .header("content-type", "application/jsonl")

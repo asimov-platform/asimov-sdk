@@ -106,7 +106,7 @@ async fn reply(
         covered,
         SignatureParams::fresh(&key.public(), common::RESPONSE_TAG)?,
     )?;
-    let signer = Signer::new(key, "response", input)?;
+    let signer = Signer::new(key, "asimov", input)?;
     let response = Response::builder()
         .version(request.version())
         .header("content-type", "application/jsonl");

@@ -182,7 +182,7 @@ fn signed_response(key: &SecretKey) -> Response<Bytes> {
     params.key_id = KEY_ID.into();
     let signer = Signer::new(
         key.clone(),
-        "response",
+        "asimov",
         SignatureInput::new(
             ["@status", "content-type", "content-digest"]
                 .into_iter()
@@ -461,7 +461,7 @@ async fn explicit_verifier_replaces_automatic_discovery() {
     let verifier = Verifier::new(
         key.public(),
         KEY_ID,
-        "response",
+        "asimov",
         VerificationPolicy::new(vec![
             Component::new("@status").unwrap(),
             Component::new("content-type").unwrap(),

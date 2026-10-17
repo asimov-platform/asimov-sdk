@@ -285,6 +285,6 @@ fn parse_identity(bytes: &[u8]) -> Result<(PublicKey, Verifier), Box<Failure>> {
     ]);
     Ok((
         PublicKey::from(bytes),
-        Verifier::new(key, &id, "response", policy)?,
+        Verifier::new(key, &id, "asimov", policy)?,
     ))
 }

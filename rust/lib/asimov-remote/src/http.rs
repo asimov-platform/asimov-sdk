@@ -317,7 +317,7 @@ impl Executor {
     /// Requires signed responses using the automatically discovered remote key.
     ///
     /// Discovery is lazy, cached across clones, and uses the operation's HTTP
-    /// connection pool. The `response` signature must cover status, content
+    /// connection pool. The `asimov` signature must cover status, content
     /// type, and a matching SHA-256 content digest in headers or trailers.
     /// Freshness and nonce checks use the default HTTP verification policy.
     /// Output remains provisional until EOF verification succeeds.
@@ -343,7 +343,7 @@ impl Executor {
     ///
     /// # Example
     ///
-    /// Configure a trusted remote key and the remote's `response` signature
+    /// Configure a trusted remote key and the remote's `asimov` signature
     /// label, allowing either header or trailer digests:
     ///
     /// ```no_run
@@ -360,7 +360,7 @@ impl Executor {
     ///         Component::new("content-type")?,
     ///     ]);
     ///     let verifier = Verifier::new(
-    ///         remote_key, &key_id(&remote_key), "response", policy,
+    ///         remote_key, &key_id(&remote_key), "asimov", policy,
     ///     )?;
     ///     Ok(Executor::new("https://asimov.social", Some("api-token"))?
     ///         .with_response_verifier(verifier))

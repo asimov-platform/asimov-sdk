@@ -266,7 +266,7 @@ impl<B: Body<Data = Bytes>> Body for SigningBody<B> {
 /// # Example
 ///
 /// Verify a Hyper response against a trusted server key, allowing either digest
-/// location. The sender uses the same key ID and the `response` signature label.
+/// location. The sender uses the same key ID and the `asimov` signature label.
 ///
 /// ```no_run
 /// # extern crate alloc;
@@ -286,7 +286,7 @@ impl<B: Body<Data = Bytes>> Body for SigningBody<B> {
 ///         Component::new("content-type")?,
 ///     ]);
 ///     let verifier = Verifier::new(
-///         server_key, &key_id(&server_key), "response", policy,
+///         server_key, &key_id(&server_key), "asimov", policy,
 ///     )?;
 ///     let mut body = VerifyingBody::response(
 ///         response, None, Some(verifier), SignatureParams::now()?,
