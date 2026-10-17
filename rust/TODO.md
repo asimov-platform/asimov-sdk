@@ -364,6 +364,12 @@ Unless marked reproduced, implementation findings are based on source review.
 
 ## P3: Design, coverage, and maintenance
 
+- [ ] **Overlap remote identity refresh with HTTP/2 operations.**
+  Coordinate connection readiness before multiplexing discovery and execution;
+  preserve response-header validation time and avoid duplicate cold handshakes.
+  Extend remote identity resolution to overlapping rotation keys by signature
+  key ID, defining the singular `remote_public_key()` contract during rotation.
+
 - [ ] **Make workspace publish dry runs dependency-aware.**
   Internal dependencies in `Cargo.toml` use versions with local
   `[patch.crates-io]` overrides. During 25.7.3 preparation,

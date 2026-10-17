@@ -36,9 +36,10 @@ fn request_signatures_use_fresh_nonces_and_the_shared_profile() {
         .with_signing_key(key);
     let mut nonces = Vec::new();
     for _ in 0..2 {
-        let request = executor
+        let mut request = executor
             .prepare_json_request("fetch", &json!({"input": "Українське"}))
             .unwrap();
+        executor.sign_request(&mut request).unwrap();
         let message = Message::request(
             request.method().clone(),
             request.url().as_str(),

@@ -40,8 +40,11 @@
 //! authenticate messages. Redirects return [`Error::Redirect`]; configure the
 //! final service URL.
 //!
-//! [`Executor::with_response_verifier`] enables frame-preserving digest and
-//! signature verification, including trailers. JSONL batches are provisional
+//! [`Executor::with_response_verification`] discovers the remote public key
+//! through the executor's connection pool and requires signed responses.
+//! [`Executor::remote_public_key`] exposes the same cached identity to callers.
+//! [`Executor::with_response_verifier`] supplies an explicit key and policy.
+//! Verification preserves frames, including trailers. JSONL batches are provisional
 //! until EOF; an integrity failure is a terminal stream error. Validation time
 //! is response-header receipt. Content coding is not automatically decoded.
 //!
@@ -84,7 +87,7 @@
 //! # }
 //! ```
 
-use alloc::{boxed::Box, format, string::String};
+use alloc::{boxed::Box, format, string::String, sync::Arc};
 use asimov_flow::{BatchStream, jsonl_batches_from_chunks};
 use asimov_http::{
     Component, Message, REQUEST_SIGNATURE_TAG, SignatureInput, SignatureParams, Signer,
@@ -102,6 +105,10 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
 pub use asimov_http::{DigestOptions, DigestPreference, SecretKey, Verifier};
+pub use asimov_id::PublicKey;
+
+mod remote_identity;
+use remote_identity::RemoteIdentityCache;
 
 /// Transport-independent request types, re-exported for convenience.
 pub use crate::{FetcherRequest, ListerRequest};
@@ -137,9 +144,27 @@ pub enum Error {
     /// HTTP digest/signature construction or terminal verification failure.
     #[error(transparent)]
     Integrity(#[from] asimov_http::Error),
+    /// Remote identity discovery or revalidation failed.
+    #[error("failed to discover remote public key: {0}")]
+    RemoteKey(#[source] Arc<dyn core::error::Error + Send + Sync>),
 }
 
-/// Reusable HTTP(S) service configuration. Clones share the connection pool.
+#[derive(Clone, Default)]
+enum ResponseVerification {
+    #[default]
+    Disabled,
+    Remote,
+    Explicit(Verifier),
+}
+
+impl ResponseVerification {
+    fn is_enabled(&self) -> bool {
+        !matches!(self, Self::Disabled)
+    }
+}
+
+/// Reusable HTTP(S) service configuration.
+/// Clones share the connection pool and remote identity cache.
 ///
 /// Owns service addressing, bearer authentication, request digests, and response
 /// batching; resource URLs and operation options belong to the request values.
@@ -151,7 +176,8 @@ pub struct Executor {
     batching: BatchOptions,
     digests: DigestOptions,
     signing_key: Option<SecretKey>,
-    response_verifier: Option<Verifier>,
+    response_verification: ResponseVerification,
+    remote_identity: Arc<RemoteIdentityCache>,
 }
 
 impl fmt::Debug for Executor {
@@ -161,7 +187,10 @@ impl fmt::Debug for Executor {
             .field("batching", &self.batching)
             .field("digests", &self.digests)
             .field("signing", &self.signing_key.is_some())
-            .field("response_verification", &self.response_verifier.is_some())
+            .field(
+                "response_verification",
+                &self.response_verification.is_enabled(),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -172,7 +201,7 @@ impl Executor {
     /// Uses rustls with HTTP/2 negotiation and HTTP/1.1 fallback. Plain HTTP URLs
     /// are accepted for development. Path prefixes and an optional trailing slash
     /// are supported; query strings and fragments on the base URL are ignored.
-    /// Sends an `Authorization: Bearer` header on every request. `Some(token)`
+    /// Sends an `Authorization: Bearer` header on operation requests. `Some(token)`
     /// uses the supplied token; `None` loads the current user's public key with
     /// [`Keyring::my_public_key`] and encodes it as Base58, without the non-ASCII
     /// ASIMOV prefix. The token is stored in a [`SecretString`], which zeroizes
@@ -231,13 +260,35 @@ impl Executor {
             batching: BatchOptions::default(),
             digests: DigestOptions::default(),
             signing_key: None,
-            response_verifier: None,
+            response_verification: ResponseVerification::Disabled,
+            remote_identity: Arc::default(),
         })
     }
 
     /// Returns the HTTP service base URL used for endpoint resolution.
     pub fn base_url(&self) -> &Url {
         &self.base_url
+    }
+
+    /// Returns the remote service's validated Ed25519 public key.
+    ///
+    /// Discovery uses this executor's HTTP connection pool, without bearer or
+    /// URL credentials. Clones share cached identities and in-flight lookups.
+    /// Freshness follows the remote's max-age, Age, no-cache, and no-store
+    /// directives, defaulting to five minutes without an explicit policy.
+    /// Expired identities are revalidated using an ETag when available.
+    ///
+    /// This discovers the remote identity independently of an explicitly
+    /// configured response verifier. It does not enable response verification.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::RemoteKey`] if discovery fails, redirects, exceeds its
+    /// 30-second or 64-KiB limit, or does not identify exactly one eligible key.
+    pub async fn remote_public_key(&self) -> Result<PublicKey, Error> {
+        self.remote_identity
+            .public_key(&self.client, &self.base_url)
+            .await
     }
 
     /// Sets local response-stream batching for this HTTP client.
@@ -263,11 +314,28 @@ impl Executor {
         self
     }
 
+    /// Requires signed responses using the automatically discovered remote key.
+    ///
+    /// Discovery is lazy, cached across clones, and uses the operation's HTTP
+    /// connection pool. The `response` signature must cover status, content
+    /// type, and a matching SHA-256 content digest in headers or trailers.
+    /// Freshness and nonce checks use the default HTTP verification policy.
+    /// Output remains provisional until EOF verification succeeds.
+    ///
+    /// Replaces any explicitly configured verifier. Discovery failures prevent
+    /// the operation from being sent; an expired key is never used as fallback.
+    #[must_use]
+    pub fn with_response_verification(mut self) -> Self {
+        self.response_verification = ResponseVerification::Remote;
+        self
+    }
+
     /// Requires response signatures from the verifier's key and profile, and a
     /// matching SHA-256 content digest in headers or trailers. Batches delivered
     /// before EOF are provisional. Consume to EOF to observe terminal failures.
     ///
-    /// To let the server choose digest placement per response, omit the response
+    /// Replaces automatic remote-key verification, if enabled.
+    /// To let the remote choose digest placement per response, omit the response
     /// digest from [`VerificationPolicy::required_components`]. Requiring
     /// `"content-digest"` pins it to headers; `"content-digest";tr` pins it to
     /// trailers. The body verifier independently requires a matching SHA-256
@@ -275,7 +343,7 @@ impl Executor {
     ///
     /// # Example
     ///
-    /// Configure a trusted server key and the server's `response` signature
+    /// Configure a trusted remote key and the remote's `response` signature
     /// label, allowing either header or trailer digests:
     ///
     /// ```no_run
@@ -286,13 +354,13 @@ impl Executor {
     /// };
     /// use asimov_remote::http::{Error, Executor};
     ///
-    /// fn client(server_key: VerifyingKey) -> Result<Executor, Error> {
+    /// fn client(remote_key: VerifyingKey) -> Result<Executor, Error> {
     ///     let policy = VerificationPolicy::new(vec![
     ///         Component::new("@status")?,
     ///         Component::new("content-type")?,
     ///     ]);
     ///     let verifier = Verifier::new(
-    ///         server_key, &key_id(&server_key), "response", policy,
+    ///         remote_key, &key_id(&remote_key), "response", policy,
     ///     )?;
     ///     Ok(Executor::new("https://asimov.social", Some("api-token"))?
     ///         .with_response_verifier(verifier))
@@ -300,7 +368,7 @@ impl Executor {
     /// ```
     #[must_use]
     pub fn with_response_verifier(mut self, verifier: Verifier) -> Self {
-        self.response_verifier = Some(verifier);
+        self.response_verification = ResponseVerification::Explicit(verifier);
         self
     }
 
@@ -322,8 +390,19 @@ impl Executor {
         endpoint: &str,
         request: &impl Serialize,
     ) -> Result<JsonlStream, Error> {
-        let request = self.prepare_json_request(endpoint, request)?;
-        let request_context = if self.response_verifier.is_some() {
+        let mut request = self.prepare_json_request(endpoint, request)?;
+        let verifier = match &self.response_verification {
+            ResponseVerification::Disabled => None,
+            ResponseVerification::Explicit(verifier) => Some(verifier.clone()),
+            ResponseVerification::Remote => Some(
+                self.remote_identity
+                    .verifier(&self.client, &self.base_url)
+                    .await?,
+            ),
+        };
+        // Discovery can involve network I/O. Sign only once ready to dispatch.
+        self.sign_request(&mut request)?;
+        let request_context = if verifier.is_some() {
             Some(Message::request(
                 request.method().clone(),
                 request.url().as_str(),
@@ -337,14 +416,14 @@ impl Executor {
             return Err(Error::Redirect(response.status()));
         }
         let response = response.error_for_status()?;
-        if let Some(verifier) = &self.response_verifier {
+        if let Some(verifier) = verifier {
             use asimov_http::body::{BodyError, VerifyingBody};
             use http_body_util::BodyExt as _;
             let response: asimov_http::http::Response<reqwest::Body> = response.into();
             let response = VerifyingBody::response(
                 response,
                 request_context,
-                Some(verifier.clone()),
+                Some(verifier),
                 SignatureParams::now()?,
             )?;
             return Ok(jsonl_batches_from_chunks(
@@ -365,12 +444,15 @@ impl Executor {
         ))
     }
 
-    /// Finalizes and optionally signs the exact request to dispatch.
+    /// Serializes and validates the request before discovery performs network I/O.
     fn prepare_json_request(
         &self,
         endpoint: &str,
         request: &impl Serialize,
     ) -> Result<Request, Error> {
+        if self.signing_key.is_some() && !self.digests.content {
+            return Err(asimov_http::Error::Policy("signing requires a content digest").into());
+        }
         // Endpoints are relative paths so the configured bearer token is always
         // sent to the configured service, including when a caller supplies a path.
         let mut url = self
@@ -401,7 +483,7 @@ impl Executor {
         let digests = self.digests.headers(body);
         request.headers_mut().insert(CONTENT_LENGTH, length);
         request.headers_mut().extend(digests);
-        if self.response_verifier.is_some() {
+        if self.response_verification.is_enabled() {
             request
                 .headers_mut()
                 .insert(reqwest::header::TE, HeaderValue::from_static("trailers"));
@@ -409,10 +491,11 @@ impl Executor {
                 .headers_mut()
                 .insert(reqwest::header::CONNECTION, HeaderValue::from_static("te"));
         }
+        Ok(request)
+    }
+
+    fn sign_request(&self, request: &mut Request) -> Result<(), Error> {
         if let Some(key) = &self.signing_key {
-            if !self.digests.content {
-                return Err(asimov_http::Error::Policy("signing requires a content digest").into());
-            }
             let mut components = VerificationPolicy::request().required_components;
             for name in [
                 "content-encoding",
@@ -436,7 +519,7 @@ impl Executor {
             )?;
             signer.sign(&message)?.append_to(request.headers_mut())?;
         }
-        Ok(request)
+        Ok(())
     }
 }
 

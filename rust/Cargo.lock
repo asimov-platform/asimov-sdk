@@ -1542,7 +1542,9 @@ dependencies = [
  "http-body-util",
  "hyper 1.11.1",
  "hyper-util",
+ "rcgen",
  "reqwest 0.12.28",
+ "rustls",
  "secrecy",
  "serde",
  "serde_json",
@@ -1551,6 +1553,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "tokio-rustls",
  "whoami",
 ]
 
