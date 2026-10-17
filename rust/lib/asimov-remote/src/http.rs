@@ -207,6 +207,10 @@ impl Executor {
     /// ASIMOV prefix. The token is stored in a [`SecretString`], which zeroizes
     /// its storage on drop.
     ///
+    /// Proxy selection honors `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and
+    /// `NO_PROXY` (including lowercase variants), with native proxy settings as
+    /// a fallback on macOS and Windows.
+    ///
     /// The `User-Agent` is the caller name reported by `agent-detector` at
     /// construction, or `asimov-remote/<version>` if detection yields no valid
     /// HTTP header value.

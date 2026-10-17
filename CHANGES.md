@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verification using the operation's HTTP connection pool
 ### Fixed
 - asimov-remote: Verify the `asimov` response signature label used by Relay
+- asimov-remote: Honor native HTTP proxy settings on macOS and Windows
 
 ## 25.7.5 - 2026-10-16
 ### Added
