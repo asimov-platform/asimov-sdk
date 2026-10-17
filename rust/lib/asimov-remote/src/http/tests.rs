@@ -207,6 +207,47 @@ async fn default_authorization_uses_the_local_public_key() {
     assert!(Executor::new("http://127.0.0.1:1", Some("explicit-token")).is_ok());
 }
 
+#[test]
+#[cfg(all(
+    unix,
+    not(target_vendor = "apple"),
+    not(target_os = "android"),
+    not(target_arch = "wasm32")
+))]
+fn empty_or_missing_system_roots_are_setup_errors() {
+    const CHILD: &str = "ASIMOV_REMOTE_TEST_EMPTY_ROOTS";
+    if std::env::var_os(CHILD).is_some() {
+        assert!(matches!(
+            Executor::new("https://example.invalid", Some("token")),
+            Err(Error::Tls(_))
+        ));
+        return;
+    }
+
+    // Isolate CA environment overrides from concurrently running tests.
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("empty.pem"), b"").unwrap();
+    for file in ["empty.pem", "missing.pem"] {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "http::tests::empty_or_missing_system_roots_are_setup_errors",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .env("SSL_CERT_FILE", directory.path().join(file))
+            .env("SSL_CERT_DIR", directory.path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
 #[tokio::test]
 async fn patterns_post_authenticated_json_and_stream_raw_batches_before_eof() {
     async fn fetch(

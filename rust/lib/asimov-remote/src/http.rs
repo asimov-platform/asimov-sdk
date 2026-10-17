@@ -3,8 +3,9 @@
 //! HTTP(S) execution adapters for resource fetches and collection listings.
 //!
 //! [`Executor`] owns the service URL, bearer credentials, connection pool, and
-//! local response batching. HTTPS uses rustls, with HTTP/2 negotiation and
-//! HTTP/1.1 streaming fallback. Plain HTTP is also accepted for development.
+//! local response batching. HTTPS uses rustls with platform certificate
+//! verification, HTTP/2 negotiation, and HTTP/1.1 streaming fallback. Plain HTTP
+//! is also accepted for development.
 //!
 //! # HTTP request mapping
 //!
@@ -101,6 +102,7 @@ use reqwest::{
     Client, Request, Url,
     header::{ACCEPT, CONTENT_LENGTH, HeaderValue},
 };
+use rustls_platform_verifier::BuilderVerifierExt;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
@@ -129,6 +131,9 @@ pub enum Error {
     /// HTTP request construction, connection, status, or response-body failure.
     #[error(transparent)]
     Http(#[from] reqwest::Error),
+    /// TLS configuration or platform certificate verifier initialization failure.
+    #[error("failed to configure TLS: {0}")]
+    Tls(#[from] rustls::Error),
     /// Failure to load the local identity used for the HTTP bearer credential.
     #[error("failed to load local public key: {0}")]
     Keyring(#[from] asimov_keyring::KeyringError),
@@ -213,6 +218,19 @@ impl Executor {
     /// `ALL_PROXY=socks5h://127.0.0.1:1080`, to resolve destination hostnames at
     /// the proxy. The `socks5://` scheme resolves them locally.
     ///
+    /// TLS certificates use native verification on macOS/Windows and WebPKI
+    /// with system CA certificates on Linux/BSD. Linux/BSD honor `SSL_CERT_FILE`
+    /// and `SSL_CERT_DIR`; at least one usable CA is required at construction.
+    /// These roots are snapshotted; recreate the executor after changing them.
+    /// macOS/Windows use native trust settings rather than those environment
+    /// variables. Bundled Mozilla roots are not added to the verifier.
+    ///
+    /// Native verification may fetch certificates or revocation information
+    /// using OS networking, independently of this client's proxy settings.
+    /// See [rustls-platform-verifier] for other platforms' setup requirements.
+    ///
+    /// [rustls-platform-verifier]: https://docs.rs/rustls-platform-verifier
+    ///
     /// The `User-Agent` is the caller name reported by `agent-detector` at
     /// construction, or `asimov-remote/<version>` if detection yields no valid
     /// HTTP header value.
@@ -223,8 +241,9 @@ impl Executor {
     ///
     /// # Errors
     ///
-    /// Returns an error for an invalid base URL, HTTP client setup failure, or
-    /// failure to read or initialize the local identity when no token is given.
+    /// Returns an error for an invalid base URL, TLS verifier initialization
+    /// ([`Error::Tls`]), HTTP client setup, or failure to read or initialize the
+    /// local identity when no token is given.
     pub fn new(base_url: impl AsRef<str>, api_token: Option<&str>) -> Result<Self, Error> {
         let mut base_url = Url::parse(base_url.as_ref())
             .map_err(|error| Error::InvalidBaseUrl(format!("{error}")))?;
@@ -246,7 +265,7 @@ impl Executor {
         Ok(Self {
             client: Client::builder()
                 .user_agent(user_agent)
-                .use_rustls_tls()
+                .use_preconfigured_tls(tls_config()?)
                 .redirect(reqwest::redirect::Policy::none())
                 // Digests cover content-coded bytes. Disable decoding even if
                 // another workspace dependency enables reqwest compression.
@@ -624,6 +643,19 @@ impl<T: Clone + fmt::Display + Send + Sync, F: fmt::Display + Send + Sync>
 impl<T: Clone + fmt::Display + Send + Sync, F: fmt::Display + Send + Sync>
     asimov_patterns::Lister<JsonlStream> for Lister<T, F>
 {
+}
+
+fn tls_config() -> Result<rustls::ClientConfig, rustls::Error> {
+    let provider = rustls::crypto::CryptoProvider::get_default()
+        .cloned()
+        .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()));
+    let mut config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()?
+        .with_platform_verifier()?
+        .with_no_client_auth();
+    // Reqwest uses preconfigured TLS verbatim, including ALPN negotiation.
+    config.alpn_protocols = alloc::vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+    Ok(config)
 }
 
 fn validate_fetcher_options(output: Option<&str>, other: &[String]) -> Result<(), Error> {

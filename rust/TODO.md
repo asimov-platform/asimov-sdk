@@ -241,6 +241,12 @@ Unless marked reproduced, implementation findings are based on source review.
 
 ## P2: Protocols, execution, and service APIs
 
+- [ ] **Expose explicit additional TLS roots for remote HTTPS.**
+  Add constructor/builder support for custom CA certificates alongside platform
+  verification in `lib/asimov-remote/src/http.rs`. macOS/Windows use native trust
+  stores and do not read `SSL_CERT_FILE`/`SSL_CERT_DIR`; cover executor-scoped
+  custom roots with local fixtures.
+
 - [ ] **Bound proxy connection, upload, and shutdown lifetimes.**
   `lib/asimov-proxy/src/openai.rs` needs upload deadlines and bounded
   concurrency; stalled response streams can indefinitely delay shutdown. Add
@@ -363,6 +369,12 @@ Unless marked reproduced, implementation findings are based on source review.
   concurrent first starts and disabling while another invocation is active.
 
 ## P3: Design, coverage, and maintenance
+
+- [ ] **Pin remote HTTP DNS to the system resolver.**
+  `lib/asimov-remote/src/http.rs` currently inherits reqwest's resolver default.
+  Add `no_hickory_dns()` to preserve system resolution if another consumer enables
+  reqwest's `hickory-dns` feature. Document the blocking-worker `getaddrinfo` path,
+  proxy/destination lookup split, and reliance on OS caching and resolver policy.
 
 - [ ] **Overlap remote identity refresh with HTTP/2 operations.**
   Coordinate connection readiness before multiplexing discovery and execution;

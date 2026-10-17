@@ -79,16 +79,27 @@ where
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none());
     let acceptor = if tls {
-        let identity = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+        let mut root_params = rcgen::CertificateParams::default();
+        root_params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        root_params.key_usages = vec![rcgen::KeyUsagePurpose::KeyCertSign];
+        root_params
+            .distinguished_name
+            .push(rcgen::DnType::CommonName, "ASIMOV test CA");
+        let root_key = rcgen::KeyPair::generate().unwrap();
+        let root = root_params.self_signed(&root_key).unwrap();
+        let issuer = rcgen::Issuer::new(root_params, root_key);
+        let key = rcgen::KeyPair::generate().unwrap();
+        let mut params = rcgen::CertificateParams::new(vec!["localhost".into()]).unwrap();
+        params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ServerAuth];
+        let certificate = params.signed_by(&key, &issuer).unwrap();
         let provider = Arc::new(rustls::crypto::ring::default_provider());
-        let mut config = rustls::ServerConfig::builder_with_provider(provider.clone())
+        let mut config = rustls::ServerConfig::builder_with_provider(provider)
             .with_safe_default_protocol_versions()
             .unwrap()
             .with_no_client_auth()
             .with_single_cert(
-                vec![identity.cert.der().clone()],
-                rustls::pki_types::PrivatePkcs8KeyDer::from(identity.signing_key.serialize_der())
-                    .into(),
+                vec![certificate.der().clone()],
+                rustls::pki_types::PrivatePkcs8KeyDer::from(key.serialize_der()).into(),
             )
             .unwrap();
         config.alpn_protocols = vec![if version == Version::HTTP_2 {
@@ -96,14 +107,15 @@ where
         } else {
             b"http/1.1".to_vec()
         }];
-        let mut roots = rustls::RootCertStore::empty();
-        roots.add(identity.cert.der().clone()).unwrap();
-        let mut config_client = rustls::ClientConfig::builder_with_provider(provider)
-            .with_safe_default_protocol_versions()
-            .unwrap()
-            .with_root_certificates(roots)
-            .with_no_client_auth();
-        config_client.alpn_protocols = config.alpn_protocols.clone();
+        let mut config_client = tls_config().unwrap();
+        let verifier = rustls_platform_verifier::Verifier::new_with_extra_roots(
+            [root.der().clone()],
+            config_client.crypto_provider().clone(),
+        )
+        .unwrap();
+        config_client
+            .dangerous()
+            .set_certificate_verifier(Arc::new(verifier));
         client = client.use_preconfigured_tls(config_client);
         Some(TlsAcceptor::from(Arc::new(config)))
     } else {
@@ -141,7 +153,9 @@ where
             let handler = handler.clone();
             tasks.spawn(async move {
                 if let Some(acceptor) = acceptor {
-                    let socket = acceptor.accept(socket).await.unwrap();
+                    let Ok(socket) = acceptor.accept(socket).await else {
+                        return; // Certificate rejection closes the TLS handshake.
+                    };
                     negotiated.fetch_add(1, Ordering::SeqCst);
                     serve(socket, version, handler).await;
                 } else {
@@ -257,6 +271,42 @@ async fn discovery_and_operations_reuse_http_and_tls_connections() {
             assert_eq!(fixture.connections.load(Ordering::SeqCst), 1);
             assert_eq!(fixture.handshakes.load(Ordering::SeqCst), usize::from(tls));
         }
+    }
+}
+
+#[tokio::test]
+async fn tls_rejects_untrusted_certificates_and_hostname_mismatches() {
+    for trusted in [false, true] {
+        let mut fixture = fixture(Version::HTTP_11, true, |_| async {
+            panic!("an invalid TLS peer must not receive HTTP requests");
+        })
+        .await;
+        if trusted {
+            // The trusted leaf only identifies localhost, not its IP address.
+            fixture
+                .executor
+                .base_url
+                .set_host(Some("127.0.0.1"))
+                .unwrap();
+        } else {
+            fixture.executor.client = Client::builder()
+                .no_proxy()
+                .use_preconfigured_tls(tls_config().unwrap())
+                .build()
+                .unwrap();
+        }
+        let url = fixture
+            .executor
+            .base_url
+            .join("/.well-known/jwks.json")
+            .unwrap();
+        let error = timeout(DEADLINE, fixture.executor.client.get(url).send())
+            .await
+            .unwrap()
+            .unwrap_err();
+        assert!(error.is_connect(), "{error:?}");
+        assert_eq!(fixture.connections.load(Ordering::SeqCst), 1);
+        assert_eq!(fixture.handshakes.load(Ordering::SeqCst), 0);
     }
 }
 
