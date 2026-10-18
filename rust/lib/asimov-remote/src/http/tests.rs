@@ -462,6 +462,52 @@ fn configuration_supports_prefixes_and_redacts_token() {
 }
 
 #[tokio::test]
+async fn json_selection_is_forwarded_for_fetch_and_list() {
+    for listing in [false, true] {
+        let response = b"{\"name\":\"remote\",\"extra\":true}\n";
+        let (url, request, resume, server) = http1_server(200, response, b"").await;
+        let executor = Executor::new(url, Some("token")).unwrap();
+        let filtering = FilteringOptions::builder()
+            .json(vec!["name".into(), "@id".into()])
+            .build();
+        let mut stream = timeout(DEADLINE, async {
+            if listing {
+                let body = ListerRequest::<String>::new("example:", Default::default())
+                    .with_filtering(filtering);
+                super::Lister::new(executor, body).execute().await
+            } else {
+                let body =
+                    FetcherRequest::new("example:", Default::default()).with_filtering(filtering);
+                Fetcher::new(executor, body).execute().await
+            }
+        })
+        .await
+        .unwrap()
+        .unwrap();
+        let request = timeout(DEADLINE, request).await.unwrap().unwrap();
+        let (headers, body) = request.split_once("\r\n\r\n").unwrap();
+        let expected = if listing {
+            assert!(headers.starts_with("POST /api/list HTTP/1.1"));
+            json!({"url": "example:", "options": {"json": ["name", "@id"]}})
+        } else {
+            assert!(headers.starts_with("POST /api/fetch HTTP/1.1"));
+            json!({"urls": ["example:"], "options": {"json": ["name", "@id"]}})
+        };
+        assert_eq!(serde_json::from_str::<Value>(body).unwrap(), expected);
+        resume.send(()).unwrap();
+        let mut bytes = Vec::new();
+        while let Some(batch) = timeout(DEADLINE, stream.next()).await.unwrap() {
+            for line in batch.unwrap().lines() {
+                bytes.extend_from_slice(line);
+            }
+        }
+        // Selection belongs to the endpoint; the transport preserves its bytes.
+        assert_eq!(bytes, response);
+        server.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn typed_lister_forwards_all_options_and_preserves_response_bytes() {
     async fn execute(
         operation: &mut impl asimov_patterns::Lister<JsonlStream, Error = Error>,
@@ -504,6 +550,7 @@ async fn typed_lister_forwards_all_options_and_preserves_response_bytes() {
         .with_filtering(
             FilteringOptions::builder()
                 .jev("The name is Ukrainian")
+                .json(vec!["name".into()])
                 .jq("select(.name)")
                 .build(),
         )
@@ -537,6 +584,7 @@ async fn typed_lister_forwards_all_options_and_preserves_response_bytes() {
                     "other": ["--custom", "literal argument", ""],
                     "max-age": "1h",
                     "jev": "The name is Ukrainian",
+                    "json": ["name"],
                     "jq": "select(.name)",
                     "deadline": "0s",
                 },

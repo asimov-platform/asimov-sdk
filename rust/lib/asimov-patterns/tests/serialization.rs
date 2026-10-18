@@ -30,6 +30,7 @@ fn flattened_options_match_the_remote_http_protocol() {
         "sort": "-name,date", "before": "urn:item:b", "after": "urn:item:a",
         "offset": 0, "limit": 25, "output": "jsonl", "other": ["--custom=a b"],
         "max-age": "1h", "jev": "The name is Ukrainian", "jq": "select(.name)",
+        "json": ["@id", "name"],
         "deadline": "1m 250ms"
     });
     let options: Options = serde_json::from_value(wire.clone()).unwrap();
@@ -66,6 +67,8 @@ fn preserves_explicit_zero_and_empty_values_but_rejects_bad_types() {
         json!({"sort": ["name"]}),
         json!({"output": {"Other": "jsonl"}}),
         json!({"other": "--flag"}),
+        json!({"json": "name,url"}),
+        json!({"json": ["name", 42]}),
     ] {
         assert!(serde_json::from_value::<Options>(wire).is_err());
     }

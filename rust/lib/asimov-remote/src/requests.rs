@@ -23,6 +23,8 @@ mod serialization;
 /// unset fields and an empty `other` array are omitted. An empty options object
 /// is also omitted. Durations use human-readable strings, retaining subsecond
 /// precision. Explicit zero durations and empty filters are preserved.
+/// JSON property selection uses a `json` array of literal names. The endpoint
+/// applies Jev, then property selection, then jq, and validates option support.
 ///
 /// The `jcs` feature adds canonical JSON serialization of this representation.
 /// Both encoding features are independent of transport selection.
@@ -103,6 +105,8 @@ impl FetcherRequest {
 /// into the nested `options` object. Unset fields and an empty `other` array are
 /// omitted, as is the whole object when empty. Explicit zero and empty values
 /// are preserved. Durations use human-readable strings.
+/// JSON property selection uses a `json` array of literal names. The endpoint
+/// applies Jev, then property selection, then jq, and validates option support.
 ///
 /// Sort keys are comma-separated with a `-` prefix for descending order. Sort
 /// keys and custom output formats require only [`core::fmt::Display`] for

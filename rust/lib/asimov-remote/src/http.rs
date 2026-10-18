@@ -169,11 +169,12 @@
 //! serialization; enabling `jcs` does not change the HTTP body encoding.
 //! The request types document their JSON representation and omission rules.
 //!
-//! This HTTP protocol delegates cache policy, filters (Jev before jq), and
-//! relative execution deadlines to the endpoint. [`Fetcher`] applies additional
-//! protocol-specific option restrictions before sending. Endpoint validation
-//! determines support for forwarded options. These are HTTP adapter contracts,
-//! not restrictions on the transport-independent request types.
+//! This HTTP protocol delegates cache policy, filters (Jev, JSON property
+//! selection, then jq), and relative execution deadlines to the endpoint.
+//! [`Fetcher`] applies additional protocol-specific option restrictions before
+//! sending. Endpoint validation determines support for forwarded options. These
+//! are HTTP adapter contracts, not restrictions on the transport-independent
+//! request types.
 //!
 //! # Request integrity
 //!
@@ -802,9 +803,10 @@ impl Executor {
 /// Each execution serializes its [`FetcherRequest`] and POSTs it to the
 /// service's `fetch` endpoint, returning a [`JsonlStream`].
 ///
-/// The endpoint applies caching, filtering (Jev before jq), and relative
-/// execution deadlines. This HTTP adapter supports only unset or `jsonl` output
-/// and an empty `other` array; it rejects other values before sending.
+/// The endpoint applies caching, filtering (Jev, JSON property selection, then
+/// jq), and relative execution deadlines. This HTTP adapter supports only unset
+/// or `jsonl` output and an empty `other` array; it rejects other values before
+/// sending.
 #[derive(Clone, Debug)]
 pub struct Fetcher {
     executor: Executor,
@@ -840,8 +842,8 @@ impl asimov_patterns::Fetcher<JsonlStream> for Fetcher {}
 /// sends a fresh request, including when the limit is zero.
 ///
 /// [`ListerRequest`] defines the request data and its JSON encoding. The HTTP
-/// endpoint validates and applies options, including caching, filtering (Jev
-/// before jq), and relative execution deadlines.
+/// endpoint validates and applies options, including caching, filtering (Jev,
+/// JSON property selection, then jq), and relative execution deadlines.
 ///
 /// `T` is the sort-key type and `F` the custom output-format type from
 /// [`ListerOptions<T, F>`], both defaulting to [`String`]. Execution uses

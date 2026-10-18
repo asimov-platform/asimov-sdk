@@ -65,9 +65,9 @@ fn shared_options_empty(
     timing: &TimingOptions,
 ) -> bool {
     let CachingOptions { max_age } = caching;
-    let FilteringOptions { jev, jq } = filtering;
+    let FilteringOptions { jev, json, jq } = filtering;
     let TimingOptions { deadline } = timing;
-    max_age.is_none() && jev.is_none() && jq.is_none() && deadline.is_none()
+    max_age.is_none() && jev.is_none() && json.is_none() && jq.is_none() && deadline.is_none()
 }
 
 impl Serialize for FetcherRequest {

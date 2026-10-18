@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- asimov-patterns, asimov-remote: JSON property selection for fetch/list requests,
+  applied after Jev and before jq
 - asimov-remote: Cached remote public-key discovery and automatic response
   verification using the operation's HTTP connection pool
 - asimov-remote: SOCKS proxy support with proxy-side DNS via `socks5h://`

@@ -32,9 +32,11 @@ fn builders_preserve_unset_defaults() {
 
     let filtering = FilteringOptions::builder()
         .jev("The name is Ukrainian")
+        .json(alloc::vec!["@id".into(), "name".into()])
         .jq("select(.name)")
         .build();
     assert_eq!(filtering.jev.as_deref(), Some("The name is Ukrainian"));
+    assert_eq!(filtering.json.unwrap(), ["@id", "name"]);
     assert_eq!(filtering.jq.as_deref(), Some("select(.name)"));
 }
 
@@ -132,6 +134,7 @@ mod cli {
                 for option in [
                     "--output <FORMAT>",
                     "--jev <NOUL>",
+                    "--json <FIELDS>",
                     "--jq <EXPR>",
                     "--max-age <DURATION>",
                     "--deadline <DURATION>",
@@ -170,8 +173,9 @@ mod cli {
                         help.contains("an assertion evaluated as true or false"),
                         "{help}"
                     );
-                    assert!(help.contains("before --jq"), "{help}");
+                    assert!(help.contains("before --json property selection"), "{help}");
                     assert!(help.contains("after Jev filtering"), "{help}");
+                    assert!(help.contains("@id,name,url"), "{help}");
                 }
             }
         }
@@ -204,7 +208,7 @@ mod cli {
     }
 
     #[test]
-    fn fetch_accepts_both_filters_and_forwards_durations() {
+    fn fetch_accepts_all_filters_and_forwards_durations() {
         let args = FetchCommand::try_parse_from([
             "fetch",
             "-M",
@@ -213,6 +217,8 @@ mod cli {
             "jsonl",
             "--jev",
             "The name is Ukrainian",
+            "--json",
+            "@id,name",
             "--jq",
             ".name",
             "--max-age",
@@ -227,6 +233,7 @@ mod cli {
         assert_eq!(args.urls.len(), 2);
         assert_eq!(args.options.output.as_deref(), Some("jsonl"));
         assert_eq!(args.filtering.jev.as_deref(), Some("The name is Ukrainian"));
+        assert_eq!(args.filtering.json.unwrap(), ["@id", "name"]);
         assert_eq!(args.filtering.jq.as_deref(), Some(".name"));
         assert!(args.options.other.is_empty());
         assert_eq!(args.cache.max_age, Some(Duration::from_secs(3600)));
@@ -239,7 +246,7 @@ mod cli {
     }
 
     #[test]
-    fn list_accepts_sort_aliases_pagination_and_both_filters() {
+    fn list_accepts_sort_aliases_pagination_and_all_filters() {
         for sort in ["--sort", "--sort-by", "--order", "--order-by"] {
             let args = ListCommand::try_parse_from([
                 "list",
@@ -253,6 +260,8 @@ mod cli {
                 "jsonl",
                 "--jev",
                 "The name is Ukrainian",
+                "--json",
+                "@id,name",
                 "--jq",
                 "select(.name)",
                 "--max-age",
@@ -267,6 +276,7 @@ mod cli {
             assert_eq!(args.options.limit, Some(100));
             assert_eq!(args.options.output, Some(OutputFormat::Jsonl));
             assert_eq!(args.filtering.jev.as_deref(), Some("The name is Ukrainian"));
+            assert_eq!(args.filtering.json.unwrap(), ["@id", "name"]);
             assert_eq!(args.filtering.jq.as_deref(), Some("select(.name)"));
             assert_eq!(args.cache.max_age, Some(Duration::from_secs(7 * 86400)));
             assert_eq!(args.timing.deadline, Some(Duration::ZERO));
@@ -274,6 +284,51 @@ mod cli {
                 args.timing.deadline_option().as_deref(),
                 Some("--deadline=0s")
             );
+        }
+    }
+
+    #[test]
+    fn json_selection_accumulates_literal_names_without_consuming_urls() {
+        for command in [FetchCommand::command(), ListCommand::command()] {
+            let matches = command
+                .try_get_matches_from([
+                    "test",
+                    "--json=@id,name,a.b",
+                    "--json",
+                    "name,schema:name,a\"b,naïve",
+                    "https://example.com/",
+                ])
+                .unwrap();
+            assert_eq!(
+                matches
+                    .get_many::<String>("json")
+                    .unwrap()
+                    .collect::<Vec<_>>(),
+                ["@id", "name", "a.b", "name", "schema:name", "a\"b", "naïve"]
+            );
+            assert_eq!(
+                matches
+                    .get_many::<String>("urls")
+                    .unwrap()
+                    .collect::<Vec<_>>(),
+                ["https://example.com/"]
+            );
+        }
+    }
+
+    #[test]
+    fn json_selection_requires_a_nonempty_list_of_nonempty_names() {
+        for command in [FetchCommand::command(), ListCommand::command()] {
+            for value in ["", ",", "name,", ",name", "name,,url"] {
+                assert!(
+                    command
+                        .clone()
+                        .try_get_matches_from(["test", "--json", value])
+                        .is_err(),
+                    "accepted {value:?}"
+                );
+            }
+            assert!(command.try_get_matches_from(["test", "--json"]).is_err());
         }
     }
 

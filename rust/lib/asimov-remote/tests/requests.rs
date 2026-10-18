@@ -18,6 +18,7 @@ fn fetcher_body_round_trips_all_option_groups_and_multiple_urls() {
             "other": ["--custom", "literal argument", ""],
             "max-age": "1m 30s 123ms 456us 789ns",
             "jev": "The name is \"Українське\"",
+            "json": ["@id", "name"],
             "jq": "select(.name == \"Ada Lovelace\")",
             "deadline": "1ns"
         }
@@ -57,6 +58,7 @@ fn lister_body_round_trips_all_option_groups() {
             "other": ["--custom", "literal argument", ""],
             "max-age": "1ns",
             "jev": "",
+            "json": ["@id", "name"],
             "jq": "",
             "deadline": "0s"
         }
@@ -104,6 +106,24 @@ fn missing_or_empty_options_default_and_serialize_as_omitted() {
             serde_json::to_value(list).unwrap(),
             json!({"url": "example:"})
         );
+    }
+}
+
+#[test]
+fn json_selection_alone_retains_options_and_literal_names() {
+    let options = json!({"json": ["name", "@id", "a.b", "a\"b", "naïve", "name"]});
+    let fetch = json!({"urls": ["example:"], "options": options});
+    let request: FetcherRequest = serde_json::from_value(fetch.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), fetch);
+    let list = json!({"url": "example:", "options": options});
+    let request: ListerRequest = serde_json::from_value(list.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), list);
+
+    // The transport model preserves explicit selections for host validation.
+    for selection in [json!([]), json!([""])] {
+        let wire = json!({"urls": ["example:"], "options": {"json": selection}});
+        let request: FetcherRequest = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(request).unwrap(), wire);
     }
 }
 
@@ -169,6 +189,8 @@ fn malformed_bodies_and_option_values_are_rejected() {
         json!({"max-age": 1}),
         json!({"jev": false}),
         json!({"jq": []}),
+        json!({"json": "name,url"}),
+        json!({"json": [false]}),
         json!({"output": {"Other": "jsonl"}}),
         json!({"other": "--flag"}),
     ] {

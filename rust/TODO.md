@@ -241,6 +241,13 @@ Unless marked reproduced, implementation findings are based on source review.
 
 ## P2: Protocols, execution, and service APIs
 
+- [ ] **Coordinate JSON property selection with relay endpoints.**
+  Endpoints must accept `options.json` as a nonempty array of nonempty property
+  names and apply Jev, then shallow property selection, then jq. Match the
+  `FilteringOptions::json` contract for objects, arrays, missing properties,
+  JSONL output, and errors. Deploy server support before advertising remote
+  `--json` support; the SDK transports the request without local evaluation.
+
 - [ ] **Honor Windows native proxy exclusions and protocol maps.**
   Reqwest 0.13.5/hyper-util 0.1.21 omit Windows per-protocol `ProxyServer` maps
   and `<local>` exclusions. A local matcher probe on 2026-10-17 reproduced no
@@ -499,7 +506,7 @@ Unless marked reproduced, implementation findings are based on source review.
   `../.config/readmer/rust/README.md.liquid` (`make -Bn README.md` fails).
   Both `lib/asimov-remote/` and `lib/asimov-telemetry/` lack the
   `examples.md.j2` required by the shared template and generated READMEs;
-  remote also lacks `package.metadata.readme.title`. On 2026-10-13,
+  remote also lacks `package.metadata.readme.title`. On 2026-10-18,
   `rake -B lib/asimov-remote/README.md` reproduced the missing-template error,
   returned success, and left a blank README. Restore the inputs.
   Per-crate `Rakefile` tasks depend only on the shared Jinja template, omitting

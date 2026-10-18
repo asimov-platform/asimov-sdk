@@ -38,6 +38,7 @@ fn fetcher_sorts_all_option_groups_and_preserves_array_order() {
             "maxAge": "90s 123ms 456us 789ns",
             "jev": "The name is \"Українське\"",
             "jq": ".",
+            "json": ["name", "@id"],
             "deadline": "1ns"
         }
     }))
@@ -46,6 +47,7 @@ fn fetcher_sorts_all_option_groups_and_preserves_array_order() {
         &request,
         concat!(
             r#"{"options":{"deadline":"1ns","jev":"The name is \"Українське\"","jq":".","#,
+            r#""json":["name","@id"],"#,
             r#""max-age":"1m 30s 123ms 456us 789ns","other":["--z","--a",""],"output":"jsonl"},"#,
             r#""urls":["https://example.com/z","https://example.com/a"]}"#,
         ),
@@ -67,6 +69,7 @@ fn lister_sorts_all_option_groups_and_preserves_array_order() {
             "max_age": "1ns",
             "jev": "name",
             "jq": ".",
+            "json": ["name", "@id"],
             "deadline": "1s"
         }
     }))
@@ -75,7 +78,8 @@ fn lister_sorts_all_option_groups_and_preserves_array_order() {
         &request,
         concat!(
             r#"{"options":{"after":"urn:entry:1","before":"urn:entry:9","deadline":"1s","#,
-            r#""jev":"name","jq":".","limit":10,"max-age":"1ns","offset":20,"#,
+            r#""jev":"name","jq":".","json":["name","@id"],"#,
+            r#""limit":10,"max-age":"1ns","offset":20,"#,
             r#""other":["--z","--a",""],"output":"csv","sort":"-name,first-name"},"#,
             r#""url":"https://example.com/collection"}"#,
         ),
