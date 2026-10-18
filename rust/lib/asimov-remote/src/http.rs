@@ -29,7 +29,7 @@
 //!
 //! ## Proxies and destination lookup
 //!
-//! Reqwest snapshots automatic proxy configuration at [`Executor::new`].
+//! The executor snapshots automatic proxy configuration at [`Executor::new`].
 //! Create a new executor after changing it. Uppercase environment variables
 //! are checked before their lowercase variants:
 //!
@@ -39,18 +39,40 @@
 //!   per-scheme settings. A usable per-scheme setting, including a native one,
 //!   takes precedence over the `ALL_PROXY` fallback.
 //! - `NO_PROXY` bypasses proxying for matching URL hosts. It accepts
-//!   comma-separated domains/subdomains, IP literals/CIDRs, or `*` (all hosts).
+//!   comma-separated domains/subdomains, IP literals/CIDRs, or `*` (DNS names).
+//!   The current matcher needs explicit IP rules for IP-literal URLs even with
+//!   `*`.
 //!   Matching happens before DNS; a CIDR rule does not resolve hostname URLs to
 //!   test their IPs.
 //!
-//! Native integration reads macOS static HTTP/HTTPS settings and the current
-//! user's Windows Internet Settings. Windows `ProxyOverride` fills an empty
-//! `NO_PROXY` setting. Reqwest's current integration does not support PAC/WPAD,
-//! macOS native bypass exceptions, Windows per-protocol `ProxyServer` maps, or
-//! the Windows `<local>` bypass token. Use explicit proxy URLs and `NO_PROXY`
-//! for those configurations; configure SOCKS using environment URLs. In CGI
-//! environments (`REQUEST_METHOD` is set), automatic proxy selection is
-//! disabled.
+//! On macOS, global static HTTP/HTTPS settings come from `SCDynamicStore`.
+//! Native `HTTPSProxy` is an HTTP CONNECT proxy for HTTPS destinations. When a
+//! native proxy is selected and `NO_PROXY` is empty, native bypass settings apply:
+//!
+//! - `ExceptionsList` accepts exact hosts/IPs, whole-label wildcards such as
+//!   `*.example.com` and `example.*`, and IPv4 CIDRs such as `169.254/16`.
+//!   Bare domains match only that host; a leading dot or `*.` requires a
+//!   subdomain. Use ASCII/punycode names and canonical, unbracketed IPv6 literals.
+//! - `ExcludeSimpleHostnames`, when `1` or `true`, excludes single-label DNS
+//!   names, not IP literals. `0` and `false` disable this rule. IPv4 CIDRs use
+//!   conventional masks, including `/0` and `/32`.
+//! - The presence of either bypass setting also excludes `localhost`,
+//!   `127.0.0.1`, and `::1`. This does not cover the whole loopback subnet.
+//!
+//! A native exclusion selects a direct connection, including when `ALL_PROXY`
+//! is set. Nonempty `NO_PROXY` replaces the native bypass rules. Native rules
+//! do not override an explicit per-scheme environment proxy. Native routing is
+//! fixed at construction for the executor's origin, shared by execution and
+//! identity discovery. Invalid native endpoints return [`Error::InvalidProxy`]
+//! with a setting name rather than its contents.
+//!
+//! Windows uses reqwest's current-user Internet Settings integration;
+//! `ProxyOverride` fills an empty `NO_PROXY` setting. Windows per-protocol
+//! `ProxyServer` maps and `<local>` exclusions are not supported yet. Native
+//! PAC/WPAD, SOCKS settings, proxy credential lookup, and macOS interface/VPN
+//! scopes are not implemented; use environment proxy URLs and `NO_PROXY` for
+//! explicit routing. In CGI environments (`REQUEST_METHOD` is set), automatic
+//! proxy selection is disabled.
 //!
 //! | Route | Destination hostname resolution |
 //! | --- | --- |
@@ -237,6 +259,8 @@ use serde::Serialize;
 pub use asimov_http::{DigestOptions, DigestPreference, SecretKey, Verifier};
 pub use asimov_id::PublicKey;
 
+#[cfg(target_os = "macos")]
+mod macos_proxy;
 mod remote_identity;
 use remote_identity::RemoteIdentityCache;
 mod timeouts;
@@ -264,6 +288,10 @@ pub enum Error {
     /// TLS configuration or platform certificate verifier initialization failure.
     #[error("failed to configure TLS: {0}")]
     Tls(#[from] rustls::Error),
+    /// Native settings could not be decoded or an enabled proxy is invalid.
+    /// Only the setting name is reported, never its contents.
+    #[error("invalid native proxy setting: {0}")]
+    InvalidProxy(&'static str),
     /// A configured local deadline expired. The remote may have accepted work.
     #[error("HTTP {phase} timed out after {duration:?}")]
     Timeout {
@@ -409,8 +437,9 @@ impl Executor {
     /// # Errors
     ///
     /// Returns an error for an invalid base URL, TLS verifier initialization
-    /// ([`Error::Tls`]), HTTP client setup, or failure to read or initialize the
-    /// local identity when no token is given.
+    /// ([`Error::Tls`]), native proxy settings ([`Error::InvalidProxy`]), HTTP
+    /// client setup, or failure to read or initialize the local identity when
+    /// no token is given.
     pub fn new(base_url: impl AsRef<str>, api_token: Option<&str>) -> Result<Self, Error> {
         Self::new_with_timeouts(base_url, api_token, TimeoutOptions::default())
     }
@@ -457,8 +486,11 @@ impl Executor {
         }
         base_url.set_query(None);
         base_url.set_fragment(None);
+        let builder = client_builder(timeouts)?;
+        #[cfg(target_os = "macos")]
+        let builder = macos_proxy::configure(builder, &base_url)?;
         Ok(Self {
-            client: client_builder(timeouts)?.build()?,
+            client: builder.build()?,
             base_url,
             api_token: match api_token {
                 Some(token) => SecretString::from(token),

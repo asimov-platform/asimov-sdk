@@ -19,7 +19,7 @@ default = ["all", "std"]
 all = ["http", "iroh", "serde"]
 std = ["asimov-flow?/std", "asimov-http?/std", "asimov-id?/std", "asimov-keyring?/std", "asimov-patterns/std", "clientele?/std", "rustls?/std", "serde?/std", "serde_json?/std"]
 # Transport adapters:
-http = ["std", "serde", "dep:asimov-flow", "asimov-flow/tokio", "dep:asimov-http", "dep:asimov-id", "dep:asimov-keyring", "dep:agent-detector", "dep:async-trait", "dep:base64", "dep:http-body-util", "dep:reqwest", "dep:rustls", "dep:rustls-platform-verifier", "dep:secrecy", "dep:serde_json", "dep:thiserror", "dep:tokio"]
+http = ["std", "serde", "dep:asimov-flow", "asimov-flow/tokio", "dep:asimov-http", "dep:asimov-id", "dep:asimov-keyring", "dep:agent-detector", "dep:async-trait", "dep:base64", "dep:http-body-util", "dep:plist", "dep:reqwest", "dep:rustls", "dep:rustls-platform-verifier", "dep:secrecy", "dep:serde_json", "dep:system-configuration", "dep:thiserror", "dep:tokio"]
 iroh = []
 # Transport-independent request encodings:
 jcs = ["std", "serde", "dep:serde_json", "dep:serde_json_canonicalizer"]
@@ -46,6 +46,10 @@ serde_json = { workspace = true, optional = true }
 serde_json_canonicalizer = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["sync", "time"], optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+plist = { workspace = true, optional = true }
+system-configuration = { workspace = true, optional = true }
 
 [dev-dependencies]
 base64 = { workspace = true, features = ["alloc"] }

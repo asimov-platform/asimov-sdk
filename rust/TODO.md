@@ -241,12 +241,12 @@ Unless marked reproduced, implementation findings are based on source review.
 
 ## P2: Protocols, execution, and service APIs
 
-- [ ] **Honor common native proxy exclusions and protocol maps.**
-  Reqwest 0.13.5/hyper-util 0.1.21 omit macOS bypass exceptions and Windows
-  per-protocol `ProxyServer` maps and `<local>` exclusions. A local matcher probe
-  on 2026-10-17 reproduced no proxy for `http=host:8080;https=host:8443` and a
-  proxied single-label host with `<local>` exclusions. Without an `ALL_PROXY`
-  fallback, an ignored map permits a direct connection.
+- [ ] **Honor Windows native proxy exclusions and protocol maps.**
+  Reqwest 0.13.5/hyper-util 0.1.21 omit Windows per-protocol `ProxyServer` maps
+  and `<local>` exclusions. A local matcher probe on 2026-10-17 reproduced no
+  proxy for `http=host:8080;https=host:8443` and a proxied single-label host with
+  `<local>` exclusions. Without an `ALL_PROXY` fallback, an ignored map permits
+  a direct connection.
 
   Dependency review, 2026-10-17 (published versions unless noted):
   - `async-http-proxy` 1.2.5 implements CONNECT over caller-supplied I/O, with
@@ -282,18 +282,16 @@ Unless marked reproduced, implementation findings are based on source review.
     a native C library with blocking per-URL resolution and ordered fallback
     results. Neither is a narrow static-settings fix.
 
-  Prefer a focused, construction-time settings adapter using safe
-  `system-configuration`/`windows-registry` APIs and reqwest's existing
-  connector. Keep native bypass dialects distinct from environment `NO_PROXY`;
-  preserve uppercase precedence, per-scheme native fill, `ALL_PROXY`, and CGI
-  behavior. Include macOS `ExcludeSimpleHostnames` and Windows protocol-map,
-  wildcard, and `<local>` fixtures. A map key `https=` selects destinations, not
-  TLS to the proxy: a bare endpoint there is still an HTTP CONNECT proxy.
-  Validate proxy schemes/endpoints before installing `Proxy::custom` and apply
-  exclusions inside the callback: local HTTP probes reproduced ignored attached
-  `.no_proxy(...)` and direct fallback for invalid callback URLs in reqwest
-  0.13.5. The isolated probes above ran on macOS with Rust 1.97.1; they do not
-  establish native Windows behavior.
+  Use a focused, origin-scoped settings adapter with safe `windows-registry`
+  APIs and reqwest's standard proxy API. Keep native bypass syntax distinct
+  from environment `NO_PROXY`; preserve uppercase precedence, per-scheme native
+  fill, `ALL_PROXY`, and CGI behavior. Include Windows protocol-map, wildcard,
+  and `<local>` fixtures. A map key `https=` selects destinations, not TLS to the
+  proxy: a bare endpoint there is still an HTTP CONNECT proxy.
+  Prefer a construction-time routing decision over `Proxy::custom`: local HTTP
+  probes reproduced ignored attached `.no_proxy(...)` and direct fallback for
+  invalid callback URLs in reqwest 0.13.5. The isolated probes above ran on macOS
+  with Rust 1.97.1; they do not establish native Windows behavior.
 
   Track [hyper-util's merged Windows-map fix][hyper-util-win-map] (unreleased
   after 0.1.21) and [open bypass-macro fix][hyper-util-win-bypass]. Source review
@@ -305,11 +303,20 @@ Unless marked reproduced, implementation findings are based on source review.
   endpoint, and cannot report resolution errors.
 
 - [ ] **Exercise remote DNS/proxy routing end to end before release.**
-  `lib/asimov-remote/src/http/tests/remote_identity.rs` explicitly disables proxies
-  in TLS fixtures. Add local HTTP forwarding/CONNECT, HTTPS-proxy, SOCKS5h
-  unresolved `.invalid` destination, and `NO_PROXY` cases. Verify proxy/service
-  credential separation and TLS verification through successful tunnels.
-  Isolate environment settings in subprocesses; avoid public DNS.
+  Extend coverage to HTTPS-proxy transport, authenticated forwarding/CONNECT,
+  SOCKS5h with an unresolved `.invalid` destination, and native Windows settings.
+  Verify proxy/service credential separation and TLS verification through
+  successful tunnels. Include `NO_PROXY=*` with IP literals: source review of
+  hyper-util 0.1.21 found wildcard matching only in its domain branch. Isolate
+  environment settings in subprocesses; avoid public DNS.
+
+- [ ] **Extend native proxy support beyond global static HTTP/HTTPS settings.**
+  Add macOS native SOCKS selection, credential lookup, and interface/VPN-scoped
+  settings with native fixtures. PAC/WPAD requires asynchronous per-URL
+  resolution, deadlines, and ordered fallback handling; avoid replaying POSTs
+  after an ambiguous failure. Distinguish unavailable native settings from an
+  empty configuration: `system-configuration`'s safe read API collapses both
+  cases to `None`.
 
 - [ ] **Expose explicit additional TLS roots for remote HTTPS.**
   Add constructor/builder support for custom CA certificates alongside platform
