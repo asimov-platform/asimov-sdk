@@ -275,6 +275,41 @@ async fn discovery_and_operations_reuse_http_and_tls_connections() {
 }
 
 #[tokio::test]
+async fn discovery_rate_limits_preserve_retry_after_and_allow_a_later_lookup() {
+    let discoveries = Arc::new(AtomicUsize::new(0));
+    let count = discoveries.clone();
+    let fixture = fixture(Version::HTTP_11, false, move |request| {
+        let count = count.clone();
+        async move {
+            let key = SecretKey::from_bytes(&[42; 32]);
+            if request.method() == "GET" {
+                if count.fetch_add(1, Ordering::SeqCst) == 0 {
+                    return Response::builder()
+                        .status(429)
+                        .header("retry-after", "0")
+                        .body(Bytes::new())
+                        .unwrap();
+                }
+                metadata(&key, "max-age=300")
+            } else {
+                signed_response(&key)
+            }
+        }
+    })
+    .await;
+    let error = timeout(DEADLINE, fixture.executor.post_jsonl("fetch", &json!({})))
+        .await
+        .unwrap()
+        .err()
+        .unwrap();
+    assert!(matches!(error, Error::RemoteKey(_)));
+    assert_eq!(error.retry_after(), Some(Duration::ZERO));
+    assert_eq!(discoveries.load(Ordering::SeqCst), 1);
+    consume(&fixture.executor, "fetch").await;
+    assert_eq!(discoveries.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
 async fn tls_rejects_untrusted_certificates_and_hostname_mismatches() {
     for trusted in [false, true] {
         let mut fixture = fixture(Version::HTTP_11, true, |_| async {

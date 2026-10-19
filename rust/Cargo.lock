@@ -1540,6 +1540,7 @@ dependencies = [
  "base64 0.23.1",
  "clientele",
  "http-body-util",
+ "httpdate",
  "hyper 1.12.0",
  "hyper-util",
  "plist",

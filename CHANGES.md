@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+### Added
+- asimov-remote: Expose HTTP 429 `Retry-After` delays for execution and identity
+  discovery
+
 ## 25.8.0 - 2026-10-18
 ### Added
 - asimov-patterns, asimov-remote: JSON property selection for fetch/list requests,

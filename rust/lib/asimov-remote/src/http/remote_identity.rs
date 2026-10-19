@@ -154,6 +154,7 @@ async fn discover(
         request.send(),
     )
     .await??;
+    super::rate_limit::check(&response)?;
     let unchanged = response.status() == StatusCode::NOT_MODIFIED;
     if !response.status().is_success() && !unchanged {
         return Err(format!(

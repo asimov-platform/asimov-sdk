@@ -341,6 +341,41 @@ async fn http_status_failure_is_a_startup_error() {
 }
 
 #[tokio::test]
+async fn rate_limits_preserve_retry_after_without_retrying() {
+    for (status, headers, delay) in [
+        (429, "Retry-After: 120\r\n", Some(Duration::from_secs(120))),
+        (429, "Retry-After: 0\r\n", Some(Duration::ZERO)),
+        (
+            429,
+            "Retry-After: Sun, 06 Nov 1994 08:49:37 GMT\r\n",
+            Some(Duration::ZERO),
+        ),
+        (429, "Retry-After: invalid\r\n", None),
+        (429, "Retry-After: 1\r\nRetry-After: 2\r\n", None),
+        (429, "", None),
+        (503, "Retry-After: 120\r\n", None),
+    ] {
+        let (url, request, resume, server) =
+            http1_server_with_headers(status, headers, b"", b"").await;
+        let executor = Executor::new(url, Some("token")).unwrap();
+        let error = timeout(DEADLINE, executor.post_jsonl("fetch", &json!({})))
+            .await
+            .unwrap()
+            .err()
+            .unwrap();
+        assert_eq!(error.retry_after(), delay, "{headers}");
+        if status == 429 {
+            assert!(matches!(error, Error::RateLimited { .. }));
+        } else {
+            assert!(matches!(error, Error::Http(_)));
+        }
+        request.await.unwrap();
+        drop(resume);
+        server.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn truncated_body_flushes_complete_records_then_reports_failure() {
     let (url, request, resume, server) = http1_server(200, b"{}\npartial", b"").await;
     let executor = Executor::new(url, Some("token")).unwrap();

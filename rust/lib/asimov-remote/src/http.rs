@@ -210,6 +210,11 @@
 //! establish an application-level success outcome. Dropping the stream releases
 //! the response, without promising cancellation of work on the remote server.
 //!
+//! HTTP 429 responses return [`Error::RateLimited`]. [`Error::retry_after`]
+//! exposes the server's delay in seconds or as an HTTP date, including during
+//! identity discovery. The caller decides whether to wait and execute again;
+//! each execution signs a fresh request. Missing or invalid delays are `None`.
+//!
 //! The endpoint must supply the RDF mapping profile expected by its graph
 //! consumers; this adapter's JSONL framing does not validate that mapping.
 //!
@@ -262,6 +267,7 @@ pub use asimov_id::PublicKey;
 
 #[cfg(target_os = "macos")]
 mod macos_proxy;
+mod rate_limit;
 mod remote_identity;
 use remote_identity::RemoteIdentityCache;
 mod timeouts;
@@ -316,6 +322,13 @@ pub enum Error {
     /// A redirection response, which is never followed automatically.
     #[error("HTTP redirect ({0}); configure the final service URL")]
     Redirect(reqwest::StatusCode),
+    /// HTTP 429, with the server's requested delay when usable.
+    #[error("HTTP 429 Too Many Requests")]
+    RateLimited {
+        /// Delay parsed from `Retry-After` at response-header receipt.
+        /// Missing, malformed, duplicate, or unrepresentable values are `None`.
+        retry_after: Option<Duration>,
+    },
     /// HTTP digest/signature construction or terminal verification failure.
     #[error(transparent)]
     Integrity(#[from] asimov_http::Error),
@@ -325,6 +338,19 @@ pub enum Error {
 }
 
 impl Error {
+    /// The HTTP 429 retry delay, including within [`Error::RemoteKey`].
+    ///
+    /// Supports nonnegative integer seconds and HTTP dates. Past dates yield
+    /// zero; missing, malformed, duplicate, or monotonic-clock-overflowing
+    /// values yield `None`. No retries or waiting are performed by the adapter.
+    pub fn retry_after(&self) -> Option<Duration> {
+        match self {
+            Self::RateLimited { retry_after } => *retry_after,
+            Self::RemoteKey(error) => error.downcast_ref::<Self>().and_then(Self::retry_after),
+            _ => None,
+        }
+    }
+
     /// Whether this error or its discovery/transport source is a timeout.
     pub fn is_timeout(&self) -> bool {
         match self {
@@ -686,6 +712,7 @@ impl Executor {
         if response.status().is_redirection() {
             return Err(Error::Redirect(response.status()));
         }
+        rate_limit::check(&response)?;
         let response = response.error_for_status()?;
         if let Some(verifier) = verifier {
             use asimov_http::body::{BodyError, VerifyingBody};
