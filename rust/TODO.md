@@ -269,6 +269,17 @@ Unless marked reproduced, implementation findings are based on source review.
   for redirects. Never reuse an origin-scoped policy for another origin.
   Skip `asimov-module-kit` while its embedded transport integration is deferred.
 
+- [ ] **Integrate shared proxy policy with Iroh-owned HTTP traffic.**
+  `lib/asimov-protocol/src/node.rs` builds `DefaultPreset`, which delegates to
+  Iroh's `N0` preset in `src/presets.rs`. This enables relay connections and
+  Pkarr HTTP address publication/resolution. Iroh 1.3 exposes one endpoint-wide
+  `proxy_url`; `proxy_from_env` uses HTTP-first precedence without shared bypass
+  handling. Pkarr constructs its own reqwest clients. Review relay and lookup
+  integration separately, including redirects and per-destination selection.
+  Resolve the `asimov-http` integrity dependency on `asimov-protocol` before
+  adding a reverse dependency for proxy policy. Cover each path with local
+  fixtures; SDK-owned HTTP client coverage does not exercise these transports.
+
 - [ ] **Deferred: shared proxy routing for embedded template Git downloads.**
   On hold pending an upstream safe transport hook; do not pursue `git2-rs`
   changes or replace embedded Git with a CLI dependency for this work.
