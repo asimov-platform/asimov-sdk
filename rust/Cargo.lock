@@ -1118,6 +1118,7 @@ version = "25.8.0"
 dependencies = [
  "asimov-core",
  "asimov-credit",
+ "asimov-http",
  "asimov-id",
  "asimov-kb",
  "asimov-nexus",

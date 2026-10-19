@@ -15,10 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: Expose shared proxy configuration, native discovery, and an
   origin-scoped reqwest adapter; available through SDK `http-proxy`/`http-client`
 ### Changed
+- asimov-cloud: Reject redirects for native account balance requests
 - asimov-module: Reject redirects when fetching the public module index
 - asimov-http: HTTP integrity APIs now require `integrity` (enabled by default);
   consumers enabling only `std` must add `integrity`
 ### Fixed
+- asimov-cloud: Use shared proxy discovery for native balance and credit checks
 - asimov-module: Use shared proxy routing for index downloads and return setup
   errors instead of panicking
 - asimov-telemetry: Use shared environment/native proxy routing for uploads

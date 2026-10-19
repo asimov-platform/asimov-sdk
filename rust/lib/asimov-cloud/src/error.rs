@@ -8,6 +8,11 @@ pub enum AccountBalanceError {
     #[error("HTTP request failed: {0}")]
     FailedRequest(#[from] reqwest::Error),
 
+    /// Native proxy discovery failed or the target origin is invalid.
+    #[cfg(not(target_family = "wasm"))]
+    #[error(transparent)]
+    Proxy(#[from] asimov_http::proxy::Error),
+
     #[error("unexpected HTTP response status: {0}")]
     UnexpectedResponse(reqwest::StatusCode),
 

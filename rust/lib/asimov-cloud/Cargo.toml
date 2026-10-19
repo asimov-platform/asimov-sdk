@@ -25,6 +25,7 @@ all = ["tracing"]
 std = [
     "asimov-core/std",
     "asimov-credit/std",
+    "asimov-http/std",
     "asimov-id/std",
     "asimov-kb/std",
     "asimov-nexus/std",
@@ -51,6 +52,7 @@ derive_more = { version = "2", features = ["display"] }
 thiserror.workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
+asimov-http = { workspace = true, features = ["reqwest"] }
 reqwest = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "rt"] }
 
@@ -58,6 +60,9 @@ tokio = { workspace = true, features = ["io-util", "rt"] }
 reqwest = { workspace = true, features = ["json"] }
 tokio = { workspace = true, features = ["rt"] }
 tokio_with_wasm = { version = "0.9", features = ["rt"] }
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "net", "io-util", "time"] }
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]
