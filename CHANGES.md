@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- asimov-installer: Use automatic proxy routing with a custom registry via
+  `Installer::with_registry`
 - asimov-remote: Expose HTTP 429 `Retry-After` delays for execution and identity
   discovery
 - asimov-remote: Discover static GNOME/KDE proxies and native macOS SOCKS proxies
@@ -20,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: HTTP integrity APIs now require `integrity` (enabled by default);
   consumers enabling only `std` must add `integrity`
 ### Fixed
+- asimov-installer: Use shared proxy discovery for GitHub requests and redirects
 - asimov-cloud: Use shared proxy discovery for native balance and credit checks
 - asimov-module: Use shared proxy routing for index downloads and return setup
   errors instead of panicking

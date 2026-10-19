@@ -14,25 +14,27 @@ use error::*;
 use asimov_registry::Registry;
 
 mod github;
+mod http;
 mod platform;
+#[cfg(test)]
+mod test_support;
 
+/// Installs modules using GitHub metadata and streamed release downloads.
+///
+/// The default transport uses shared environment/native proxy discovery for
+/// each origin, including redirect destinations. It follows at most ten
+/// redirects per GET/HEAD and uses 10-second connection and 30-second read
+/// timeouts. Clones share a cache of at most sixteen origin-specific clients;
+/// each snapshots proxy settings when constructed and is reused until eviction.
 #[derive(Clone, Debug)]
 pub struct Installer {
-    client: reqwest::Client,
+    client: http::Client,
     registry: Registry,
 }
 
 impl Default for Installer {
     fn default() -> Self {
-        // TODO: retry support
-        let client = reqwest::Client::builder()
-            .user_agent("asimov-module-installer")
-            .connect_timeout(std::time::Duration::from_secs(10))
-            .read_timeout(std::time::Duration::from_secs(30))
-            .build()
-            .expect("Failed to build HTTP client");
-        let registry = Registry::default();
-        Self::new(client, registry)
+        Self::with_registry(Registry::default())
     }
 }
 
@@ -53,8 +55,23 @@ struct Preinstalled {
 }
 
 impl Installer {
+    /// Uses a caller-configured client for every GitHub request. The caller owns
+    /// its proxy, redirect, TLS, and timeout policy across all destinations.
+    /// Use [`Self::with_registry`] for automatic per-origin proxy routing.
     pub fn new(client: reqwest::Client, registry: Registry) -> Self {
-        Self { client, registry }
+        Self {
+            client: client.into(),
+            registry,
+        }
+    }
+
+    /// Uses automatic proxy routing with a custom registry. Proxy discovery and
+    /// client construction happen on demand, with failures returned by requests.
+    pub fn with_registry(registry: Registry) -> Self {
+        Self {
+            client: http::Client::default(),
+            registry,
+        }
     }
 
     /// ```rust,no_run

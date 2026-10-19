@@ -25,6 +25,8 @@ all = ["cli", "tracing"]
 cli = ["std", "dep:clientele", "clientele?/clap"]
 std = [
   "asimov-core/std",
+  "dep:asimov-http",
+  "asimov-http/reqwest",
   "dep:asimov-env",
   "asimov-env?/std",
   "dep:getenv",
@@ -63,6 +65,7 @@ zip = { workspace = true, features = ["deflate"] }
 
 # Optional dependencies:
 asimov-env = { workspace = true, optional = true }
+asimov-http = { workspace = true, optional = true }
 clientele = { workspace = true, optional = true }
 getenv = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true, features = ["attributes"] }

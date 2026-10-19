@@ -121,6 +121,12 @@ mod common {
     pub enum HttpError {
         #[error("HTTP request failed: {0}")]
         Http(#[from] reqwest::Error),
+        /// Shared proxy discovery or target-origin validation failed.
+        #[error(transparent)]
+        Proxy(#[from] asimov_http::proxy::Error),
+        /// The redirect chain exceeded its limit or contained an invalid hop.
+        #[error("HTTP redirect failed: {0}")]
+        Redirect(&'static str),
         #[error("HTTP status code was not successful: {0}")]
         NotSuccess(reqwest::StatusCode),
     }

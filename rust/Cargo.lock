@@ -1292,6 +1292,7 @@ version = "25.8.0"
 dependencies = [
  "asimov-core",
  "asimov-env",
+ "asimov-http",
  "asimov-huggingface",
  "asimov-module",
  "asimov-registry",

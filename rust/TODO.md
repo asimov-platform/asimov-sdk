@@ -132,10 +132,10 @@ Unless marked reproduced, implementation findings are based on source review.
   indefinitely. Track the dependency chain; test cycles and diamond
   dependencies.
 
-- [ ] **Validate GitHub release redirects and cover asset fallback.**
+- [ ] **Validate GitHub release redirect results.**
   In `lib/asimov-installer/src/installer/github.rs`, redirect lookup accepts the
-  final path segment without validating status or tag-route shape. Test failed
-  redirects and asset fallback using injectable local release endpoints.
+  final path segment without validating status or tag-route shape. Cover
+  unsuccessful and non-tag final destinations with local release fixtures.
 
 - [ ] **Coordinate low-level registry mutations and read-time recovery.**
   Extend publication locking to legacy migration, enable/disable, and low-level
@@ -274,10 +274,6 @@ Unless marked reproduced, implementation findings are based on source review.
 
 - [ ] **Share automatic proxy routing with other SDK HTTP clients.**
   Adopt `asimov-http::proxy` in separate patches (source audit 2026-10-19):
-  - Installer (`lib/asimov-installer/src/installer{,/github}.rs`): add shared
-    per-destination resolution and redirect handling before migrating GitHub
-    metadata, manifests, checksums, and streamed release assets. Preserve
-    timeouts, pool reuse, cancellation, and explicit discovery errors.
   - Hugging Face (`lib/asimov-huggingface/src/ensure.rs`): adapt or replace
     `hf-hub`'s internal ureq clients, including metadata and redirected downloads.
   - OpenAI forwarding (`lib/asimov-proxy/src/{openai,proxy_config}.rs`): replace
