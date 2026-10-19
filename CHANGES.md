@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-remote: Discover static GNOME/KDE proxies and native macOS SOCKS proxies
 - asimov-remote: Configure automatic, direct, or explicit proxies and bypass
   overrides per executor, alongside transport timeouts
+- asimov-http: Expose shared proxy configuration, native discovery, and an
+  origin-scoped reqwest adapter; available through SDK `http-proxy`/`http-client`
+### Changed
+- asimov-http: HTTP integrity APIs now require `integrity` (enabled by default);
+  consumers enabling only `std` must add `integrity`
 ### Fixed
 - asimov-remote: Honor Windows proxy protocol maps and native bypass rules
 - asimov-remote: Bypass all hosts with `NO_PROXY=*`, including IP addresses

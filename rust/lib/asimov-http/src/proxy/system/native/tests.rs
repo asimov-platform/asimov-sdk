@@ -225,7 +225,7 @@ fn linux_desktop_settings_are_read_from_isolated_native_stores() {
             .unwrap();
         }
         let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "http::proxy::native::tests::linux_desktop_settings_are_read_from_isolated_native_stores", "--nocapture"])
+            .args(["--exact", "proxy::system::native::tests::linux_desktop_settings_are_read_from_isolated_native_stores", "--nocapture"])
             .env(CHILD, case)
             .env("HOME", root.path())
             .env("XDG_CONFIG_HOME", &config)

@@ -4,7 +4,7 @@
 //! enabled static proxy remains usable alongside an unevaluated PAC/WPAD setup.
 
 use super::{Environment, Error, Route, native};
-use reqwest::Url;
+use url::Url;
 use windows_registry::{CURRENT_USER, Key, LOCAL_MACHINE};
 
 const SETTINGS: &str = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings";

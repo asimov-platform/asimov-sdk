@@ -6,7 +6,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-description = "HTTP message integrity with SHA-256 digests and Ed25519 signatures"
+description = "HTTP message integrity and shared client proxy configuration"
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
@@ -16,13 +16,19 @@ publish.workspace = true
 
 [features]
 default = ["all", "std"]
-all = []
+all = ["integrity"]
 std = [
-    "base64/std", "sha2/std", "dep:thiserror", "thiserror/std", "dep:asimov-protocol",
+    "base64/std", "sha2/std", "thiserror?/std", "asimov-protocol?/std",
+    "bytes?/std", "url?/std",
+]
+integrity = [
+    "std", "dep:thiserror", "dep:asimov-protocol",
     "asimov-protocol/std", "dep:bs58", "dep:bytes", "bytes/std",
     "dep:getrandom", "dep:http", "dep:http-body", "dep:sfv", "dep:url",
-    "url/std",
 ]
+proxy = ["dep:thiserror", "dep:url"]
+system-proxy = ["std", "proxy", "dep:plist", "dep:proxy-watch", "dep:system-configuration", "dep:windows-registry"]
+reqwest = ["system-proxy", "dep:reqwest", "reqwest/socks", "dep:tokio", "tokio/rt"]
 
 [dependencies]
 base64 = { workspace = true, features = ["alloc"] }
@@ -36,24 +42,42 @@ http = { workspace = true, optional = true }
 http-body = { workspace = true, optional = true }
 sfv = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+plist = { workspace = true, optional = true }
+system-configuration = { workspace = true, optional = true }
+
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
+proxy-watch = { workspace = true, features = ["resolve", "linux-gnome", "linux-kde"], optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-registry = { workspace = true, optional = true }
 
 [dev-dependencies]
 async-stream.workspace = true
 http-body-util.workspace = true
 hyper = { workspace = true, features = ["client", "server", "http1", "http2"] }
 hyper-util = { workspace = true, features = ["server-auto", "tokio"] }
-tokio = { workspace = true, features = ["macros", "rt", "net", "sync", "time"] }
+proxy-watch = { workspace = true, features = ["resolve"] }
+rcgen = { workspace = true, features = ["crypto", "ring"] }
+rustls = { workspace = true, features = ["ring", "std", "tls12"] }
+rustls-platform-verifier.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["io-util", "macros", "rt", "net", "sync", "time"] }
+tokio-rustls.workspace = true
 
 [[example]]
 name = "client"
-required-features = ["std"]
+required-features = ["integrity"]
 
 [[example]]
 name = "server"
-required-features = ["std"]
+required-features = ["integrity"]
 
 [package.metadata.readme]
-title = "ASIMOV.rs: HTTP Integrity"
+title = "ASIMOV.rs: HTTP Support"
 
 [package.metadata.docs.rs]
 all-features = true

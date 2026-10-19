@@ -54,6 +54,7 @@ std = [
     "asimov-env?/std",
     "asimov-flow?/std",
     "asimov-http?/std",
+    "asimov-http?/integrity",
     "asimov-id?/std",
     "asimov-installer?/std",
     "asimov-kb?/std",
@@ -94,6 +95,8 @@ telemetry = ["dep:asimov-telemetry"]
 derive = []
 
 # Integrations:
+http-client = ["http", "asimov-http/reqwest"]
+http-proxy = ["http", "asimov-http/proxy"]
 jcs = ["asimov-remote?/jcs"]
 serde = ["asimov-core?/serde"]
 tokio = ["asimov-flow?/tokio"]

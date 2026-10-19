@@ -29,6 +29,9 @@
 //!
 //! ## Proxies and destination lookup
 //!
+//! Proxy options, discovery, and reqwest configuration are shared through
+//! [`asimov_http::proxy`]. This adapter keeps requests on its configured origin.
+//!
 //! [`Executor::new_with_options`] accepts [`TransportOptions`] with an
 //! executor-local [`ProxyOptions`] policy:
 //!
@@ -312,10 +315,7 @@ use serde::Serialize;
 pub use asimov_http::{DigestOptions, DigestPreference, SecretKey, Verifier};
 pub use asimov_id::PublicKey;
 
-#[cfg(target_os = "macos")]
-mod macos_proxy;
-mod proxy;
-pub use proxy::{ProxyMode, ProxyOptions};
+pub use asimov_http::proxy::{ProxyMode, ProxyOptions};
 mod rate_limit;
 mod remote_identity;
 use remote_identity::RemoteIdentityCache;
@@ -437,6 +437,18 @@ impl Error {
                 .and_then(Self::timeout_phase)
                 .or_else(|| error.downcast_ref::<reqwest::Error>().and_then(connection)),
             _ => None,
+        }
+    }
+}
+
+impl From<asimov_http::proxy::Error> for Error {
+    fn from(error: asimov_http::proxy::Error) -> Self {
+        use asimov_http::proxy::Error as ProxyError;
+        match error {
+            ProxyError::InvalidProxy(setting) => Self::InvalidProxy(setting),
+            ProxyError::InvalidProxyUrl(reason) => Self::InvalidProxyUrl(reason),
+            ProxyError::UnsupportedProxy(source) => Self::UnsupportedProxy(source),
+            ProxyError::InvalidOrigin(reason) => Self::InvalidBaseUrl(reason.into()),
         }
     }
 }
@@ -630,8 +642,8 @@ impl Executor {
         }
         base_url.set_query(None);
         base_url.set_fragment(None);
-        let proxy = proxy::resolve(&base_url, &options.proxy)?;
-        let builder = proxy.apply(client_builder(timeouts)?)?;
+        let proxy = asimov_http::proxy::OriginProxy::resolve(&base_url, &options.proxy)?;
+        let builder = proxy.configure_reqwest(client_builder(timeouts)?)?;
         Ok(Self {
             client: builder.build()?,
             base_url,

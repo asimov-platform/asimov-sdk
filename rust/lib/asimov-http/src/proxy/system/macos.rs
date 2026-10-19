@@ -6,14 +6,10 @@
 //! ignores attached `NoProxy` rules. Discovery and execution use the same origin,
 //! and redirects are disabled, so native bypass decisions can be made once.
 
-use super::{
-    Error,
-    proxy::{Environment, Route},
-};
+use super::{Environment, Error, Route};
 use alloc::{format, string::String, vec, vec::Vec};
 use core::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use plist::{Dictionary, Value};
-use reqwest::Url;
 use system_configuration::{
     core_foundation::{
         base::{CFType, TCFType},
@@ -23,6 +19,7 @@ use system_configuration::{
     },
     dynamic_store::SCDynamicStoreBuilder,
 };
+use url::Url;
 
 pub(super) fn read(url: &Url, env: &Environment) -> Result<Route, Error> {
     select(url, env, read_system)
@@ -33,7 +30,7 @@ fn select(
     env: &Environment,
     read: impl FnOnce() -> Result<Option<Dictionary>, Error>,
 ) -> Result<Route, Error> {
-    super::proxy::select(env, || select_native(url, env, read))
+    super::select(env, || select_native(url, env, read))
 }
 
 fn select_native(
@@ -64,7 +61,7 @@ fn select_native(
 }
 
 fn read_system() -> Result<Option<Dictionary>, Error> {
-    let Some(settings) = SCDynamicStoreBuilder::new("asimov-remote")
+    let Some(settings) = SCDynamicStoreBuilder::new("asimov-http")
         .build()
         .and_then(|store| store.get_proxies())
     else {

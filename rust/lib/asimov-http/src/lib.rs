@@ -1,11 +1,26 @@
 // This is free and unencumbered software released into the public domain.
 
-//! Shared HTTP integrity for clients and servers.
+//! Shared HTTP integrity and client proxy configuration.
 //!
-//! SHA-256 is the sole digest algorithm (RFC 9530). With `std`, this crate
+//! SHA-256 is the sole digest algorithm (RFC 9530). With `integrity`, this crate
 //! implements RFC 9421 Ed25519 signatures using the protocol crate's keys,
 //! HTTP message-component canonicalization, and frame-preserving body adapters.
-//! Without `std`, SHA-256 hashing and digest-field encoding remain available.
+//! SHA-256 hashing and digest-field encoding are also available without `std`.
+//!
+//! # Features
+//!
+//! - `integrity` (default): signatures, message contexts, and body adapters;
+//!   implies `std`. Callers previously using only `std` must enable `integrity`
+//!   to retain these APIs.
+//! - `proxy`: proxy options, URL validation, and proxy errors with `no_std` and
+//!   alloc support.
+//! - `system-proxy`: origin-scoped environment/native discovery; implies `std`
+//!   and `proxy`.
+//! - `reqwest`: the origin-scoped reqwest proxy adapter; implies `system-proxy`.
+//!
+//! Proxy features do not enable integrity or its protocol/Iroh dependencies.
+//! Use `default-features = false` to select them independently. Native proxy
+//! readers and the reqwest adapter are absent from integrity-only builds.
 //!
 //! Signature processing operates on an explicit message context, independently
 //! of HTTP versions and body types. Servers supply the externally visible target
@@ -21,7 +36,7 @@
 //! # Buffered requests
 //!
 //! ```no_run
-//! # #[cfg(feature = "std")] {
+//! # #[cfg(feature = "integrity")] {
 //! use asimov_http::{
 //!     SecretKey, SignatureInput, SignatureParams, Signer, VerificationPolicy,
 //!     REQUEST_SIGNATURE_TAG, body::sign_request, http::Request,
@@ -47,7 +62,7 @@
 //! # Streaming responses
 //!
 //! ```no_run
-//! # #[cfg(feature = "std")] {
+//! # #[cfg(feature = "integrity")] {
 //! use asimov_http::{
 //!     Component, FieldSection, SecretKey, SignatureInput, SignatureParams,
 //!     Signer, body::SigningBody, http::Response,
@@ -85,30 +100,33 @@ extern crate std;
 mod digest;
 pub use digest::{ContentDigest, DigestOptions, DigestPreference};
 
-#[cfg(feature = "std")]
+#[cfg(feature = "integrity")]
 mod error;
-#[cfg(feature = "std")]
+#[cfg(feature = "integrity")]
 pub use error::Error;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "integrity")]
 mod fields;
-#[cfg(feature = "std")]
+#[cfg(feature = "integrity")]
 mod message;
-#[cfg(feature = "std")]
+#[cfg(feature = "integrity")]
 pub use message::{Component, FieldSection, Message, StructuredFieldType};
 
-#[cfg(feature = "std")]
+#[cfg(feature = "integrity")]
 mod signature;
-#[cfg(feature = "std")]
+#[cfg(feature = "integrity")]
 pub use signature::{
     REQUEST_SIGNATURE_TAG, SignatureFields, SignatureInput, SignatureParams, Signer,
     VerificationPolicy, VerifiedSignature, Verifier, key_id,
 };
 
-#[cfg(feature = "std")]
+#[cfg(feature = "integrity")]
 pub use asimov_protocol::{EndpointId as VerifyingKey, SecretKey};
-#[cfg(feature = "std")]
+#[cfg(feature = "integrity")]
 pub use http;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "integrity")]
 pub mod body;
+
+#[cfg(feature = "proxy")]
+pub mod proxy;

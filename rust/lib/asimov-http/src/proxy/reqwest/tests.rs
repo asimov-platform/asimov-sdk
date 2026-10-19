@@ -1,8 +1,11 @@
 // This is free and unencumbered software released into the public domain.
 
 use super::*;
-use crate::http::{Executor, StreamExt, TimeoutOptions, TransportOptions, client_builder};
-use alloc::{sync::Arc, vec, vec::Vec};
+use crate::proxy::{
+    ProxyMode, ProxyOptions,
+    test_support::{client_builder, tls_config},
+};
+use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
 use core::{convert::Infallible, time::Duration};
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, body::Bytes, service::service_fn};
@@ -12,131 +15,9 @@ use tokio::{
     net::TcpListener,
     time::timeout,
 };
+use url::Url;
 
 const DEADLINE: Duration = Duration::from_secs(10);
-
-mod configuration;
-
-#[test]
-fn overrides_and_cgi_skip_native_discovery() {
-    for (env, expected) in [
-        (
-            Environment {
-                proxy: "socks5h://proxy.invalid".into(),
-                ..Environment::default()
-            },
-            Route::Automatic,
-        ),
-        (
-            Environment {
-                proxy: "unsupported://proxy.invalid".into(),
-                ..Environment::default()
-            },
-            Route::Automatic,
-        ),
-        (
-            Environment {
-                no_proxy: "other.invalid, *".into(),
-                ..Environment::default()
-            },
-            Route::Direct,
-        ),
-        (
-            Environment {
-                cgi: true,
-                ..Environment::default()
-            },
-            Route::Direct,
-        ),
-    ] {
-        assert_eq!(
-            select(&env, || panic!("native settings must not be read")).unwrap(),
-            expected
-        );
-    }
-}
-
-#[test]
-fn environment_urls_keep_transport_dns_modes_and_credentials() {
-    for scheme in ["http", "https", "socks4", "socks4a", "socks5", "socks5h"] {
-        let url = environment_proxy(&format!(
-            "{scheme}://User%40Realm:p%3Aa%25ss+@proxy.invalid:1080"
-        ))
-        .unwrap();
-        assert_eq!(url.scheme(), scheme);
-        assert_eq!(url.username(), "User%40Realm");
-        assert_eq!(url.password(), Some("p%3Aa%25ss+"));
-    }
-    assert_eq!(
-        environment_proxy("proxy.invalid:3128").unwrap().scheme(),
-        "http"
-    );
-    for value in [
-        "",
-        "ftp://proxy.invalid",
-        "http://proxy.invalid:bad",
-        "http://",
-    ] {
-        assert!(environment_proxy(value).is_none());
-    }
-}
-
-#[test]
-fn environment_capture_uses_uppercase_first_including_empty_values() {
-    const CHILD: &str = "ASIMOV_PROXY_ENV_TEST";
-    if let Ok(case) = std::env::var(CHILD) {
-        let http = Environment::capture(&Url::parse("http://service.invalid").unwrap());
-        let https = Environment::capture(&Url::parse("https://service.invalid").unwrap());
-        if case == "empty" {
-            assert!(http.proxy.is_empty() && https.proxy.is_empty());
-            assert!(http.all_proxy.is_empty() && http.no_proxy.is_empty());
-            assert!(http.cgi);
-        } else {
-            assert_eq!(http.proxy, format!("{case}-http"));
-            assert_eq!(https.proxy, format!("{case}-https"));
-            assert_eq!(http.all_proxy, format!("{case}-all"));
-            assert_eq!(http.no_proxy, format!("{case}-no"));
-            assert!(!http.cgi);
-        }
-        return;
-    }
-    for case in ["upper", "lower", "empty"] {
-        let mut child = std::process::Command::new(std::env::current_exe().unwrap());
-        child.args(["--exact", "http::proxy::tests::environment_capture_uses_uppercase_first_including_empty_values", "--nocapture"])
-            .env(CHILD, case).env_remove("REQUEST_METHOD");
-        for (upper, lower, suffix) in [
-            ("HTTP_PROXY", "http_proxy", "http"),
-            ("HTTPS_PROXY", "https_proxy", "https"),
-            ("ALL_PROXY", "all_proxy", "all"),
-            ("NO_PROXY", "no_proxy", "no"),
-        ] {
-            child.env_remove(upper).env_remove(lower);
-            if case == "lower" || !cfg!(windows) {
-                child.env(lower, format!("lower-{suffix}"));
-            }
-            if case != "lower" {
-                child.env(
-                    upper,
-                    if case == "empty" {
-                        String::new()
-                    } else {
-                        format!("upper-{suffix}")
-                    },
-                );
-            }
-        }
-        if case == "empty" {
-            child.env("REQUEST_METHOD", "");
-        }
-        let output = child.output().unwrap();
-        assert!(
-            output.status.success(),
-            "{case}: {}\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-}
 
 trait Io: AsyncRead + AsyncWrite + Send + Unpin {}
 impl<T: AsyncRead + AsyncWrite + Send + Unpin> Io for T {}
@@ -174,7 +55,7 @@ fn tls() -> (
         .unwrap();
         tokio_rustls::TlsAcceptor::from(Arc::new(config))
     };
-    let mut client = crate::http::tls_config().unwrap();
+    let mut client = tls_config().unwrap();
     let verifier = rustls_platform_verifier::Verifier::new_with_extra_roots(
         [root.der().clone()],
         client.crypto_provider().clone(),
@@ -302,7 +183,7 @@ async fn serve(io: Stream, forwarded: bool, proxy_auth: bool) {
 }
 
 #[tokio::test]
-async fn authenticated_http_https_and_socks_proxies_carry_discovery_and_execution() {
+async fn authenticated_http_https_and_socks_proxies_carry_requests() {
     use base64::Engine as _;
     for scheme in ["http", "https", "socks4", "socks4a", "socks5", "socks5h"] {
         for secure in [false, true] {
@@ -357,18 +238,17 @@ async fn authenticated_http_https_and_socks_proxies_carry_discovery_and_executio
                 address.port()
             ))
             .unwrap();
-            let mut executor = Executor::new(&url, Some("service-token")).unwrap();
-            executor.client = resolve_options(
+            let url = Url::parse(&url).unwrap();
+            let client = OriginProxy::resolve(
+                &url,
                 &ProxyOptions {
                     mode: ProxyMode::Explicit(proxy.as_str().into()),
                     no_proxy: Some(String::new()),
                 },
-                || panic!("explicit proxy and bypass must not read the environment"),
-                |_| panic!("explicit proxy must not read native settings"),
             )
             .unwrap()
-            .apply(
-                client_builder(TimeoutOptions::default())
+            .configure_reqwest(
+                client_builder()
                     .unwrap()
                     .tls_backend_preconfigured(tls)
                     .resolve("proxy.invalid", address),
@@ -377,17 +257,33 @@ async fn authenticated_http_https_and_socks_proxies_carry_discovery_and_executio
             .build()
             .unwrap();
             timeout(DEADLINE, async {
-                executor.remote_public_key().await.unwrap();
-                let mut response = executor
-                    .post_jsonl("fetch", &serde_json::json!({}))
+                client
+                    .get(url.join("/.well-known/jwks.json").unwrap())
+                    .send()
+                    .await
+                    .unwrap()
+                    .bytes()
                     .await
                     .unwrap();
-                assert!(response.next().await.unwrap().is_ok());
-                assert!(response.next().await.is_none());
+                let body = client
+                    .post(url.join("fetch").unwrap())
+                    .bearer_auth("service-token")
+                    .header(
+                        "content-digest",
+                        crate::ContentDigest::new(b"{}").to_field_value(),
+                    )
+                    .body("{}")
+                    .send()
+                    .await
+                    .unwrap()
+                    .bytes()
+                    .await
+                    .unwrap();
+                assert_eq!(body, b"{}\n".as_slice());
             })
             .await
             .unwrap_or_else(|_| panic!("{scheme}, secure={secure} timed out"));
-            drop(executor);
+            drop(client);
             timeout(DEADLINE, task).await.unwrap().unwrap();
         }
     }
@@ -421,17 +317,24 @@ async fn proxy_and_tunneled_origin_tls_validate_their_own_hostnames() {
             address.port()
         ))
         .unwrap();
-        let client = configure_with(
-            client_builder(TimeoutOptions::default())
-                .unwrap()
-                .tls_backend_preconfigured(tls)
-                .resolve("proxy.invalid", address),
-            &Environment::default(),
-            || Ok(Route::Native(proxy)),
+        let policy = OriginProxy::resolve(
+            &Url::parse("https://service.invalid/").unwrap(),
+            &ProxyOptions {
+                mode: ProxyMode::Explicit(proxy.as_str().into()),
+                no_proxy: Some(String::new()),
+            },
         )
-        .unwrap()
-        .build()
         .unwrap();
+        let client = policy
+            .configure_reqwest(
+                client_builder()
+                    .unwrap()
+                    .tls_backend_preconfigured(tls)
+                    .resolve("proxy.invalid", address),
+            )
+            .unwrap()
+            .build()
+            .unwrap();
         let error = timeout(DEADLINE, client.get("https://service.invalid/").send())
             .await
             .unwrap()
@@ -442,60 +345,38 @@ async fn proxy_and_tunneled_origin_tls_validate_their_own_hostnames() {
 }
 
 #[tokio::test]
-async fn environment_fallback_and_bypass_control_the_actual_connection() {
-    for (per_scheme, bypass, native, cgi, proxied) in [
-        ("selected", "", Route::Automatic, false, true),
-        ("", "", Route::Automatic, false, true),
-        (
-            "unsupported://bad.invalid",
-            "",
-            Route::Automatic,
-            false,
-            true,
-        ),
-        ("", "", Route::Direct, false, false),
-        ("", "*", Route::Automatic, false, false),
-        ("", "127.0.0.0/8", Route::Automatic, false, false),
-        ("", "", Route::Automatic, true, false),
-    ] {
-        let origin = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let proxy = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let url = format!("http://{}/", origin.local_addr().unwrap());
-        let proxy_url = format!("http://{}", proxy.local_addr().unwrap());
-        let env = Environment {
-            proxy: if per_scheme == "selected" {
-                proxy_url.clone()
-            } else {
-                per_scheme.into()
-            },
-            all_proxy: if per_scheme == "selected" {
-                "http://127.0.0.1:1".into()
-            } else {
-                proxy_url
-            },
-            no_proxy: bypass.into(),
-            cgi,
-            ..Environment::default()
-        };
-        let client = configure_with(reqwest::Client::builder(), &env, || {
-            assert_ne!(per_scheme, "selected");
-            Ok(native)
-        })
+async fn origin_scoped_configuration_disables_redirects() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
+    let policy = OriginProxy::resolve(
+        &url,
+        &ProxyOptions {
+            mode: ProxyMode::Direct,
+            no_proxy: None,
+        },
+    )
+    .unwrap();
+    let client = policy
+        .configure_reqwest(
+            reqwest::Client::builder().redirect(reqwest::redirect::Policy::limited(10)),
+        )
         .unwrap()
         .build()
         .unwrap();
-        let request = tokio::spawn(async move { client.get(url).send().await.unwrap() });
-        let chosen = if proxied { &proxy } else { &origin };
-        let (socket, _) = timeout(DEADLINE, chosen.accept()).await.unwrap().unwrap();
-        let mut io: Stream = alloc::boxed::Box::new(socket);
-        let header = headers(&mut io).await;
-        assert_eq!(header.starts_with("GET http://"), proxied);
-        io.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+    let task = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.unwrap();
+        let mut io: Stream = Box::new(socket);
+        headers(&mut io).await;
+        io.write_all(b"HTTP/1.1 302 Found\r\nLocation: http://unresolved.invalid/\r\nContent-Length: 0\r\n\r\n").await.unwrap();
+    });
+    policy.check_origin(&url).unwrap();
+    assert_eq!(
+        timeout(DEADLINE, client.get(url).send())
             .await
-            .unwrap();
-        assert_eq!(
-            timeout(DEADLINE, request).await.unwrap().unwrap().status(),
-            200
-        );
-    }
+            .unwrap()
+            .unwrap()
+            .status(),
+        302
+    );
+    timeout(DEADLINE, task).await.unwrap().unwrap();
 }

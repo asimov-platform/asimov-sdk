@@ -39,8 +39,23 @@ pub use asimov_flow as flow;
 #[cfg(feature = "id")]
 pub use asimov_id as id;
 
-/// Shared SHA-256 HTTP digests and Ed25519 message signatures.
-/// Enable `std` for HTTP field processing and streaming body adapters.
+/// Shared HTTP integrity and optional client proxy support.
+///
+/// `std,http` includes signatures and body adapters. `http-proxy` exposes
+/// alloc-only proxy options; `http-client` adds native discovery and the reqwest
+/// adapter. With defaults disabled, those proxy flags need not enable the SDK's
+/// `std`/integrity bundle.
+///
+/// ```
+/// # #[cfg(feature = "http-proxy")] {
+/// use asimov_sdk::http::proxy::{ProxyMode, ProxyOptions};
+/// let options = ProxyOptions {
+///     mode: ProxyMode::Direct,
+///     ..ProxyOptions::default()
+/// };
+/// assert_eq!(options.mode, ProxyMode::Direct);
+/// # }
+/// ```
 #[cfg(feature = "http")]
 pub use asimov_http as http;
 

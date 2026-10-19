@@ -1236,11 +1236,21 @@ dependencies = [
  "http-body-util",
  "hyper 1.12.0",
  "hyper-util",
+ "plist",
+ "proxy-watch",
+ "rcgen",
+ "reqwest",
+ "rustls",
+ "rustls-platform-verifier",
  "sfv",
  "sha2 0.10.9",
+ "system-configuration",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "tokio-rustls",
  "url",
+ "windows-registry",
 ]
 
 [[package]]
@@ -1543,8 +1553,6 @@ dependencies = [
  "httpdate",
  "hyper 1.12.0",
  "hyper-util",
- "plist",
- "proxy-watch",
  "rcgen",
  "reqwest",
  "rustls",
@@ -1554,13 +1562,11 @@ dependencies = [
  "serde_json",
  "serde_json_canonicalizer",
  "sha2 0.10.9",
- "system-configuration",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tokio-rustls",
  "whoami",
- "windows-registry",
 ]
 
 [[package]]

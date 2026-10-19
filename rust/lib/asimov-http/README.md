@@ -1,4 +1,4 @@
-# ASIMOV.rs: HTTP Integrity
+# ASIMOV.rs: HTTP Support
 
 [![License](https://img.shields.io/badge/license-Public%20Domain-blue.svg)](https://unlicense.org)
 [![Compatibility](https://img.shields.io/badge/rust-1.97%2B-blue)](https://blog.rust-lang.org/2026/07/09/Rust-1.97.0/)
@@ -29,6 +29,7 @@ for [trustworthy neurosymbolic machine intelligence].
 - Streams response bodies with verification at EOF.
 - Provides runtime-independent HTTP body adapters for Hyper and Axum.
 - Supports `no_std` digest hashing and encoding.
+- Provides opt-in native proxy discovery and an origin-scoped reqwest adapter.
 - Cuts red tape: 100% free and unencumbered public domain software.
 
 ## 🛠️ Prerequisites
@@ -71,7 +72,9 @@ assert_eq!(
 
 The crate rustdoc contains buffered request-signing and streaming
 response-signing examples. See [`DESIGN.md`](DESIGN.md) for verification,
-HTTP/1.1–HTTP/2, and trailer lifecycle contracts.
+HTTP/1.1–HTTP/2, trailer lifecycle, and origin-scoped proxy contracts.
+Enable `proxy` for alloc-only configuration, `system-proxy` for discovery, or
+`reqwest` for the client adapter; disable defaults for proxy-only dependencies.
 
 ### Runnable client and server
 
@@ -107,7 +110,7 @@ These examples use fixed demo Ed25519 keys, loopback HTTP, and an in-memory
 nonce cache that resets when the server stops. HTTP/2 uses cleartext prior
 knowledge. The default address is `127.0.0.1:3000`; set
 `ASIMOV_HTTP_EXAMPLE_ADDR` in both terminals to use another address. Both examples
-require the `std` feature.
+require the default-enabled `integrity` feature, which includes `std`.
 
 ## 📚 Reference
 

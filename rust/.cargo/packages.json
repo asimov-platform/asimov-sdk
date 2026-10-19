@@ -161,10 +161,10 @@
   {
     "package": {
       "name": "asimov-http",
-      "description": "HTTP message integrity with SHA-256 digests and Ed25519 signatures",
+      "description": "HTTP message integrity and shared client proxy configuration",
       "metadata": {
         "readme": {
-          "title": "ASIMOV.rs: HTTP Integrity"
+          "title": "ASIMOV.rs: HTTP Support"
         }
       }
     }

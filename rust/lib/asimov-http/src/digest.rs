@@ -37,12 +37,12 @@ impl ContentDigest {
     ///
     /// Unknown algorithms are ignored after validating the dictionary's syntax
     /// and byte-sequence member types. No weaker algorithm is used as fallback.
-    #[cfg(feature = "std")]
+    #[cfg(feature = "integrity")]
     pub fn parse(value: &str) -> Result<Self, crate::Error> {
         Self::find(value)?.ok_or(crate::Error::ContentDigest)
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "integrity")]
     fn find(value: &str) -> Result<Option<Self>, crate::Error> {
         let dictionary = crate::fields::dictionary(value)?;
         for entry in dictionary.values() {
@@ -68,7 +68,7 @@ impl ContentDigest {
 
     /// Verifies every supplied SHA-256 digest, preserving header/trailer scope.
     /// At least one section must contain a SHA-256 digest.
-    #[cfg(feature = "std")]
+    #[cfg(feature = "integrity")]
     pub fn verify(
         self,
         headers: &http::HeaderMap,
@@ -141,7 +141,7 @@ impl Default for DigestOptions {
 impl DigestOptions {
     /// Creates fields for complete representation bytes, usable in either a
     /// header or trailer map. Partial representations require separate hashing.
-    #[cfg(feature = "std")]
+    #[cfg(feature = "integrity")]
     pub fn headers(&self, body: &[u8]) -> http::HeaderMap {
         let mut headers = http::HeaderMap::new();
         if self.content || self.representation {

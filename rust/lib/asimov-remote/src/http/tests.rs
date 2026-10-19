@@ -15,6 +15,7 @@ use tokio::{
 };
 
 mod digest;
+mod proxy;
 mod remote_identity;
 mod signature;
 mod timeouts;

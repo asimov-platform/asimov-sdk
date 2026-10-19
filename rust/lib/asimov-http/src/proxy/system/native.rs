@@ -5,7 +5,7 @@
 
 use super::{Environment, Error, Route};
 use proxy_watch::{ProxyEntry, ProxyMode, ProxyScheme, ProxyStep, Scheme};
-use reqwest::Url;
+use url::Url;
 
 pub(super) fn route(
     mode: &ProxyMode,
