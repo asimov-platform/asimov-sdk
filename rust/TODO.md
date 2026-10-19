@@ -282,7 +282,10 @@ Unless marked reproduced, implementation findings are based on source review.
   Add constructor/builder support for custom CA certificates alongside platform
   verification in `lib/asimov-remote/src/http.rs`. macOS/Windows use native trust
   stores and do not read `SSL_CERT_FILE`/`SSL_CERT_DIR`; cover executor-scoped
-  custom roots with local fixtures.
+  custom roots with local fixtures. Curl's `--proxy-cacert` is a useful model,
+  but the current preconfigured rustls client shares trust policy between proxy
+  and origin: expose additional executor roots honestly; independent proxy-only
+  trust and client certificates need separate connector support.
 
 - [ ] **Bound proxy connection, upload, and shutdown lifetimes.**
   `lib/asimov-proxy/src/openai.rs` needs upload deadlines and bounded
@@ -407,9 +410,32 @@ Unless marked reproduced, implementation findings are based on source review.
 
 - [ ] **Expose per-executor proxy selection and configuration errors.**
   Support automatic, direct, and explicitly configured proxy modes without
-  process-global environment changes. A local hyper-util 0.1.21 matcher probe
-  on 2026-10-17 reproduced silently ignoring an unsupported proxy URL scheme;
-  explicitly supplied proxy URLs should report configuration errors.
+  process-global environment changes, following curl's `--proxy`/`--noproxy`.
+  Include executor-local bypass overrides; distinguish inheritance, an empty
+  replacement list, and `*`. Validate explicit proxy URLs instead of silently
+  ignoring unsupported schemes, as hyper-util 0.1.21 currently does. Apply
+  transport configuration before constructing the shared HTTP client.
+
+- [ ] **Accept proxy credentials separately from endpoint URLs.**
+  Follow curl's `--proxy-user`: explicit username/password fields for HTTP Basic
+  and SOCKS5, with redacted diagnostics and lossless credential encoding.
+  Reqwest 0.13.5 `Proxy::basic_auth` writes credentials through URL setters;
+  test literal percent escapes as well as `@`, `:`, and non-ASCII characters.
+  Keep proxy authentication separate from the service bearer token.
+
+- [ ] **Expose proxy headers and explicit HTTP proxy authorization.**
+  Curl's `--proxy-header` maps to reqwest's `Proxy::headers` and
+  `Proxy::custom_http_auth`, useful for token-authenticated gateways. Define
+  precedence against URL credentials; mark secret values sensitive. Cover HTTP
+  forwarding, CONNECT, and bypassed requests. Preserve service headers and
+  signatures; reject headers that override tunnel authority or message framing.
+
+- [ ] **Expose redacted proxy-route diagnostics.**
+  Report the selected endpoint, configuration source, destination DNS mode,
+  and bypass reason from the construction-time decision. This supports
+  curl-style verbose troubleshooting without printing credentials or tokens.
+  Assess typed HTTP 407/CONNECT failures separately; avoid classifying errors
+  by matching display strings.
 
 - [ ] **Overlap remote identity refresh with HTTP/2 operations.**
   Coordinate connection readiness before multiplexing discovery and execution;
