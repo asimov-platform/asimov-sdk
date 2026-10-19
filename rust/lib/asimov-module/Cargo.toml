@@ -25,6 +25,7 @@ all = ["cli", "index", "tracing", "serde", "asimov-env?/all"]
 cli = ["std", "dep:clientele", "clientele?/clap"]
 std = [
   "asimov-core/std",
+  "asimov-http?/std",
   "clientele?/std",
   "dep:asimov-env",
   "asimov-env?/std",
@@ -43,7 +44,7 @@ std = [
 unstable = []
 
 # Optional features:
-index = ["std", "serde", "tracing", "dep:reqwest"]
+index = ["std", "serde", "tracing", "dep:asimov-http", "asimov-http/reqwest", "dep:reqwest"]
 json = ["dep:serde_json"]
 serde = ["dep:serde", "json", "yaml"]
 tracing = ["dep:tracing", "dep:tracing-subscriber", "clientele?/tracing"]
@@ -60,6 +61,7 @@ mime = { version = "0.3", default-features = false }
 
 # Optional dependencies:
 asimov-env = { workspace = true, optional = true }
+asimov-http = { workspace = true, optional = true }
 clientele = { workspace = true, optional = true }
 getenv = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
@@ -72,6 +74,7 @@ tracing-subscriber = { workspace = true, optional = true }
 [dev-dependencies]
 serde_yaml_ng = { workspace = true }
 tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "net", "io-util", "time"] }
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]

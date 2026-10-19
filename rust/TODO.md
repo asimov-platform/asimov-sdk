@@ -274,8 +274,6 @@ Unless marked reproduced, implementation findings are based on source review.
 
 - [ ] **Share automatic proxy routing with other SDK HTTP clients.**
   Adopt `asimov-http::proxy` in separate patches (source audit 2026-10-19):
-  - Module index (`lib/asimov-module/src/index.rs`): configure the default fetch
-    client and define the policy for caller-supplied clients/URLs.
   - Cloud balance (`lib/asimov-cloud/src/account.rs`): configure its fixed-origin
     client and preserve the no-default-feature/WebAssembly build contract.
   - Installer (`lib/asimov-installer/src/installer{,/github}.rs`): add shared

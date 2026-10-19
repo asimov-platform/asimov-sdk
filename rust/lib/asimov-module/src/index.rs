@@ -2,6 +2,8 @@
 
 use crate::ModuleManifest;
 use alloc::{string::String, vec::Vec};
+use asimov_http::proxy::{OriginProxy, ProxyOptions};
+use core::time::Duration;
 use thiserror::Error;
 
 /// The URL of the public index of ASIMOV modules, in JSONL format.
@@ -16,17 +18,47 @@ pub struct Index {
 
 impl Index {
     /// Fetches the index from [`INDEX_URL`].
+    ///
+    /// Uses shared environment/native proxy discovery from `asimov-http`, with
+    /// a 10-second connection timeout and a 30-second read timeout. Redirects
+    /// are rejected because the proxy policy is scoped to the index's origin.
+    ///
+    /// # Errors
+    ///
+    /// Returns proxy discovery, client construction, request, or JSONL parsing
+    /// errors. Non-success HTTP statuses, including redirects, return
+    /// [`HttpError::NotSuccess`].
     pub async fn fetch() -> Result<Self, FetchIndexError> {
-        let client = reqwest::Client::builder()
-            .user_agent("asimov-module-registry")
-            .connect_timeout(std::time::Duration::from_secs(10))
-            .read_timeout(std::time::Duration::from_secs(30))
-            .build()
-            .expect("Failed to build HTTP client");
-
-        Self::fetch_from(&client, INDEX_URL).await
+        Self::fetch_url(INDEX_URL).await
     }
 
+    async fn fetch_url(url: &str) -> Result<Self, FetchIndexError> {
+        let url = reqwest::Url::parse(url)
+            .map_err(|_| asimov_http::proxy::Error::InvalidOrigin("expected an absolute URL"))?;
+        let proxy = OriginProxy::resolve(&url, &ProxyOptions::default())?;
+        let builder = reqwest::Client::builder()
+            .user_agent("asimov-module-registry")
+            .connect_timeout(Duration::from_secs(10))
+            .read_timeout(Duration::from_secs(30));
+        let client = proxy.configure_reqwest(builder)?.build()?;
+
+        // Use the exact URL whose origin-scoped proxy policy was resolved.
+        Self::fetch_from(&client, url.as_str()).await
+    }
+
+    /// Fetches an index using a caller-configured HTTP client.
+    ///
+    /// The caller owns proxy, redirect, TLS, and timeout policy. For shared proxy
+    /// routing, resolve [`OriginProxy`] for `url` and apply
+    /// [`OriginProxy::configure_reqwest`] before building the client. Reusing an
+    /// origin-scoped client requires checking each URL with
+    /// [`OriginProxy::check_origin`].
+    ///
+    /// # Errors
+    ///
+    /// Returns request or JSONL parsing errors. Non-success statuses returned
+    /// by the client, including unfollowed redirects, yield
+    /// [`HttpError::NotSuccess`].
     pub async fn fetch_from(
         client: &reqwest::Client,
         url: impl AsRef<str>,
@@ -139,6 +171,9 @@ pub enum FetchIndexError {
     Http(#[from] HttpError),
     #[error(transparent)]
     Parse(#[from] ParseIndexError),
+    /// Shared proxy discovery failed or the target origin is unsupported.
+    #[error(transparent)]
+    Proxy(#[from] asimov_http::proxy::Error),
 }
 
 impl From<reqwest::Error> for FetchIndexError {
@@ -158,3 +193,6 @@ pub enum HttpError {
 #[derive(Debug, Error)]
 #[error("failed to deserialize module index on line {0}: {1}")]
 pub struct ParseIndexError(pub usize, #[source] pub serde_json::Error);
+
+#[cfg(test)]
+mod tests;
