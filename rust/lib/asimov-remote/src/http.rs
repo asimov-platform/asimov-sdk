@@ -17,7 +17,7 @@
 //!
 //! Local name resolution is explicitly pinned to the system resolver, even
 //! when another dependency enables reqwest's `hickory-dns` feature.
-//! Reqwest/Hyper run `std::net::ToSocketAddrs` on Tokio's blocking pool,
+//! Local lookups run `std::net::ToSocketAddrs` on Tokio's blocking pool,
 //! calling libc/libSystem `getaddrinfo()` on Unix/macOS or Winsock
 //! `getaddrinfo()` on Windows. Hosts files, search domains, VPN/split-DNS
 //! rules, and any DNS transport or caching follow platform resolver policy.
@@ -35,19 +35,20 @@
 //!
 //! - `HTTP_PROXY` and `HTTPS_PROXY` select proxies by the **destination**
 //!   scheme. The proxy URL's scheme selects HTTP(S) or SOCKS transport.
-//! - On macOS/Windows, supported native static proxy settings fill empty
+//! - On macOS, Windows, and Linux desktops, native static settings fill empty
 //!   per-scheme settings. A usable per-scheme setting, including a native one,
 //!   takes precedence over the `ALL_PROXY` fallback.
 //! - `NO_PROXY` bypasses proxying for matching URL hosts. It accepts
-//!   comma-separated domains/subdomains, IP literals/CIDRs, or `*` (DNS names).
-//!   The current matcher needs explicit IP rules for IP-literal URLs even with
-//!   `*`.
+//!   comma-separated domains/subdomains, IP literals/CIDRs, or `*` (all hosts,
+//!   including IP literals).
 //!   Matching happens before DNS; a CIDR rule does not resolve hostname URLs to
 //!   test their IPs.
 //!
-//! On macOS, global static HTTP/HTTPS settings come from `SCDynamicStore`.
-//! Native `HTTPSProxy` is an HTTP CONNECT proxy for HTTPS destinations. When a
-//! native proxy is selected and `NO_PROXY` is empty, native bypass settings apply:
+//! On macOS, global static HTTP/HTTPS/SOCKS settings come from `SCDynamicStore`.
+//! Native `HTTPSProxy` is an HTTP CONNECT proxy for HTTPS destinations. SOCKS5
+//! with proxy-side DNS fills schemes without an enabled HTTP-family proxy.
+//! When a native proxy is selected and `NO_PROXY` is empty, native bypass rules
+//! apply:
 //!
 //! - `ExceptionsList` accepts exact hosts/IPs, whole-label wildcards such as
 //!   `*.example.com` and `example.*`, and IPv4 CIDRs such as `169.254/16`.
@@ -66,12 +67,38 @@
 //! identity discovery. Invalid native endpoints return [`Error::InvalidProxy`]
 //! with a setting name rather than its contents.
 //!
-//! Windows uses reqwest's current-user Internet Settings integration;
-//! `ProxyOverride` fills an empty `NO_PROXY` setting. Windows per-protocol
-//! `ProxyServer` maps and `<local>` exclusions are not supported yet. Native
-//! PAC/WPAD, SOCKS settings, proxy credential lookup, and macOS interface/VPN
-//! scopes are not implemented; use environment proxy URLs and `NO_PROXY` for
-//! explicit routing. In CGI environments (`REQUEST_METHOD` is set), automatic
+//! Windows reads static Internet Settings from the current user's registry, or
+//! the machine's when policy sets `ProxySettingsPerUser=0`. `ProxyServer` accepts
+//! one endpoint or `http=...;https=...;socks=...` maps. A bare `https=` endpoint
+//! speaks HTTP CONNECT; an explicit `https://` URL enables TLS to the proxy.
+//! A bare `socks=` endpoint uses SOCKS4; explicit SOCKS URL schemes select their
+//! own version and DNS mode. SOCKS fills otherwise unconfigured protocol slots.
+//! Native `ProxyOverride` supports exact hosts, wildcards, optional ports,
+//! `<local>` (single-label DNS names), and `<-loopback>` (disable implicit
+//! loopback/link-local exclusions). Bare domains match only that host.
+//!
+//! Linux reads GNOME GSettings (`org.gnome.system.proxy`) and KDE `kioslaverc`
+//! through `proxy-watch`, preferring the current desktop's configured source.
+//! GNOME requires GLib and its proxy schemas at runtime, with no build-time
+//! system-library dependency. KDE reads the XDG configuration cascade and
+//! honors immutable settings. Native bypass rules retain their source syntax,
+//! including GNOME `ignore-hosts` and KDE `NoProxyFor`/`ReversedException`.
+//! Native SOCKS5 settings use proxy-side DNS. Headless systems with no desktop
+//! settings use environment variables. Portal-only sandbox configurations return
+//! [`Error::UnsupportedProxy`]; a portal's probe result is not an origin route.
+//!
+//! Empty native protocol slots still fall back to `ALL_PROXY`. An unusable
+//! nonempty per-scheme environment value suppresses native discovery, then
+//! falls back to a usable `ALL_PROXY`, or direct access, as before. No proxy
+//! retries or direct fallback occur after a selected proxy fails to connect.
+//!
+//! PAC/WPAD is not evaluated. Saved proxy passwords, integrated NTLM/Kerberos
+//! authentication, Windows per-connection VPN settings/WinHTTP service defaults,
+//! and macOS interface/VPN scopes are not read. Configure environment proxy URLs
+//! for these cases when a static endpoint is available. URL credentials support
+//! HTTP Basic and SOCKS5 username/password authentication; percent-encode reserved
+//! characters. Proxy credentials remain separate from the service bearer token.
+//! In CGI environments (`REQUEST_METHOD` is present, even empty), all automatic
 //! proxy selection is disabled.
 //!
 //! | Route | Destination hostname resolution |
@@ -85,6 +112,8 @@
 //! lookup. For example, `HTTPS_PROXY=socks5h://127.0.0.1:1080` delegates HTTPS
 //! destination lookup to that SOCKS proxy. TLS still validates the original
 //! destination hostname through the tunnel.
+//! SOCKS4 local lookups prefer IPv4, which its protocol requires; the system
+//! resolver is still used. SOCKS4 cannot reach IPv6-only destinations.
 //!
 //! ## TLS and trust stores
 //!
@@ -267,6 +296,7 @@ pub use asimov_id::PublicKey;
 
 #[cfg(target_os = "macos")]
 mod macos_proxy;
+mod proxy;
 mod rate_limit;
 mod remote_identity;
 use remote_identity::RemoteIdentityCache;
@@ -299,6 +329,9 @@ pub enum Error {
     /// Only the setting name is reported, never its contents.
     #[error("invalid native proxy setting: {0}")]
     InvalidProxy(&'static str),
+    /// The native proxy source requires a resolver this adapter cannot use.
+    #[error("unsupported automatic proxy source: {0}; configure HTTP_PROXY or HTTPS_PROXY")]
+    UnsupportedProxy(&'static str),
     /// A configured local deadline expired. The remote may have accepted work.
     #[error("HTTP {phase} timed out after {duration:?}")]
     Timeout {
@@ -514,8 +547,7 @@ impl Executor {
         base_url.set_query(None);
         base_url.set_fragment(None);
         let builder = client_builder(timeouts)?;
-        #[cfg(target_os = "macos")]
-        let builder = macos_proxy::configure(builder, &base_url)?;
+        let builder = proxy::configure(builder, &base_url)?;
         Ok(Self {
             client: builder.build()?,
             base_url,

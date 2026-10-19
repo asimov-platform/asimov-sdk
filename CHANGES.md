@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - asimov-remote: Expose HTTP 429 `Retry-After` delays for execution and identity
   discovery
+- asimov-remote: Discover static GNOME/KDE proxies and native macOS SOCKS proxies
+### Fixed
+- asimov-remote: Honor Windows proxy protocol maps and native bypass rules
+- asimov-remote: Bypass all hosts with `NO_PROXY=*`, including IP addresses
+- asimov-remote: Prefer IPv4 for locally resolved SOCKS4 destinations
 
 ## 25.8.0 - 2026-10-18
 ### Added

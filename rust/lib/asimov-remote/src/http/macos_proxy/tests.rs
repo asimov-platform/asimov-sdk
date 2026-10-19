@@ -7,6 +7,7 @@ use core::{convert::Infallible, time::Duration};
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, body::Bytes, service::service_fn};
 use hyper_util::rt::TokioIo;
+use reqwest::{ClientBuilder, Proxy};
 use system_configuration::core_foundation::{array::CFArray, boolean::CFBoolean, number::CFNumber};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -42,6 +43,15 @@ fn exceptions(settings: &mut Dictionary, entries: &[&str]) {
 
 fn route(url: &str, settings: Dictionary, env: &Environment) -> Result<Route, Error> {
     select(&Url::parse(url).unwrap(), env, || Ok(Some(settings)))
+}
+
+fn configure_with(
+    builder: ClientBuilder,
+    url: &Url,
+    env: &Environment,
+    read: impl FnOnce() -> Result<Option<Dictionary>, Error>,
+) -> Result<ClientBuilder, Error> {
+    crate::http::proxy::configure_with(builder, env, || select_native(url, env, read))
 }
 
 #[test]
@@ -156,6 +166,44 @@ fn malformed_native_endpoints_report_setting_names_without_credentials() {
             Err(Error::InvalidProxy("HTTPPort"))
         ));
     }
+}
+
+#[test]
+fn native_socks_fills_empty_protocol_slots_with_remote_dns() {
+    let env = Environment::default();
+    let mut config = settings();
+    config.insert("SOCKSEnable".into(), Value::Integer(1.into()));
+    config.insert("SOCKSProxy".into(), Value::String("socks.invalid".into()));
+    config.insert("SOCKSPort".into(), Value::Integer(1081.into()));
+    assert_eq!(
+        route("http://service.invalid", config.clone(), &env).unwrap(),
+        Route::Native(Url::parse("http://http.proxy.invalid:8080").unwrap())
+    );
+    config.insert("HTTPSEnable".into(), Value::Boolean(false));
+    assert_eq!(
+        route("https://service.invalid", config.clone(), &env).unwrap(),
+        Route::Native(Url::parse("socks5h://socks.invalid:1081/").unwrap())
+    );
+    config.remove("SOCKSPort");
+    assert_eq!(
+        route("https://service.invalid", config.clone(), &env).unwrap(),
+        Route::Native(Url::parse("socks5h://socks.invalid:1080/").unwrap())
+    );
+    exceptions(&mut config, &["*.corp.invalid"]);
+    assert_eq!(
+        route("https://a.corp.invalid", config.clone(), &env).unwrap(),
+        Route::Direct
+    );
+    config.insert("SOCKSPort".into(), Value::Integer(0.into()));
+    assert!(matches!(
+        route("https://service.invalid", config.clone(), &env),
+        Err(Error::InvalidProxy("SOCKSPort"))
+    ));
+    // A broken, unselected SOCKS proxy cannot break the HTTP slot.
+    assert!(matches!(
+        route("http://service.invalid", config, &env),
+        Ok(Route::Native(_))
+    ));
 }
 
 #[test]
@@ -293,7 +341,11 @@ fn environment_and_cgi_take_precedence_without_reading_native_settings() {
     ] {
         assert_eq!(
             select(&url, &env, || panic!("native settings must not be read")).unwrap(),
-            Route::Automatic
+            if env.cgi {
+                Route::Direct
+            } else {
+                Route::Automatic
+            }
         );
     }
     let mut config = settings();
@@ -306,72 +358,6 @@ fn environment_and_cgi_take_precedence_without_reading_native_settings() {
         select(&url, &env, || Ok(Some(config))).unwrap(),
         Route::Native(_)
     ));
-}
-
-#[test]
-fn environment_capture_preserves_uppercase_empty_values_and_scheme_selection() {
-    const CHILD: &str = "ASIMOV_REMOTE_PROXY_ENV_TEST";
-    if let Ok(case) = std::env::var(CHILD) {
-        let http = Environment::capture(&Url::parse("http://service.invalid").unwrap());
-        let https = Environment::capture(&Url::parse("https://service.invalid").unwrap());
-        match case.as_str() {
-            "upper" => {
-                assert_eq!(http.proxy, "upper-http");
-                assert_eq!(https.proxy, "upper-https");
-                assert_eq!(http.no_proxy, "upper-no");
-                assert!(!http.cgi);
-            },
-            "lower" => {
-                assert_eq!(http.proxy, "lower-http");
-                assert_eq!(https.proxy, "lower-https");
-                assert_eq!(http.no_proxy, "lower-no");
-            },
-            "empty" => {
-                assert!(http.proxy.is_empty());
-                assert!(https.proxy.is_empty());
-                assert!(http.no_proxy.is_empty());
-                assert!(http.cgi); // Presence, even with an empty value.
-            },
-            _ => unreachable!(),
-        }
-        return;
-    }
-    for case in ["upper", "lower", "empty"] {
-        let mut child = std::process::Command::new(std::env::current_exe().unwrap());
-        child.args(["--exact", "http::macos_proxy::tests::environment_capture_preserves_uppercase_empty_values_and_scheme_selection", "--nocapture"])
-            .env(CHILD, case)
-            .env("http_proxy", "lower-http")
-            .env("https_proxy", "lower-https")
-            .env("no_proxy", "lower-no")
-            .env_remove("REQUEST_METHOD");
-        for (key, value) in [
-            ("HTTP_PROXY", "upper-http"),
-            ("HTTPS_PROXY", "upper-https"),
-            ("NO_PROXY", "upper-no"),
-        ] {
-            match case {
-                "lower" => {
-                    child.env_remove(key);
-                },
-                "empty" => {
-                    child.env(key, "");
-                },
-                _ => {
-                    child.env(key, value);
-                },
-            }
-        }
-        if case == "empty" {
-            child.env("REQUEST_METHOD", "");
-        }
-        let output = child.output().unwrap();
-        assert!(
-            output.status.success(),
-            "{case}: {}\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
 }
 
 struct Peer {

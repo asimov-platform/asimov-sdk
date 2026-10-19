@@ -6,11 +6,14 @@
 //! ignores attached `NoProxy` rules. Discovery and execution use the same origin,
 //! and redirects are disabled, so native bypass decisions can be made once.
 
-use super::Error;
+use super::{
+    Error,
+    proxy::{Environment, Route},
+};
 use alloc::{format, string::String, vec, vec::Vec};
 use core::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use plist::{Dictionary, Value};
-use reqwest::{ClientBuilder, NoProxy, Proxy, Url};
+use reqwest::Url;
 use system_configuration::{
     core_foundation::{
         base::{CFType, TCFType},
@@ -21,57 +24,8 @@ use system_configuration::{
     dynamic_store::SCDynamicStoreBuilder,
 };
 
-#[derive(Default)]
-struct Environment {
-    proxy: String,
-    no_proxy: String,
-    cgi: bool,
-}
-
-impl Environment {
-    fn capture(url: &Url) -> Self {
-        fn first(upper: &str, lower: &str) -> String {
-            // An empty uppercase value still takes precedence over lowercase.
-            std::env::var(upper)
-                .or_else(|_| std::env::var(lower))
-                .unwrap_or_default()
-        }
-        Self {
-            proxy: match url.scheme() {
-                "https" => first("HTTPS_PROXY", "https_proxy"),
-                _ => first("HTTP_PROXY", "http_proxy"),
-            },
-            no_proxy: first("NO_PROXY", "no_proxy"),
-            cgi: std::env::var_os("REQUEST_METHOD").is_some(),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-enum Route {
-    Automatic,
-    Direct,
-    Native(Url),
-}
-
-pub(super) fn configure(builder: ClientBuilder, url: &Url) -> Result<ClientBuilder, Error> {
-    configure_with(builder, url, &Environment::capture(url), read_system)
-}
-
-fn configure_with(
-    builder: ClientBuilder,
-    url: &Url,
-    env: &Environment,
-    read: impl FnOnce() -> Result<Option<Dictionary>, Error>,
-) -> Result<ClientBuilder, Error> {
-    Ok(match select(url, env, read)? {
-        Route::Automatic => builder,
-        // A native exclusion means direct, not a retry through ALL_PROXY.
-        Route::Direct => builder.no_proxy(),
-        Route::Native(proxy) => {
-            builder.proxy(Proxy::all(proxy)?.no_proxy(NoProxy::from_string(&env.no_proxy)))
-        },
-    })
+pub(super) fn read(url: &Url, env: &Environment) -> Result<Route, Error> {
+    select(url, env, read_system)
 }
 
 fn select(
@@ -79,12 +33,14 @@ fn select(
     env: &Environment,
     read: impl FnOnce() -> Result<Option<Dictionary>, Error>,
 ) -> Result<Route, Error> {
-    // Preserve reqwest's environment, fallback, and CGI behavior. In particular,
-    // a nonempty but unusable per-scheme environment setting does not use native
-    // settings; reqwest can still choose ALL_PROXY instead.
-    if env.cgi || !env.proxy.is_empty() {
-        return Ok(Route::Automatic);
-    }
+    super::proxy::select(env, || select_native(url, env, read))
+}
+
+fn select_native(
+    url: &Url,
+    env: &Environment,
+    read: impl FnOnce() -> Result<Option<Dictionary>, Error>,
+) -> Result<Route, Error> {
     let Some(settings) = read()? else {
         return Ok(Route::Automatic);
     };
@@ -93,10 +49,13 @@ fn select(
         "https" => ("HTTPSEnable", "HTTPSProxy", "HTTPSPort"),
         _ => return Ok(Route::Automatic),
     };
-    if flag(settings.get(enabled)) != Some(true) {
+    let proxy = if flag(settings.get(enabled)) == Some(true) {
+        proxy_url(&settings, host, port, "http", 80)?
+    } else if flag(settings.get("SOCKSEnable")) == Some(true) {
+        proxy_url(&settings, "SOCKSProxy", "SOCKSPort", "socks5h", 1080)?
+    } else {
         return Ok(Route::Automatic);
-    }
-    let proxy = proxy_url(&settings, host, port)?;
+    };
     if env.no_proxy.is_empty() && bypasses(&settings, url) {
         Ok(Route::Direct)
     } else {
@@ -143,6 +102,8 @@ fn proxy_url(
     settings: &Dictionary,
     host_key: &'static str,
     port_key: &'static str,
+    scheme: &str,
+    default_port: u16,
 ) -> Result<Url, Error> {
     let host = settings
         .get(host_key)
@@ -163,10 +124,10 @@ fn proxy_url(
     };
     // HTTPSProxy selects HTTPS destinations, but speaks HTTP CONNECT to the
     // proxy. TLS to a proxy is selected by an explicit environment URL instead.
-    let mut proxy =
-        Url::parse(&format!("http://{authority}/")).map_err(|_| Error::InvalidProxy(host_key))?;
+    let mut proxy = Url::parse(&format!("{scheme}://{authority}/"))
+        .map_err(|_| Error::InvalidProxy(host_key))?;
     let port = match settings.get(port_key) {
-        None => 80,
+        None => default_port,
         Some(value) => value
             .as_unsigned_integer()
             .and_then(|port| u16::try_from(port).ok())

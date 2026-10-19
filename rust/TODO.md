@@ -248,82 +248,35 @@ Unless marked reproduced, implementation findings are based on source review.
   JSONL output, and errors. Deploy server support before advertising remote
   `--json` support; the SDK transports the request without local evaluation.
 
-- [ ] **Honor Windows native proxy exclusions and protocol maps.**
-  Reqwest 0.13.5/hyper-util 0.1.21 omit Windows per-protocol `ProxyServer` maps
-  and `<local>` exclusions. A local matcher probe on 2026-10-17 reproduced no
-  proxy for `http=host:8080;https=host:8443` and a proxied single-label host with
-  `<local>` exclusions. Without an `ALL_PROXY` fallback, an ignored map permits
-  a direct connection.
+- [ ] **Resolve PAC/WPAD and portal proxies asynchronously.**
+  Add per-URL resolution, deadlines, and ordered connection fallback without
+  replaying POSTs after an ambiguous failure. Reqwest's `Proxy::custom` is
+  synchronous, sees only scheme/authority, returns one endpoint, and cannot
+  report resolution errors. Linux portal snapshots in `proxy-watch` resolve a
+  fixed probe host; they must not route an arbitrary origin. Keep its native
+  parsers separate from its incompatible environment precedence/NO_PROXY grammar.
 
-  Dependency review, 2026-10-17 (published versions unless noted):
-  - `async-http-proxy` 1.2.5 implements CONNECT over caller-supplied I/O, with
-    optional Basic auth; it has no native discovery, bypass matcher, or PAC.
-    A local Tokio duplex probe reproduced loss of tunnel bytes arriving with
-    the CONNECT response, from dropping the temporary buffered reader. Latest
-    release/repository push is from 2022; unsuitable for this integration.
-  - `hyper-http-proxy` 1.2.0 supplies a Hyper 1 connector with manual interception
-    rules and configurable TLS, not native discovery or a reqwest replacement
-    connector. Its TLS-handshake timer does not cover the whole connection.
-    A probe reproduced `Proxy::new(Intercept::All, authenticated_uri)` populating
-    both `Authorization` and `Proxy-Authorization`; HTTP-only interception sets
-    only `Authorization`. Do not copy its header example into service requests.
-  - `iroh-proxy-utils` 0.3.0 bridges HTTP/TCP over Iroh QUIC; it does not discover
-    corporate proxies. Assess it for future Iroh transport work instead.
-  - `proxy_cfg` 0.4.2 reads the relevant macOS/Windows static settings, but local
-    probes reproduced unsupported CIDR/IP-wildcard exclusions, treating IPv6
-    literals as simple hostnames, and lowercasing proxy credentials. Its built-in
-    matcher is unsuitable without fixes. `sysproxy` 0.3.0 models one endpoint;
-    source review found Windows `ProxyServer` parsed as `SocketAddr`, excluding
-    hostname endpoints and protocol maps.
-  - `proxy-watch` 0.3.1 is the closest broader discovery/resolution candidate:
-    Windows maps/macros, macOS exclusions, GNOME/KDE, and optional native PAC.
-    Local probes passed Windows map/`<local>` cases but confirmed incompatible
-    `NO_PROXY` matching (leading-dot domains and implicit localhost bypass).
-    Its environment reader prefers lowercase; `with_env` ranks whole sources,
-    not per-scheme slots, and a lone `NO_PROXY` can suppress every native proxy.
-    The project dates from August 2026; its docs identify macOS GUI/VPN coverage
-    limits and source review confirms omitted scoped/supplemental proxy maps.
-    Any adoption needs native fixtures and an explicit compatibility layer.
-  - `proxyparser` 0.2.0 adds a mandatory Boa engine and blocking reqwest for PAC;
-    source review found PAC errors converted to `DIRECT`. `libproxy` 0.1.1 wraps
-    a native C library with blocking per-URL resolution and ordered fallback
-    results. Neither is a narrow static-settings fix.
+- [ ] **Support native proxy credentials and scoped network settings.**
+  Add saved-password lookup and integrated NTLM/Kerberos authentication, macOS
+  interface/VPN scopes, and Windows active-connection settings. Select WinHTTP
+  machine defaults explicitly for service processes. GNOME discovery currently
+  reads a configured username but not its saved password; environment URLs are
+  the available credential path. Distinguish unavailable macOS settings from an
+  empty configuration: `system-configuration` collapses both to `None`.
 
-  Use a focused, origin-scoped settings adapter with safe `windows-registry`
-  APIs and reqwest's standard proxy API. Keep native bypass syntax distinct
-  from environment `NO_PROXY`; preserve uppercase precedence, per-scheme native
-  fill, `ALL_PROXY`, and CGI behavior. Include Windows protocol-map, wildcard,
-  and `<local>` fixtures. A map key `https=` selects destinations, not TLS to the
-  proxy: a bare endpoint there is still an HTTP CONNECT proxy.
-  Prefer a construction-time routing decision over `Proxy::custom`: local HTTP
-  probes reproduced ignored attached `.no_proxy(...)` and direct fallback for
-  invalid callback URLs in reqwest 0.13.5. The isolated probes above ran on macOS
-  with Rust 1.97.1; they do not establish native Windows behavior.
+- [ ] **Validate desktop proxy policy on native Windows and GUI sessions.**
+  Run the isolated registry fixture on Windows and add real policy/VPN cases;
+  cross-compilation alone does not establish native behavior. Exercise macOS
+  network-location changes and GNOME dconf/administrator profiles alongside
+  the isolated GLib keyfile and KDE XDG fixtures. The GNOME fixture requires
+  `glib-compile-schemas`; headless test hosts without it exercise KDE only.
+  Review source-specific malformed bypass handling before changing dependencies.
 
-  Track [hyper-util's merged Windows-map fix][hyper-util-win-map] (unreleased
-  after 0.1.21) and [open bypass-macro fix][hyper-util-win-bypass]. Source review
-  of the merged map parser found it turns `https=host:port` into an HTTPS proxy
-  URL and emits `socks://`, which 0.1.21's matcher rejects; review/correct those
-  semantics before adopting it. PAC/WPAD needs separate asynchronous resolution,
-  deadlines, and ordered fallback handling; `Proxy::custom` is synchronous,
-  receives only scheme/authority in reqwest 0.13.5, returns one optional
-  endpoint, and cannot report resolution errors.
-
-- [ ] **Exercise remote DNS/proxy routing end to end before release.**
-  Extend coverage to HTTPS-proxy transport, authenticated forwarding/CONNECT,
-  SOCKS5h with an unresolved `.invalid` destination, and native Windows settings.
-  Verify proxy/service credential separation and TLS verification through
-  successful tunnels. Include `NO_PROXY=*` with IP literals: source review of
-  hyper-util 0.1.21 found wildcard matching only in its domain branch. Isolate
-  environment settings in subprocesses; avoid public DNS.
-
-- [ ] **Extend native proxy support beyond global static HTTP/HTTPS settings.**
-  Add macOS native SOCKS selection, credential lookup, and interface/VPN-scoped
-  settings with native fixtures. PAC/WPAD requires asynchronous per-URL
-  resolution, deadlines, and ordered fallback handling; avoid replaying POSTs
-  after an ambiguous failure. Distinguish unavailable native settings from an
-  empty configuration: `system-configuration`'s safe read API collapses both
-  cases to `None`.
+- [ ] **Share automatic proxy routing with other SDK HTTP clients.**
+  Extend the remote adapter's static discovery to installer downloads, module
+  indexes, cloud calls, telemetry, and OpenAI forwarding in reviewable stages.
+  Account for redirects and multiple origins before extracting its origin-scoped
+  route selection. Preserve each transport's cancellation and stream contracts.
 
 - [ ] **Expose explicit additional TLS roots for remote HTTPS.**
   Add constructor/builder support for custom CA certificates alongside platform
@@ -589,5 +542,3 @@ limit disk use. These checks do not establish runtime correctness of open items.
   Windows execution.
 
 [ci-review]: https://github.com/asimov-platform/asimov-sdk/actions/runs/37534709019
-[hyper-util-win-map]: https://github.com/hyperium/hyper-util/pull/329
-[hyper-util-win-bypass]: https://github.com/hyperium/hyper-util/pull/280
