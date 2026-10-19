@@ -7,6 +7,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use asimov_http::proxy::{OriginProxy, ProxyOptions};
 use core::time::Duration;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Serialize;
@@ -38,6 +39,9 @@ impl Telemetry {
     /// Events are appended to a per-invocation log in `directory`, which stays
     /// locked while the process lives. Logs of exited processes are sent at most
     /// once every five minutes.
+    ///
+    /// Uploads use shared environment/native proxy discovery from `asimov-http`.
+    /// Redirects are not followed; failed uploads remain queued for a later flush.
     pub fn new(client_key: &str, app_version: &str, directory: &Path) -> Option<Self> {
         if is_disabled(directory) {
             return None;
@@ -249,6 +253,8 @@ fn flush(directory: &Path, key: HeaderValue, endpoint: &str) -> Option<()> {
 }
 
 fn send(key: HeaderValue, endpoint: &str, events: &[Value]) -> Option<()> {
+    let endpoint = reqwest::Url::parse(endpoint).ok()?;
+    let proxy = OriginProxy::resolve(&endpoint, &ProxyOptions::default()).ok()?;
     let mut headers = HeaderMap::new();
     headers.insert("statsig-api-key", key);
     headers.insert("statsig-sdk-type", HeaderValue::from_static("asimov.rs"));
@@ -256,27 +262,27 @@ fn send(key: HeaderValue, endpoint: &str, events: &[Value]) -> Option<()> {
         "statsig-sdk-version",
         HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
     );
-    let client = reqwest::Client::builder()
+    let builder = reqwest::Client::builder()
         .default_headers(headers)
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(10))
-        .build()
-        .ok()?;
+        .timeout(Duration::from_secs(10));
+    let client = proxy.configure_reqwest(builder).ok()?.build().ok()?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .ok()?;
     runtime.block_on(async {
         for batch in events.chunks(BATCH_SIZE) {
-            client
-                .post(endpoint)
+            // Every batch uses the exact URL whose proxy policy was resolved.
+            let response = client
+                .post(endpoint.clone())
                 .header("statsig-client-time", timestamp().to_string())
                 .json(&json!({"events": batch}))
                 .send()
                 .await
-                .ok()?
-                .error_for_status()
                 .ok()?;
+            if !response.status().is_success() {
+                return None;
+            }
         }
         Some(())
     })
@@ -431,71 +437,4 @@ fn wire_event(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-    #[tokio::test]
-    async fn sends_installation_at_once_and_logs_of_exited_invocations() {
-        let directory = std::env::temp_dir().join(dogma_uuid::Uuid::now_v7().to_string());
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let endpoint = format!("http://{}", listener.local_addr().unwrap());
-        let start = {
-            let directory = directory.clone();
-            move || Telemetry::start("client-test", "1", &directory, &endpoint)
-        };
-        let receive = async |event: &str| {
-            let (mut stream, _) = listener.accept().await.unwrap();
-            let mut request = Vec::new();
-            while !String::from_utf8_lossy(&request).contains(event) {
-                let mut buffer = [0; 4096];
-                let read = stream.read(&mut buffer).await.unwrap();
-                request.extend_from_slice(&buffer[..read]);
-            }
-            stream
-                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n")
-                .await
-                .unwrap();
-            String::from_utf8_lossy(&request).into_owned()
-        };
-        let command = || Event::CommandStarted {
-            command: "test".into(),
-            modules: Vec::new(),
-        };
-
-        let previous = tokio::task::spawn_blocking(start.clone());
-        let request = receive("cli_installed").await;
-        let id = fs::read_to_string(directory.join("id")).unwrap();
-        assert!(request.contains(&id));
-        let previous = previous.await.unwrap().unwrap();
-        previous.log(command());
-        previous.shutdown();
-        drop(previous);
-        fs::remove_file(directory.join("attempted")).unwrap();
-
-        let current = start().unwrap();
-        current.log(command());
-        let request = receive("cli_command_started").await;
-        tokio::time::timeout(Duration::from_secs(3), async {
-            let logs = || {
-                fs::read_dir(&directory)
-                    .unwrap()
-                    .flatten()
-                    .filter(|entry| entry.file_name().to_string_lossy().starts_with("events-"))
-                    .count()
-            };
-            while logs() > 1 {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-        })
-        .await
-        .unwrap();
-
-        assert!(request.contains(&id));
-        assert!(!request.contains("cli_installed"));
-        assert_eq!(request.matches("cli_command_started").count(), 1);
-        assert!(directory.join("flushed").exists());
-        drop(current);
-        fs::remove_dir_all(directory).unwrap();
-    }
-}
+mod tests;

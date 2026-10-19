@@ -1727,11 +1727,13 @@ name = "asimov-telemetry"
 version = "25.8.0"
 dependencies = [
  "agent-detector",
+ "asimov-http",
  "bs58",
  "dogma-uuid",
  "reqwest",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 

@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: HTTP integrity APIs now require `integrity` (enabled by default);
   consumers enabling only `std` must add `integrity`
 ### Fixed
+- asimov-telemetry: Use shared environment/native proxy routing for uploads
+- asimov-telemetry: Keep queued events when uploads receive HTTP redirects
 - asimov-remote: Honor Windows proxy protocol maps and native bypass rules
 - asimov-remote: Bypass all hosts with `NO_PROXY=*`, including IP addresses
 - asimov-remote: Prefer IPv4 for locally resolved SOCKS4 destinations

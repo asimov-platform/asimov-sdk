@@ -273,13 +273,25 @@ Unless marked reproduced, implementation findings are based on source review.
   Review source-specific malformed bypass handling before changing dependencies.
 
 - [ ] **Share automatic proxy routing with other SDK HTTP clients.**
-  Adopt `asimov-http::proxy` in telemetry, installer, module index, cloud, and
-  OpenAI forwarding in separate patches. Its initial reqwest adapter is bound
-  to one origin: design per-destination resolution before using it for multiple
-  origins or redirects, preserving each transport's stream/cancellation policy.
-  Other backends must honor both the endpoint candidate and its NO_PROXY list.
-  OpenAI forwarding's `ProxyConfig` prefers lowercase environment values and
-  uses different bypass rules; reconcile that behavior explicitly.
+  Adopt `asimov-http::proxy` in separate patches (source audit 2026-10-19):
+  - Module index (`lib/asimov-module/src/index.rs`): configure the default fetch
+    client and define the policy for caller-supplied clients/URLs.
+  - Cloud balance (`lib/asimov-cloud/src/account.rs`): configure its fixed-origin
+    client and preserve the no-default-feature/WebAssembly build contract.
+  - Installer (`lib/asimov-installer/src/installer{,/github}.rs`): add shared
+    per-destination resolution and redirect handling before migrating GitHub
+    metadata, manifests, checksums, and streamed release assets. Preserve
+    timeouts, pool reuse, cancellation, and explicit discovery errors.
+  - Hugging Face (`lib/asimov-huggingface/src/ensure.rs`): adapt or replace
+    `hf-hub`'s internal ureq clients, including metadata and redirected downloads.
+  - OpenAI forwarding (`lib/asimov-proxy/src/{openai,proxy_config}.rs`): replace
+    duplicated discovery/validation and reconcile lowercase-first environment
+    precedence and different bypass rules while preserving response streaming.
+
+  The current reqwest adapter is origin-scoped; never reuse its policy across
+  origins or automatic redirects. Other backends must honor both the endpoint
+  candidate and its NO_PROXY list. Audit dependency-owned HTTP transports too,
+  including module-template Git downloads in `lib/asimov-module-kit/src/module.rs`.
 
 - [ ] **Expose explicit additional TLS roots for remote HTTPS.**
   Add constructor/builder support for custom CA certificates alongside platform
@@ -482,7 +494,8 @@ Unless marked reproduced, implementation findings are based on source review.
   `examples.md.j2` required by the shared template and generated READMEs;
   remote also lacks `package.metadata.readme.title`. On 2026-10-18,
   `rake -B lib/asimov-remote/README.md` reproduced the missing-template error,
-  returned success, and left a blank README. Restore the inputs.
+  returned success, and left a blank README. The telemetry task reproduced the
+  same failure on 2026-10-19. Restore the inputs.
   Per-crate `Rakefile` tasks depend only on the shared Jinja template, omitting
   manifests, local examples, and the package table; they truncate output and
   ignore renderer exit status. Track all inputs, check subprocess status, and
