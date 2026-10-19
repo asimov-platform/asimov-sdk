@@ -273,10 +273,28 @@ Unless marked reproduced, implementation findings are based on source review.
   Review source-specific malformed bypass handling before changing dependencies.
 
 - [ ] **Share automatic proxy routing with other SDK HTTP clients.**
-  Extend the remote adapter's static discovery to installer downloads, module
-  indexes, cloud calls, telemetry, and OpenAI forwarding in reviewable stages.
-  Account for redirects and multiple origins before extracting its origin-scoped
-  route selection. Preserve each transport's cancellation and stream contracts.
+  Extract reusable policy into feature-gated `asimov-http::proxy`: options,
+  endpoint validation, environment/native discovery, bypass rules, and dedicated
+  proxy errors. Isolate reqwest builder wiring and its SOCKS4 resolver in a
+  backend adapter. Re-export `ProxyMode`/`ProxyOptions` from remote and map errors
+  to its existing variants. Keep `TransportOptions`, execution/discovery
+  timeouts, bearer/signature policy, and connection-pool lifecycle in remote.
+
+  Review findings, 2026-10-19: `asimov-http` currently promises HTTP integrity;
+  update its design/metadata deliberately when adding client transport support.
+  Its `std` feature enables signatures and `asimov-protocol`/Iroh. Factor
+  capability gates before adding proxy-only consumers, accounting for existing
+  `std`-only users. Keep pure option types usable with alloc and gate native
+  readers/runtime dependencies separately from integrity-only builds.
+
+  Remote freezes native routing for one origin, then installs `Proxy::all` (or
+  disables all proxies). Applying that result to arbitrary destinations or
+  redirects can reuse the wrong protocol proxy or bypass decision. Make the
+  initial adapter explicitly origin-bound; design per-destination resolution
+  before adopting it in multi-origin/redirecting clients. Migrate remote first,
+  then telemetry, installer, module index, cloud, and OpenAI forwarding in
+  separate patches. The latter's `ProxyConfig` prefers lowercase environment
+  values and uses different bypass rules; reconcile that behavior explicitly.
 
 - [ ] **Expose explicit additional TLS roots for remote HTTPS.**
   Add constructor/builder support for custom CA certificates alongside platform
