@@ -42,7 +42,7 @@ type UpstreamClient = Client<HttpsConnector<ProxyConnector>, Full<Bytes>>;
 /// Transport, resource limits, and optional logging for a [`Proxy`].
 #[derive(Clone)]
 pub struct ProxyOptions {
-    /// How to connect upstream; defaults to a direct connection.
+    /// How to connect upstream; defaults to shared environment/native discovery.
     pub upstream_proxy: ProxyConfig,
     /// Maximum buffered request body size; defaults to 16 MiB.
     pub max_body_bytes: usize,
@@ -57,7 +57,7 @@ pub struct ProxyOptions {
 impl Default for ProxyOptions {
     fn default() -> Self {
         Self {
-            upstream_proxy: ProxyConfig::Direct,
+            upstream_proxy: ProxyConfig::Automatic,
             max_body_bytes: DEFAULT_MAX_BODY_BYTES,
             upstream_timeout: Duration::from_secs(120),
             logger: None,
@@ -89,10 +89,16 @@ pub struct Proxy {
 impl Proxy {
     /// Creates an OpenRouter proxy with explicit credentials and options.
     ///
-    /// Loads native TLS roots and validates the API key. Does not read proxy
-    /// environment variables; use [`ProxyConfig::from_env`] to opt in.
+    /// Loads native TLS roots, validates the API key, and resolves proxy policy
+    /// for the OpenRouter origin. Defaults use `asimov-http` environment/native
+    /// discovery, uppercase-first precedence, and shared bypass rules. Choose
+    /// [`ProxyConfig::Direct`] for direct access or a parsed explicit route.
+    /// Discovery failures are returned before serving. Responses are streamed
+    /// through Hyper; redirects are forwarded without replaying requests.
     pub fn openrouter(api_key: &str, options: ProxyOptions) -> Result<Self, Error> {
         let authorization = authorization_header(api_key)?;
+        let target = url::Url::parse(UPSTREAM_BASE_URL)?;
+        let upstream_proxy = options.upstream_proxy.for_target(&target)?;
 
         // Select a provider explicitly, even when downstream dependencies also
         // enable rustls's aws-lc provider.
@@ -104,7 +110,7 @@ impl Proxy {
             .with_native_roots()?
             .with_no_client_auth(),
         );
-        let connector = ProxyConnector::new(options.upstream_proxy, Arc::clone(&tls_config));
+        let connector = ProxyConnector::new(&target, upstream_proxy, Arc::clone(&tls_config))?;
         let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
             .with_tls_config((*tls_config).clone())
             .https_only()
@@ -314,6 +320,7 @@ fn insert_attribution_headers(headers: &mut HeaderMap<HeaderValue>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    mod proxy;
 
     #[tokio::test]
     async fn serves_requests_with_upstream_credentials_and_streamed_logged_responses() {
@@ -372,7 +379,9 @@ mod tests {
         .unwrap()
         .with_root_certificates(rustls::RootCertStore::empty())
         .with_no_client_auth();
-        let connector = ProxyConnector::new(ProxyConfig::Direct, Arc::new(tls.clone()));
+        let target = url::Url::parse(&format!("http://{upstream_address}/api")).unwrap();
+        let connector =
+            ProxyConnector::new(&target, ProxyConfig::Direct, Arc::new(tls.clone())).unwrap();
         let connector = hyper_rustls::HttpsConnectorBuilder::new()
             .with_tls_config(tls)
             .https_or_http()

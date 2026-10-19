@@ -50,11 +50,7 @@ pub(super) fn apply(
     let builder = builder
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none());
-    if configuration
-        .no_proxy
-        .split(',')
-        .any(|rule| rule.trim() == "*")
-    {
+    if super::bypasses_all(&configuration.no_proxy) {
         return Ok(builder);
     }
     Ok(match &configuration.proxy {

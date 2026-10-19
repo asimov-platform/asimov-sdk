@@ -17,10 +17,12 @@
 //! - `system-proxy`: origin-scoped environment/native discovery; implies `std`
 //!   and `proxy`.
 //! - `reqwest`: the origin-scoped reqwest proxy adapter; implies `system-proxy`.
+//! - `hyper`: effective proxy endpoint selection for Hyper connectors, including
+//!   shared bypass handling; implies `system-proxy`.
 //!
 //! Proxy features do not enable integrity or its protocol/Iroh dependencies.
 //! Use `default-features = false` to select them independently. Native proxy
-//! readers and the reqwest adapter are absent from integrity-only builds.
+//! readers and client adapters are absent from integrity-only builds.
 //!
 //! Signature processing operates on an explicit message context, independently
 //! of HTTP versions and body types. Servers supply the externally visible target

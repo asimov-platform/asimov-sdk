@@ -4,7 +4,7 @@
 //!
 //! [`ProxyConfig`] parses HTTP(S) and SOCKS5 proxy URLs without `std`. The
 //! `std` feature adds the `openai` protocol module, optional `BodyLogger`, and
-//! explicit environment discovery through `ProxyConfig::from_env`. Transport
+//! shared environment/native proxy discovery through `asimov-http`. Transport
 //! configuration and body logging are shared across protocol implementations.
 //!
 //! The caller supplies credentials, options, a bound listener, and a shutdown
@@ -24,6 +24,7 @@ mod error;
 pub use error::Error;
 
 mod proxy_config;
+pub use asimov_http::proxy::{ProxyMode, ProxyOptions as UpstreamProxyOptions};
 pub use proxy_config::ProxyConfig;
 
 #[cfg(feature = "std")]

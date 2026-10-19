@@ -17,6 +17,10 @@ timeouts, and connection-pool ownership remain with callers.
   activate signature/protocol dependencies or an HTTP client backend.
 - `reqwest` adds the origin-scoped client-builder adapter and SOCKS4 system-DNS
   workaround. It enables `system-proxy`; integrity-only builds do not gain it.
+- `hyper` adds `OriginProxy::proxy_for_hyper`, applying NO_PROXY with the same
+  `hyper-util` matcher used by reqwest and the shared wildcard-IP fix. It enables
+  `system-proxy`, without enabling reqwest or integrity. The caller owns its
+  connector protocols, TLS, timeouts, and pools.
 - Remote re-exports the shared options and maps proxy errors to its existing
   variants. Its `TransportOptions`, timeouts, and execution lifecycle stay local.
 - The SDK forwards `std,http` to `integrity` for compatibility; `http-proxy` and
@@ -48,6 +52,12 @@ Proxy options, discovery, and configuration errors have no dependency on remote
 execution. Native fixtures and HTTP/SOCKS interoperability tests live here;
 remote retains tests for API compatibility, shared discovery/execution routing,
 bearer/signature separation, and transport budgets.
+
+OpenAI forwarding defaults to automatic discovery and binds its Hyper connector
+to the OpenRouter origin. `ProxyConfig::from_env` uses shared uppercase-first
+precedence and native discovery; `from_options` supports local bypass overrides.
+Parsed or manually constructed routes are explicit choices. The connector
+supports HTTP(S) CONNECT and SOCKS5/5h; selected SOCKS4/4a endpoints fail explicitly.
 
 ## Message context
 

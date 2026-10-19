@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- asimov-http: Resolve effective proxy endpoints for Hyper connectors
+- asimov-proxy: Support shared proxy options and bypass overrides with
+  `ProxyConfig::from_options`
 - asimov-installer: Use automatic proxy routing with a custom registry via
   `Installer::with_registry`
 - asimov-remote: Expose HTTP 429 `Retry-After` delays for execution and identity
@@ -17,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: Expose shared proxy configuration, native discovery, and an
   origin-scoped reqwest adapter; available through SDK `http-proxy`/`http-client`
 ### Changed
+- asimov-proxy: Default OpenRouter forwarding to automatic proxy discovery;
+  use uppercase-first environment precedence and shared URL/bypass rules
 - asimov-huggingface: Download/cache APIs require `std` (enabled by default);
   HTTP requests use platform TLS verification
 - asimov-cloud: Reject redirects for native account balance requests
@@ -24,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: HTTP integrity APIs now require `integrity` (enabled by default);
   consumers enabling only `std` must add `integrity`
 ### Fixed
+- asimov-proxy: Preserve bytes following CONNECT headers and enforce the header
+  limit even when the terminator arrives in the same read
 - asimov-huggingface: Use shared proxy discovery for metadata, downloads, and
   redirects; scope saved tokens to the configured Hub origin
 - asimov-huggingface: Honor `HF_HOME` cache hits, pin snapshots to one commit,

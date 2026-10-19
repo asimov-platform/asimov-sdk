@@ -208,7 +208,7 @@ fn select(
     env: &Environment,
     native: impl FnOnce() -> Result<Route, Error>,
 ) -> Result<Route, Error> {
-    if env.cgi || env.no_proxy.split(',').any(|rule| rule.trim() == "*") {
+    if env.cgi || super::bypasses_all(&env.no_proxy) {
         Ok(Route::Direct)
     } else if !env.proxy.is_empty() {
         // Preserve the legacy ALL_PROXY fallback for unusable environment URLs.

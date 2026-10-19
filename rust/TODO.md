@@ -264,16 +264,10 @@ Unless marked reproduced, implementation findings are based on source review.
   `glib-compile-schemas`; headless test hosts without it exercise KDE only.
   Review source-specific malformed bypass handling before changing dependencies.
 
-- [ ] **Share automatic proxy routing with other SDK HTTP clients.**
-  Adopt `asimov-http::proxy` in separate patches (source audit 2026-10-19):
-  - OpenAI forwarding (`lib/asimov-proxy/src/{openai,proxy_config}.rs`): replace
-    duplicated discovery/validation and reconcile lowercase-first environment
-    precedence and different bypass rules while preserving response streaming.
-
-  The current reqwest adapter is origin-scoped; never reuse its policy across
-  origins or automatic redirects. Other backends must honor both the endpoint
-  candidate and its NO_PROXY list. Audit dependency-owned HTTP transports too,
-  including module-template Git downloads in `lib/asimov-module-kit/src/module.rs`.
+- [ ] **Audit dependency-owned HTTP transports for shared proxy routing.**
+  Start with module-template Git downloads in `lib/asimov-module-kit/src/module.rs`.
+  Adapt backend hooks to `asimov-http` policy, including per-destination handling
+  for redirects. Never reuse an origin-scoped policy for another origin.
 
 - [ ] **Expose explicit additional TLS roots for remote HTTPS.**
   Add constructor/builder support for custom CA certificates alongside platform
@@ -291,12 +285,11 @@ Unless marked reproduced, implementation findings are based on source review.
   test client disconnection and cancellation without buffering responses.
 
 - [ ] **Complete upstream-proxy interoperability coverage.**
-  `lib/asimov-proxy/src/proxy_config.rs` lacks port-aware NO_PROXY rules.
-  `proxy_connector.rs` uses only the first locally resolved SOCKS address;
-  CONNECT parsing must enforce its header cap even when the terminator arrives
-  in the same read and preserve any following tunnel bytes. Test malformed
-  CONNECT responses, HTTPS proxies, SOCKS DNS modes, and multi-address fallback
-  against local fixtures.
+  `lib/asimov-proxy/src/proxy_connector.rs` uses only the first locally resolved
+  SOCKS address. Add multi-address fallback and HTTPS-proxy TLS fixtures. Extend
+  the connector to SOCKS4/4a; selected unsupported protocols currently fail at
+  setup. Define port-qualified NO_PROXY support in the shared HTTP policy rather
+  than adding backend-specific matching rules.
 
 - [ ] **Move proxy body logging off the response polling path.**
   `lib/asimov-proxy/src/body_logger.rs` locks a mutex and writes synchronously

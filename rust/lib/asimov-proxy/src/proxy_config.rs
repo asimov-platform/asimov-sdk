@@ -2,10 +2,9 @@
 
 //! Upstream connection establishment, optionally through a proxy.
 //!
-//! Environment discovery consults conventional environment variables,
-//! consulted in this order: `https_proxy`, `HTTPS_PROXY`, `all_proxy`,
-//! `ALL_PROXY`. (Since the upstream endpoint is always HTTPS, `http_proxy`
-//! does not apply.) The `no_proxy`/`NO_PROXY` exclusion list is honored.
+//! Discovery, endpoint validation, and bypass decisions use `asimov-http`.
+//! Uppercase environment values, including empty values, precede lowercase
+//! values. Per-scheme endpoints precede native settings, then ALL_PROXY.
 //!
 //! Supported proxy URL schemes:
 //!
@@ -24,8 +23,11 @@ use base64::Engine as _;
 /// How to reach the upstream server.
 #[derive(Clone, Default)]
 pub enum ProxyConfig {
-    /// Connect directly to the target.
+    /// Resolve shared environment/native policy for the destination at setup.
     #[default]
+    Automatic,
+
+    /// Connect directly to the target.
     Direct,
 
     /// Tunnel through an HTTP(S) proxy using `CONNECT`.
@@ -56,6 +58,7 @@ pub enum ProxyConfig {
 impl core::fmt::Debug for ProxyConfig {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::Automatic => f.write_str("Automatic"),
             Self::Direct => f.write_str("Direct"),
             Self::HttpConnect {
                 host,
@@ -86,33 +89,59 @@ impl core::fmt::Debug for ProxyConfig {
 }
 
 impl ProxyConfig {
-    /// Determines the proxy configuration for `target_host` from the
-    /// conventional environment variables for an HTTPS upstream.
+    #[cfg(feature = "std")]
+    pub(crate) fn for_target(self, target: &url::Url) -> Result<Self, Error> {
+        match self {
+            Self::Automatic => Self::from_options(target, &crate::UpstreamProxyOptions::default()),
+            config => Ok(config),
+        }
+    }
+
+    /// Resolves shared environment/native proxy policy for an HTTPS host.
     ///
-    /// Reads the first nonempty value from `https_proxy`, `HTTPS_PROXY`,
-    /// `all_proxy`, and `ALL_PROXY`, unless `no_proxy` or `NO_PROXY` excludes
-    /// the host. Exclusions support `*`, exact hosts, and domain suffixes.
+    /// Uppercase variables take precedence, including empty values. Honors
+    /// native exclusions, NO_PROXY domains/IPs/CIDRs/`*`, and CGI protection.
+    /// The returned route is scoped to this host on port 443. For a URL with
+    /// a different scheme/port or local overrides, use [`Self::from_options`].
     #[cfg(feature = "std")]
     pub fn from_env(target_host: &str) -> Result<Self, Error> {
-        if no_proxy_matches(target_host) {
-            return Ok(Self::Direct);
-        }
-        match env_var(&["https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"]) {
-            Some(input) => Self::parse(&input),
+        let host = match target_host.parse::<core::net::Ipv6Addr>() {
+            Ok(address) => format!("[{address}]"),
+            Err(_) => target_host.into(),
+        };
+        let mut url = url::Url::parse("https://localhost/").expect("valid HTTPS base URL");
+        url.set_host(Some(&host))?;
+        Self::from_options(&url, &crate::UpstreamProxyOptions::default())
+    }
+
+    /// Resolves a route for one origin using shared proxy selection and bypass
+    /// options. Use the returned configuration only for this origin.
+    ///
+    /// Discovery/validation errors propagate. A selected protocol unsupported
+    /// by this connector (currently SOCKS4/4a) returns an explicit error.
+    #[cfg(feature = "std")]
+    pub fn from_options(
+        target: &url::Url,
+        options: &crate::UpstreamProxyOptions,
+    ) -> Result<Self, Error> {
+        let policy = asimov_http::proxy::OriginProxy::resolve(target, options)?;
+        match policy.proxy_for_hyper()? {
+            Some(endpoint) => Self::from_endpoint(endpoint),
             None => Ok(Self::Direct),
         }
     }
 
     /// Parses a proxy URL such as `http://user:pass@host:port` or
     /// `socks5h://host:port`.
+    ///
+    /// Produces an explicit route with no inherited bypass rules. URL syntax
+    /// uses shared validation; paths, queries, fragments, and port zero fail.
+    /// Use [`Self::Automatic`] or, with `std`, `from_options` for bypass policy.
     pub fn parse(input: &str) -> Result<Self, Error> {
-        // A bare `host:port` is conventionally an HTTP proxy:
-        let url = if input.contains("://") {
-            url::Url::parse(input)
-        } else {
-            url::Url::parse(&format!("http://{}", input))
-        }?;
+        Self::from_endpoint(&asimov_http::proxy::parse_endpoint(input)?)
+    }
 
+    fn from_endpoint(url: &url::Url) -> Result<Self, Error> {
         // Socket address tuples and TLS server names need an unbracketed IP.
         let host = match url.host().ok_or(Error::MissingProxyHost)? {
             url::Host::Domain(host) => host.to_string(),
@@ -171,40 +200,6 @@ impl ProxyConfig {
     }
 }
 
-/// Returns the first nonempty environment variable among `names`.
-#[cfg(feature = "std")]
-fn env_var(names: &[&str]) -> Option<String> {
-    names
-        .iter()
-        .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
-}
-
-/// Checks whether `host` is excluded from proxying by `no_proxy`/`NO_PROXY`.
-#[cfg(feature = "std")]
-fn no_proxy_matches(host: &str) -> bool {
-    let Some(no_proxy) = env_var(&["no_proxy", "NO_PROXY"]) else {
-        return false;
-    };
-    no_proxy_list_matches(&no_proxy, host)
-}
-
-#[cfg(any(feature = "std", test))]
-fn no_proxy_list_matches(no_proxy: &str, host: &str) -> bool {
-    no_proxy.split(',').any(|entry| {
-        let entry = entry.trim().trim_start_matches('.');
-        !entry.is_empty()
-            && (entry == "*"
-                || host.eq_ignore_ascii_case(entry)
-                || host
-                    .len()
-                    .checked_sub(entry.len())
-                    .and_then(|index| host.split_at_checked(index))
-                    .is_some_and(|(prefix, suffix)| {
-                        prefix.ends_with('.') && suffix.eq_ignore_ascii_case(entry)
-                    }))
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,7 +221,9 @@ mod tests {
                 ProxyConfig::Socks5 { auth, .. } => {
                     assert_eq!(auth, Some(("user@domain".into(), "p:a%ss+".into())));
                 },
-                ProxyConfig::Direct => panic!("expected proxy credentials"),
+                ProxyConfig::Automatic | ProxyConfig::Direct => {
+                    panic!("expected proxy credentials")
+                },
             }
             let error = ProxyConfig::parse(&format!("{scheme}://user:secret%FF@proxy.example"))
                 .unwrap_err()
@@ -253,7 +250,7 @@ mod tests {
             let (host, port) = match config {
                 ProxyConfig::HttpConnect { host, port, .. }
                 | ProxyConfig::Socks5 { host, port, .. } => (host, port),
-                ProxyConfig::Direct => panic!("expected a proxy"),
+                ProxyConfig::Automatic | ProxyConfig::Direct => panic!("expected a proxy"),
             };
             assert_eq!(host, "::1", "{input}");
             let addresses: Vec<_> = (host.as_str(), port).to_socket_addrs().unwrap().collect();
@@ -371,16 +368,15 @@ mod tests {
     }
 
     #[test]
-    fn no_proxy_matching() {
-        assert!(no_proxy_list_matches("*", "openrouter.ai"));
-        assert!(no_proxy_list_matches("openrouter.ai", "openrouter.ai"));
-        assert!(no_proxy_list_matches(".openrouter.ai", "api.openrouter.ai"));
-        assert!(no_proxy_list_matches(
-            "example.com, openrouter.ai",
-            "openrouter.ai"
-        ));
-        assert!(!no_proxy_list_matches("example.com", "openrouter.ai"));
-        assert!(!no_proxy_list_matches("router.ai", "openrouter.ai"));
-        assert!(!no_proxy_list_matches("a.ai", "é.ai"));
+    fn explicit_endpoints_use_shared_validation() {
+        for endpoint in [
+            "http://proxy.example/path",
+            "http://proxy.example?query",
+            "http://proxy.example#fragment",
+            "http://proxy.example:0",
+            " proxy.example",
+        ] {
+            assert!(matches!(ProxyConfig::parse(endpoint), Err(Error::Proxy(_))));
+        }
     }
 }

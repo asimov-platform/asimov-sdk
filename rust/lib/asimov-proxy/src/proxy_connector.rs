@@ -2,18 +2,11 @@
 
 //! Upstream connection establishment, optionally through a proxy.
 //!
-//! Receives explicit configuration; proxy URL parsing and environment
-//! discovery live in `proxy_config`.
+//! Receives one destination origin and resolves shared proxy policy at setup.
 
 use super::{proxy_config::ProxyConfig, proxy_stream::ProxyStream};
-use crate::BoxError;
-use alloc::{
-    boxed::Box,
-    format,
-    string::{String, ToString},
-    sync::Arc,
-    vec::Vec,
-};
+use crate::{BoxError, Error, ProxyMode, UpstreamProxyOptions};
+use alloc::{boxed::Box, format, string::ToString, sync::Arc, vec::Vec};
 use core::{
     future::Future,
     pin::Pin,
@@ -39,16 +32,30 @@ use tower_service::Service;
 #[derive(Clone)]
 pub(crate) struct ProxyConnector {
     config: Arc<ProxyConfig>,
+    origin: url::Origin,
     /// TLS used for connecting to `https://` proxies (not the target).
     proxy_tls: TlsConnector,
 }
 
 impl ProxyConnector {
-    pub fn new(config: ProxyConfig, tls_config: Arc<rustls::ClientConfig>) -> Self {
-        Self {
+    pub fn new(
+        target: &url::Url,
+        config: ProxyConfig,
+        tls_config: Arc<rustls::ClientConfig>,
+    ) -> Result<Self, Error> {
+        let scope = asimov_http::proxy::OriginProxy::resolve(
+            target,
+            &UpstreamProxyOptions {
+                mode: ProxyMode::Direct,
+                no_proxy: None,
+            },
+        )?;
+        let config = config.for_target(target)?;
+        Ok(Self {
             config: Arc::new(config),
+            origin: scope.origin().clone(),
             proxy_tls: TlsConnector::from(tls_config),
-        }
+        })
     }
 }
 
@@ -63,9 +70,16 @@ impl Service<Uri> for ProxyConnector {
 
     fn call(&mut self, dst: Uri) -> Self::Future {
         let config = Arc::clone(&self.config);
+        let origin = self.origin.clone();
         let proxy_tls = self.proxy_tls.clone();
 
         Box::pin(async move {
+            if url::Url::parse(&dst.to_string())?.origin() != origin {
+                return Err(asimov_http::proxy::Error::InvalidOrigin(
+                    "connector must use its configured origin",
+                )
+                .into());
+            }
             let target_host = dst
                 .host()
                 .ok_or("target URI is missing a host")?
@@ -78,6 +92,7 @@ impl Service<Uri> for ProxyConnector {
             });
 
             match &*config {
+                ProxyConfig::Automatic => Err("proxy policy was not resolved at setup".into()),
                 ProxyConfig::Direct => {
                     let stream = TcpStream::connect((target_host.as_str(), target_port)).await?;
                     Ok(ProxyStream::new(stream))
@@ -165,30 +180,32 @@ where
     stream.write_all(request.as_bytes()).await?;
 
     let mut response = Vec::with_capacity(1024);
-    loop {
-        let mut chunk = [0u8; 1024];
-        let count = stream.read(&mut chunk).await?;
-        if count == 0 {
-            return Err("the proxy closed the connection during CONNECT".into());
-        }
-        response.extend_from_slice(&chunk[..count]);
-        if response.windows(4).any(|window| window == b"\r\n\r\n") {
-            break;
-        }
-        if response.len() > 8192 {
+    while !response.ends_with(b"\r\n\r\n") {
+        if response.len() == 8192 {
             return Err("oversized CONNECT response from the proxy".into());
         }
+        // Stop exactly at the header boundary. Tunnel bytes may arrive in the
+        // same packet and must remain available to the upstream TLS/HTTP layer.
+        response.push(stream.read_u8().await?);
     }
 
-    // e.g. "HTTP/1.1 200 Connection established"
-    let response = String::from_utf8_lossy(&response);
-    let status = response.split_whitespace().nth(1).unwrap_or_default();
-    if status != "200" {
-        return Err(format!(
-            "the proxy refused CONNECT: {}",
-            response.lines().next().unwrap_or_default()
-        )
-        .into());
+    let mut status_line = response
+        .split(|byte| *byte == b'\r')
+        .next()
+        .unwrap_or_default()
+        .split(|byte| *byte == b' ');
+    if !matches!(status_line.next(), Some(b"HTTP/1.0" | b"HTTP/1.1")) {
+        return Err("invalid CONNECT response from the proxy".into());
+    }
+    let status = status_line
+        .next()
+        .and_then(|value| core::str::from_utf8(value).ok())
+        .filter(|value| value.len() == 3 && value.bytes().all(|byte| byte.is_ascii_digit()))
+        .and_then(|value| value.parse::<u16>().ok())
+        .filter(|status| (100..=599).contains(status))
+        .ok_or("invalid CONNECT response status")?;
+    if status != 200 {
+        return Err(format!("the proxy refused CONNECT: HTTP {status}").into());
     }
 
     Ok(stream)
@@ -197,6 +214,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::string::String;
 
     #[tokio::test]
     async fn connect_tunnels_authenticate_and_format_ipv6_authorities() {
@@ -211,7 +229,7 @@ mod tests {
                 "CONNECT [::1]:443 HTTP/1.1\r\nHost: [::1]:443\r\nProxy-Authorization: Basic dXNlcjpwYXNz\r\n\r\n"
             );
             proxy
-                .write_all(b"HTTP/1.1 200 Connection established\r\n\r\n")
+                .write_all(b"HTTP/1.1 200 Connection established\r\n\r\n\x07")
                 .await
                 .unwrap();
             assert_eq!(proxy.read_u8().await.unwrap(), 42);
@@ -219,7 +237,40 @@ mod tests {
         let mut tunnel = http_connect(client, "::1", 443, Some("dXNlcjpwYXNz"))
             .await
             .unwrap();
+        assert_eq!(
+            tokio::time::timeout(core::time::Duration::from_secs(2), tunnel.read_u8())
+                .await
+                .unwrap()
+                .unwrap(),
+            7
+        );
         tunnel.write_all(&[42]).await.unwrap();
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn connect_rejects_invalid_and_oversized_headers_without_echoing_secrets() {
+        for response in [
+            "not-http 200 reason\r\n\r\n".into(),
+            "HTTP/1.1 secret-status reason\r\n\r\n".into(),
+            "HTTP/1.1 0200 reason\r\n\r\n".into(),
+            "HTTP/1.1 407 secret-reason\r\n\r\n".into(),
+            format!("HTTP/1.1 200 OK\r\nX-Fill: {}\r\n\r\n", "x".repeat(8192)),
+        ] {
+            let (client, mut proxy) = tokio::io::duplex(16384);
+            let server = tokio::spawn(async move {
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    request.push(proxy.read_u8().await.unwrap());
+                }
+                proxy.write_all(response.as_bytes()).await.unwrap();
+            });
+            let error = match http_connect(client, "service.invalid", 443, None).await {
+                Err(error) => error,
+                Ok(_) => panic!("invalid CONNECT reply was accepted"),
+            };
+            assert!(!error.to_string().contains("secret"));
+            server.await.unwrap();
+        }
     }
 }

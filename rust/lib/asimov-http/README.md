@@ -29,7 +29,7 @@ for [trustworthy neurosymbolic machine intelligence].
 - Streams response bodies with verification at EOF.
 - Provides runtime-independent HTTP body adapters for Hyper and Axum.
 - Supports `no_std` digest hashing and encoding.
-- Provides opt-in native proxy discovery and an origin-scoped reqwest adapter.
+- Provides opt-in native proxy discovery and reqwest/Hyper routing adapters.
 - Cuts red tape: 100% free and unencumbered public domain software.
 
 ## 🛠️ Prerequisites

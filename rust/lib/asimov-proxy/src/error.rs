@@ -5,6 +5,10 @@ use alloc::string::String;
 /// Proxy configuration and initialization failures, without credentials.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Shared endpoint validation or environment/native discovery failed.
+    #[error(transparent)]
+    Proxy(#[from] asimov_http::proxy::Error),
+
     /// The proxy URL could not be parsed.
     #[error("invalid proxy URL: {0}")]
     InvalidProxyUrl(#[from] url::ParseError),
@@ -21,7 +25,7 @@ pub enum Error {
     #[error("proxy password is not valid UTF-8")]
     InvalidProxyPassword,
 
-    /// The URL scheme is not HTTP, HTTPS, SOCKS5, or SOCKS5H.
+    /// The selected proxy scheme is not supported by this connector.
     #[error("unsupported proxy scheme: {0}")]
     UnsupportedProxyScheme(String),
 

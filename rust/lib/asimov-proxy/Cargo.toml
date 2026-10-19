@@ -23,6 +23,7 @@ title = "ASIMOV.rs: Proxy Support"
 default = ["all", "std"]
 all = ["tracing"]
 std = [
+    "asimov-http/hyper",
     "base64/std",
     "percent-encoding/std",
     "thiserror/std",
@@ -45,6 +46,7 @@ unstable = []
 tracing = ["dep:tracing"]
 
 [dependencies]
+asimov-http = { workspace = true, features = ["proxy"] }
 base64 = { workspace = true, features = ["alloc"] }
 percent-encoding = { workspace = true, features = ["alloc"] }
 thiserror.workspace = true

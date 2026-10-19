@@ -29,6 +29,7 @@ integrity = [
 proxy = ["dep:thiserror", "dep:url"]
 system-proxy = ["std", "proxy", "dep:plist", "dep:proxy-watch", "dep:system-configuration", "dep:windows-registry"]
 reqwest = ["system-proxy", "dep:reqwest", "reqwest/socks", "dep:tokio", "tokio/rt"]
+hyper = ["system-proxy", "dep:http", "dep:hyper-util", "hyper-util/client-proxy"]
 
 [dependencies]
 base64 = { workspace = true, features = ["alloc"] }
@@ -40,6 +41,7 @@ bytes = { workspace = true, optional = true }
 getrandom = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 http-body = { workspace = true, optional = true }
+hyper-util = { workspace = true, optional = true }
 sfv = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }

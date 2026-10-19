@@ -5,6 +5,7 @@
 //! `system-proxy` adds `OriginProxy` for construction-time environment/native
 //! discovery. `reqwest` adds its `configure_reqwest` adapter. A resolved policy
 //! belongs to one HTTP(S) origin; it must not configure a multi-origin client.
+//! `hyper` adds `proxy_for_hyper`, including the effective bypass decision.
 //! Native bypass grammars remain separate from `NO_PROXY` syntax.
 
 use alloc::{format, string::String};
@@ -15,6 +16,8 @@ use url::Url;
 mod system;
 #[cfg(feature = "system-proxy")]
 pub use system::OriginProxy;
+#[cfg(feature = "hyper")]
+mod hyper;
 #[cfg(feature = "reqwest")]
 mod reqwest;
 #[cfg(all(test, feature = "reqwest"))]
@@ -80,6 +83,11 @@ pub struct ProxyOptions {
     /// Direct mode ignores this field. Automatic mode retains CGI protection
     /// regardless of the override. Configuration never changes the environment.
     pub no_proxy: Option<String>,
+}
+
+#[cfg(feature = "system-proxy")]
+fn bypasses_all(list: &str) -> bool {
+    list.split(',').any(|rule| rule.trim() == "*")
 }
 
 /// Proxy configuration failures, separate from HTTP integrity failures.

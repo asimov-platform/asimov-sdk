@@ -1502,6 +1502,7 @@ dependencies = [
 name = "asimov-proxy"
 version = "25.8.0"
 dependencies = [
+ "asimov-http",
  "axum",
  "base64 0.23.1",
  "futures-lite",
