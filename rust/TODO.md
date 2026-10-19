@@ -265,9 +265,26 @@ Unless marked reproduced, implementation findings are based on source review.
   Review source-specific malformed bypass handling before changing dependencies.
 
 - [ ] **Audit dependency-owned HTTP transports for shared proxy routing.**
-  Start with module-template Git downloads in `lib/asimov-module-kit/src/module.rs`.
   Adapt backend hooks to `asimov-http` policy, including per-destination handling
   for redirects. Never reuse an origin-scoped policy for another origin.
+  Skip `asimov-module-kit` while its embedded transport integration is deferred.
+
+- [ ] **Deferred: shared proxy routing for embedded template Git downloads.**
+  On hold pending an upstream safe transport hook; do not pursue `git2-rs`
+  changes or replace embedded Git with a CLI dependency for this work.
+  Keep embedded Git in `lib/asimov-module-kit/src/module.rs::resolve_template`.
+  `git2` 0.21 / libgit2 1.9.7 accepts a fixed proxy, but
+  `RemoteRedirect::None` only blocks different hosts: same-host port changes
+  and HTTP-to-HTTPS redirects still connect (reproduced with local listeners).
+  Run `cargo test -p asimov-module-kit --test git_redirects -- --include-ignored`
+  to exercise both ignored origin-boundary regressions and the host control.
+  Revisit when `git2` exposes a safe per-remote transport factory, using
+  `git_remote_callbacks.transport` and the existing `Transport::smart` API.
+  Its current `transport::register` is unsafe and process-global. Then supply
+  an HTTP adapter that resolves `OriginProxy` for each destination, including
+  redirects, while preserving branch selection and the single local checkout.
+  A fixed proxy plus `RemoteRedirect::None` is insufficient; certificate
+  callbacks also run too late to prevent a misrouted connection.
 
 - [ ] **Expose explicit additional TLS roots for remote HTTPS.**
   Add constructor/builder support for custom CA certificates alongside platform
