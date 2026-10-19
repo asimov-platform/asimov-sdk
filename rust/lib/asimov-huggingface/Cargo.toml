@@ -22,17 +22,33 @@ title = "ASIMOV.rs: Hugging Face Client"
 [features]
 default = ["all", "std"]
 all = []
-std = ["asimov-core/std"]
+std = [
+    "dep:asimov-core", "asimov-core/std", "dep:asimov-http", "asimov-http/reqwest",
+    "dep:hf-hub", "dep:indicatif", "dep:reqwest", "dep:tempfile",
+    "dep:thiserror", "thiserror/std", "dep:tokio", "tokio/rt", "tokio/time",
+]
 unstable = []
 
 # Features:
 tracing = []
 
 [dependencies]
-asimov-core.workspace = true
-hf-hub.workspace = true
-indicatif.workspace = true
-thiserror.workspace = true
+asimov-core = { workspace = true, optional = true }
+asimov-http = { workspace = true, optional = true }
+# Retain hf-hub's cache/types, Progress trait, and public ApiError compatibility.
+hf-hub = { workspace = true, optional = true }
+indicatif = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "net", "io-util", "time"] }
+
+[[example]]
+name = "download"
+required-features = ["std"]
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
 [package.metadata.docs.rs]

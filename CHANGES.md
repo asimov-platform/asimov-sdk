@@ -17,11 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: Expose shared proxy configuration, native discovery, and an
   origin-scoped reqwest adapter; available through SDK `http-proxy`/`http-client`
 ### Changed
+- asimov-huggingface: Download/cache APIs require `std` (enabled by default);
+  HTTP requests use platform TLS verification
 - asimov-cloud: Reject redirects for native account balance requests
 - asimov-module: Reject redirects when fetching the public module index
 - asimov-http: HTTP integrity APIs now require `integrity` (enabled by default);
   consumers enabling only `std` must add `integrity`
 ### Fixed
+- asimov-huggingface: Use shared proxy discovery for metadata, downloads, and
+  redirects; scope saved tokens to the configured Hub origin
+- asimov-huggingface: Honor `HF_HOME` cache hits, pin snapshots to one commit,
+  and return the snapshot root for nested files
+- asimov-huggingface: Reject incomplete or inconsistent downloads before caching
 - asimov-installer: Use shared proxy discovery for GitHub requests and redirects
 - asimov-cloud: Use shared proxy discovery for native balance and credit checks
 - asimov-module: Use shared proxy routing for index downloads and return setup

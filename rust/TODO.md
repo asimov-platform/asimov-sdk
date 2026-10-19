@@ -59,14 +59,6 @@ Unless marked reproduced, implementation findings are based on source review.
   collision-safe, precision-preserving representation with a legacy reader;
   test multiple same-second saves and deletion through both timestamp forms.
 
-- [ ] **Respect the requested Hugging Face revision throughout a snapshot.**
-  `ensure_snapshot` in `lib/asimov-huggingface/src/ensure.rs` queries/downloads
-  the requested revision but checks cached files using a default-revision
-  `Repo`. This can mix revisions. It also returns the first file's parent, which
-  can be a nested directory rather than the snapshot root. Resolve one commit,
-  use it consistently for all files, and test two cached revisions plus a
-  repository whose first listed file is nested.
-
 ## P2: Build, feature, and facade correctness
 
 - [ ] **Make the no-std contract hold on a target without std.**
@@ -74,8 +66,8 @@ Unless marked reproduced, implementation findings are based on source review.
   `thumbv7em-none-eabihf`: default-enabled `know` pulls `serde_json/std` and
   `memchr/std` (reproduced and traced with `cargo tree`). Audit dependency
   defaults from `Cargo.toml` and `lib/asimov-core/Cargo.toml` outward, including
-  `know`'s pretty-printing dependencies. Restore `#![no_std]` in `asimov-env`,
-  `asimov-huggingface`, and `asimov-server`. Gate OS/runtime-only dependencies,
+  `know`'s pretty-printing dependencies. Restore `#![no_std]` in `asimov-env`
+  and `asimov-server`. Gate OS/runtime-only dependencies,
   modules, and re-exports together. Add a genuine no-std target check alongside
   host checks. The default KB build also fails on `wasm32-unknown-unknown`:
   `asimov-core/std` pulls native filesystem dependencies (`errno` and
@@ -274,8 +266,6 @@ Unless marked reproduced, implementation findings are based on source review.
 
 - [ ] **Share automatic proxy routing with other SDK HTTP clients.**
   Adopt `asimov-http::proxy` in separate patches (source audit 2026-10-19):
-  - Hugging Face (`lib/asimov-huggingface/src/ensure.rs`): adapt or replace
-    `hf-hub`'s internal ureq clients, including metadata and redirected downloads.
   - OpenAI forwarding (`lib/asimov-proxy/src/{openai,proxy_config}.rs`): replace
     duplicated discovery/validation and reconcile lowercase-first environment
     precedence and different bypass rules while preserving response streaming.
@@ -414,6 +404,11 @@ Unless marked reproduced, implementation findings are based on source review.
   concurrent first starts and disabling while another invocation is active.
 
 ## P3: Design, coverage, and maintenance
+
+- [ ] **Verify Hugging Face cache contents against their content IDs.**
+  `lib/asimov-huggingface/src/download.rs` validates ranges and lengths. Add
+  Git-blob SHA-1 and LFS SHA-256 verification, including complete `.part` files
+  and reused blobs; cover same-length corruption with local fixtures.
 
 - [ ] **Accept proxy credentials separately from endpoint URLs.**
   Follow curl's `--proxy-user`: explicit username/password fields for HTTP Basic

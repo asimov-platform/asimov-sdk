@@ -24,16 +24,20 @@ impl Progress {
             started: false,
         }
     }
+
+    pub(crate) fn init_bytes(&mut self, size: u64, position: u64) {
+        if size == 0 {
+            return;
+        }
+        self.bar.set_length(size);
+        self.bar.set_position(position);
+        self.started = true;
+    }
 }
 
 impl HfProgress for Progress {
     fn init(&mut self, size: usize, _filename: &str) {
-        if size == 0 {
-            return;
-        }
-        self.bar.set_length(size as u64);
-        self.bar.set_position(0);
-        self.started = true;
+        self.init_bytes(size as u64, 0);
     }
 
     fn update(&mut self, n: usize) {

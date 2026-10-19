@@ -82,6 +82,8 @@ Alternatively, enable only specific features:
 asimov = { package = "asimov-sdk", version = "25", default-features = false, features = ["tracing"] }
 {%- elif package.name == "asimov-http" %}
 asimov-http = { version = "25", default-features = false }
+{%- elif package.name == "asimov-huggingface" %}
+asimov-huggingface = { version = "25", default-features = false, features = ["std"] }
 {%- else %}
 {{ package.name }} = { version = "25", default-features = false, features = ["tracing"] }
 {%- endif %}
