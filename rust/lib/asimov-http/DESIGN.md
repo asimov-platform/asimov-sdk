@@ -1,7 +1,8 @@
 # HTTP integrity and proxy contracts
 
 `asimov-http` owns HTTP digest and message-signature processing shared by clients
-and servers. Cryptography uses SHA-256 and the protocol crate's Ed25519 keys.
+and servers. Cryptography uses SHA-256 and `iroh-base`'s Ed25519 keys, shared
+with the protocol crate without depending on its networking implementation.
 Structured Fields parsing and serialization use `sfv` in RFC 8941 mode.
 Client proxy policy is a separate capability; service addressing, credentials,
 timeouts, and connection-pool ownership remain with callers.
@@ -14,7 +15,7 @@ timeouts, and connection-pool ownership remain with callers.
   previously requesting only `std` must now request `integrity` for these APIs.
 - `proxy` adds alloc-only options, URL validation, and dedicated proxy errors.
 - `system-proxy` adds std-dependent native/environment discovery. It does not
-  activate signature/protocol dependencies or an HTTP client backend.
+  activate signature/key dependencies or an HTTP client backend.
 - `reqwest` adds the origin-scoped client-builder adapter and SOCKS4 system-DNS
   workaround. It enables `system-proxy`; integrity-only builds do not gain it.
 - `hyper` adds `OriginProxy::proxy_for_hyper`, applying NO_PROXY with the same

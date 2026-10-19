@@ -21,14 +21,18 @@ title = "ASIMOV.rs: P2P Protocol"
 
 [features]
 default = ["all", "std"]
-all = ["csv", "random"]
-std = ["asimov-core/std"]
+all = ["csv", "random", "tracing"]
+std = [
+    "asimov-core/std", "dep:asimov-http", "asimov-http?/std",
+    "dep:iroh-dns", "dep:reqwest", "dep:rustls", "tracing?/std",
+    "tokio/macros", "tokio/rt", "tokio/sync",
+]
 unstable = []
 
 # Features:
 csv = ["dep:csv-async", "tokio/fs"]
 random = ["dep:fastrand"]
-tracing = []
+tracing = ["dep:tracing"]
 
 [dependencies]
 asimov-core.workspace = true
@@ -54,11 +58,20 @@ tokio = { workspace = true, features = ["time"] }
 # Features:
 csv-async = { workspace = true, features = ["tokio"], optional = true }
 fastrand = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+asimov-http = { workspace = true, features = ["reqwest"], optional = true }
+iroh-dns = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+rustls = { workspace = true, features = ["std"], optional = true }
 
 [dev-dependencies]
+rcgen = { workspace = true, features = ["crypto", "ring"] }
 tempfile.workspace = true
 iroh-services.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-rustls.workspace = true
 tracing-subscriber.workspace = true
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features

@@ -3,7 +3,7 @@
 //! Shared HTTP integrity and client proxy configuration.
 //!
 //! SHA-256 is the sole digest algorithm (RFC 9530). With `integrity`, this crate
-//! implements RFC 9421 Ed25519 signatures using the protocol crate's keys,
+//! implements RFC 9421 Ed25519 signatures using Iroh's base key types,
 //! HTTP message-component canonicalization, and frame-preserving body adapters.
 //! SHA-256 hashing and digest-field encoding are also available without `std`.
 //!
@@ -20,7 +20,7 @@
 //! - `hyper`: effective proxy endpoint selection for Hyper connectors, including
 //!   shared bypass handling; implies `system-proxy`.
 //!
-//! Proxy features do not enable integrity or its protocol/Iroh dependencies.
+//! Proxy features do not enable integrity or its key dependencies.
 //! Use `default-features = false` to select them independently. Native proxy
 //! readers and client adapters are absent from integrity-only builds.
 //!
@@ -123,9 +123,9 @@ pub use signature::{
 };
 
 #[cfg(feature = "integrity")]
-pub use asimov_protocol::{EndpointId as VerifyingKey, SecretKey};
-#[cfg(feature = "integrity")]
 pub use http;
+#[cfg(feature = "integrity")]
+pub use iroh_base::{EndpointId as VerifyingKey, SecretKey};
 
 #[cfg(feature = "integrity")]
 pub mod body;

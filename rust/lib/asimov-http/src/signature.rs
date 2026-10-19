@@ -244,8 +244,7 @@ impl SignatureInput {
         signature: &[u8],
         key: &VerifyingKey,
     ) -> Result<(), Error> {
-        let signature =
-            asimov_protocol::iroh::Signature::try_from(signature).map_err(|_| Error::Signature)?;
+        let signature = iroh_base::Signature::try_from(signature).map_err(|_| Error::Signature)?;
         key.verify(&self.signature_base(message)?, &signature)
             .map_err(|_| Error::Signature)
     }

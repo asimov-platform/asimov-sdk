@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: Expose shared proxy configuration, native discovery, and an
   origin-scoped reqwest adapter; available through SDK `http-proxy`/`http-client`
 ### Changed
+- asimov-protocol: Reject method-changing publication redirects and HTTPS
+  downgrades for Pkarr address records
 - asimov-proxy: Default OpenRouter forwarding to automatic proxy discovery;
   use uppercase-first environment precedence and shared URL/bypass rules
 - asimov-huggingface: Download/cache APIs require `std` (enabled by default);
@@ -29,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: HTTP integrity APIs now require `integrity` (enabled by default);
   consumers enabling only `std` must add `integrity`
 ### Fixed
+- asimov-protocol: Use shared proxy discovery for native Pkarr publication,
+  address resolution, and redirects
 - asimov-proxy: Preserve bytes following CONNECT headers and enforce the header
   limit even when the terminator arrives in the same read
 - asimov-huggingface: Use shared proxy discovery for metadata, downloads, and

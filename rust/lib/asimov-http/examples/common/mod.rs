@@ -1,8 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
 use alloc::{boxed::Box, vec};
-use asimov_http::{Component, VerificationPolicy};
-use asimov_protocol::SecretKey;
+use asimov_http::{Component, SecretKey, VerificationPolicy};
 use std::net::SocketAddr;
 
 pub type BoxError = Box<dyn core::error::Error + Send + Sync>;

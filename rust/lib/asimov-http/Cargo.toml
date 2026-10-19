@@ -18,12 +18,12 @@ publish.workspace = true
 default = ["all", "std"]
 all = ["integrity"]
 std = [
-    "base64/std", "sha2/std", "thiserror?/std", "asimov-protocol?/std",
+    "base64/std", "sha2/std", "thiserror?/std",
     "bytes?/std", "url?/std",
 ]
 integrity = [
-    "std", "dep:thiserror", "dep:asimov-protocol",
-    "asimov-protocol/std", "dep:bs58", "dep:bytes", "bytes/std",
+    "std", "dep:thiserror", "dep:iroh-base",
+    "dep:bs58", "dep:bytes", "bytes/std",
     "dep:getrandom", "dep:http", "dep:http-body", "dep:sfv", "dep:url",
 ]
 proxy = ["dep:thiserror", "dep:url"]
@@ -35,7 +35,7 @@ hyper = ["system-proxy", "dep:http", "dep:hyper-util", "hyper-util/client-proxy"
 base64 = { workspace = true, features = ["alloc"] }
 sha2.workspace = true
 thiserror = { workspace = true, optional = true }
-asimov-protocol = { workspace = true, optional = true }
+iroh-base = { workspace = true, features = ["key"], optional = true }
 bs58 = { workspace = true, optional = true }
 bytes = { workspace = true, optional = true }
 getrandom = { workspace = true, optional = true }

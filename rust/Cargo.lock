@@ -1226,7 +1226,6 @@ dependencies = [
 name = "asimov-http"
 version = "25.8.0"
 dependencies = [
- "asimov-protocol",
  "async-stream",
  "base64 0.23.1",
  "bs58",
@@ -1237,6 +1236,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.12.0",
  "hyper-util",
+ "iroh-base",
  "plist",
  "proxy-watch",
  "rcgen",
@@ -1473,6 +1473,7 @@ name = "asimov-protocol"
 version = "25.8.0"
 dependencies = [
  "asimov-core",
+ "asimov-http",
  "asimov-id",
  "asimov-kb",
  "async-stream",
@@ -1482,6 +1483,7 @@ dependencies = [
  "futures-lite",
  "heapless 0.9.3",
  "iroh",
+ "iroh-dns",
  "iroh-gossip",
  "iroh-metrics",
  "iroh-services",
@@ -1489,12 +1491,17 @@ dependencies = [
  "known-errors",
  "n0-error",
  "postcard",
+ "rcgen",
  "rdf-hash",
  "rdf-model",
+ "reqwest",
+ "rustls",
  "serde",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "tokio-rustls",
+ "tracing",
  "tracing-subscriber",
 ]
 
