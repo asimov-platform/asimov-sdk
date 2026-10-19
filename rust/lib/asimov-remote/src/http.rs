@@ -29,9 +29,27 @@
 //!
 //! ## Proxies and destination lookup
 //!
-//! The executor snapshots automatic proxy configuration at [`Executor::new`].
-//! Create a new executor after changing it. Uppercase environment variables
-//! are checked before their lowercase variants:
+//! [`Executor::new_with_options`] accepts [`TransportOptions`] with an
+//! executor-local [`ProxyOptions`] policy:
+//!
+//! - [`ProxyMode::Automatic`] discovers proxies using the rules below. This is
+//!   also the default for [`Executor::new`] and [`Executor::new_with_timeouts`].
+//! - [`ProxyMode::Direct`] skips proxy discovery and always connects directly.
+//! - [`ProxyMode::Explicit`] uses a specified HTTP(S)/SOCKS endpoint, ignoring
+//!   environment proxy endpoints, native settings, and the CGI marker. Invalid
+//!   endpoints return [`Error::InvalidProxyUrl`] rather than selecting direct
+//!   access, even when a bypass rule matches.
+//!
+//! [`ProxyOptions::no_proxy`] defaults to inheriting environment bypass rules
+//! and, in automatic mode, native exclusions when applicable. `Some(list)`
+//! replaces both sources: an empty list disables bypasses, and `*` bypasses
+//! every host. Explicit mode never reads native exclusions. Direct mode ignores
+//! bypass configuration. None of these options change the process environment.
+//!
+//! The executor snapshots configuration during construction. Create a new
+//! executor after changing it; clones share the existing connection pool and
+//! routing decision. In automatic mode, uppercase environment variables are
+//! checked before their lowercase variants:
 //!
 //! - `HTTP_PROXY` and `HTTPS_PROXY` select proxies by the **destination**
 //!   scheme. The proxy URL's scheme selects HTTP(S) or SOCKS transport.
@@ -47,8 +65,8 @@
 //! On macOS, global static HTTP/HTTPS/SOCKS settings come from `SCDynamicStore`.
 //! Native `HTTPSProxy` is an HTTP CONNECT proxy for HTTPS destinations. SOCKS5
 //! with proxy-side DNS fills schemes without an enabled HTTP-family proxy.
-//! When a native proxy is selected and `NO_PROXY` is empty, native bypass rules
-//! apply:
+//! With inherited bypass rules, a native proxy and an empty `NO_PROXY` use the
+//! native exclusions:
 //!
 //! - `ExceptionsList` accepts exact hosts/IPs, whole-label wildcards such as
 //!   `*.example.com` and `example.*`, and IPv4 CIDRs such as `169.254/16`.
@@ -61,8 +79,8 @@
 //!   `127.0.0.1`, and `::1`. This does not cover the whole loopback subnet.
 //!
 //! A native exclusion selects a direct connection, including when `ALL_PROXY`
-//! is set. Nonempty `NO_PROXY` replaces the native bypass rules. Native rules
-//! do not override an explicit per-scheme environment proxy. Native routing is
+//! is set. Nonempty inherited `NO_PROXY` replaces the native bypass rules.
+//! Native rules do not override a per-scheme environment proxy. Native routing is
 //! fixed at construction for the executor's origin, shared by execution and
 //! identity discovery. Invalid native endpoints return [`Error::InvalidProxy`]
 //! with a setting name rather than its contents.
@@ -297,6 +315,7 @@ pub use asimov_id::PublicKey;
 #[cfg(target_os = "macos")]
 mod macos_proxy;
 mod proxy;
+pub use proxy::{ProxyMode, ProxyOptions};
 mod rate_limit;
 mod remote_identity;
 use remote_identity::RemoteIdentityCache;
@@ -329,8 +348,12 @@ pub enum Error {
     /// Only the setting name is reported, never its contents.
     #[error("invalid native proxy setting: {0}")]
     InvalidProxy(&'static str),
+    /// Invalid explicitly configured proxy endpoint. Reports a reason without
+    /// including the URL or its credentials.
+    #[error("invalid explicit proxy URL: {0}")]
+    InvalidProxyUrl(&'static str),
     /// The native proxy source requires a resolver this adapter cannot use.
-    #[error("unsupported automatic proxy source: {0}; configure HTTP_PROXY or HTTPS_PROXY")]
+    #[error("unsupported automatic proxy source: {0}; configure an explicit proxy")]
     UnsupportedProxy(&'static str),
     /// A configured local deadline expired. The remote may have accepted work.
     #[error("HTTP {phase} timed out after {duration:?}")]
@@ -432,6 +455,18 @@ impl ResponseVerification {
     }
 }
 
+/// Construction-time HTTP transport policy for [`Executor::new_with_options`].
+///
+/// Defaults to automatic proxy discovery and [`TimeoutOptions::default()`].
+/// Cloned executors share the resulting connection pool and routing decision.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TransportOptions {
+    /// Local transport deadlines, including proxy negotiation.
+    pub timeouts: TimeoutOptions,
+    /// Proxy endpoint selection and executor-local bypass rules.
+    pub proxy: ProxyOptions,
+}
+
 /// Reusable HTTP(S) service configuration.
 /// Clones share the connection pool and remote identity cache.
 ///
@@ -492,7 +527,8 @@ impl Executor {
     /// configure the service's final URL so request integrity fields remain
     /// bound to the prepared request's method, target, and body.
     /// Uses [`TimeoutOptions::default()`]; select other limits with
-    /// [`Self::new_with_timeouts`].
+    /// [`Self::new_with_timeouts`]. To configure proxy selection and timeouts
+    /// together, use [`Self::new_with_options`].
     ///
     /// # Errors
     ///
@@ -533,6 +569,54 @@ impl Executor {
         api_token: Option<&str>,
         timeouts: TimeoutOptions,
     ) -> Result<Self, Error> {
+        Self::new_with_options(
+            base_url,
+            api_token,
+            TransportOptions {
+                timeouts,
+                ..TransportOptions::default()
+            },
+        )
+    }
+
+    /// Configures proxy selection and timeouts before constructing the client.
+    ///
+    /// Execution and identity discovery use the same configured client. Proxy
+    /// settings are resolved once; clones share that decision and connection
+    /// pool. Direct and explicit modes skip native discovery. Other service,
+    /// TLS, and authentication settings follow [`Self::new`].
+    ///
+    /// ```no_run
+    /// use asimov_remote::http::{
+    ///     Executor, ProxyMode, ProxyOptions, TransportOptions,
+    /// };
+    /// let options = TransportOptions {
+    ///     proxy: ProxyOptions {
+    ///         mode: ProxyMode::Explicit("socks5h://127.0.0.1:1080".into()),
+    ///         // Override inherited bypass rules, including NO_PROXY.
+    ///         no_proxy: Some("localhost,127.0.0.0/8,::1".into()),
+    ///     },
+    ///     ..TransportOptions::default()
+    /// };
+    /// let executor = Executor::new_with_options(
+    ///     "https://asimov.social", Some("api-token"), options,
+    /// )?;
+    /// # Ok::<(), asimov_remote::http::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidProxyUrl`] for invalid explicit proxy URLs,
+    /// even if a bypass rule would select direct access; also returns the
+    /// timeout, URL, TLS, HTTP setup, native-proxy, and local identity
+    /// errors of [`Self::new_with_timeouts`]. Explicit proxy validation precedes
+    /// proxy discovery, TLS setup, and local identity access.
+    pub fn new_with_options(
+        base_url: impl AsRef<str>,
+        api_token: Option<&str>,
+        options: TransportOptions,
+    ) -> Result<Self, Error> {
+        let timeouts = options.timeouts;
         timeouts.validate()?;
         let mut base_url = Url::parse(base_url.as_ref())
             .map_err(|error| Error::InvalidBaseUrl(format!("{error}")))?;
@@ -546,8 +630,8 @@ impl Executor {
         }
         base_url.set_query(None);
         base_url.set_fragment(None);
-        let builder = client_builder(timeouts)?;
-        let builder = proxy::configure(builder, &base_url)?;
+        let proxy = proxy::resolve(&base_url, &options.proxy)?;
+        let builder = proxy.apply(client_builder(timeouts)?)?;
         Ok(Self {
             client: builder.build()?,
             base_url,

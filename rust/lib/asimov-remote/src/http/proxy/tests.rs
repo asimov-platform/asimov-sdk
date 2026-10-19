@@ -1,7 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
 use super::*;
-use crate::http::{Executor, StreamExt, TimeoutOptions, client_builder};
+use crate::http::{Executor, StreamExt, TimeoutOptions, TransportOptions, client_builder};
 use alloc::{sync::Arc, vec, vec::Vec};
 use core::{convert::Infallible, time::Duration};
 use http_body_util::{BodyExt, Full};
@@ -14,6 +14,8 @@ use tokio::{
 };
 
 const DEADLINE: Duration = Duration::from_secs(10);
+
+mod configuration;
 
 #[test]
 fn overrides_and_cgi_skip_native_discovery() {
@@ -356,16 +358,20 @@ async fn authenticated_http_https_and_socks_proxies_carry_discovery_and_executio
             ))
             .unwrap();
             let mut executor = Executor::new(&url, Some("service-token")).unwrap();
-            executor.client = configure_with(
+            executor.client = resolve_options(
+                &ProxyOptions {
+                    mode: ProxyMode::Explicit(proxy.as_str().into()),
+                    no_proxy: Some(String::new()),
+                },
+                || panic!("explicit proxy and bypass must not read the environment"),
+                |_| panic!("explicit proxy must not read native settings"),
+            )
+            .unwrap()
+            .apply(
                 client_builder(TimeoutOptions::default())
                     .unwrap()
                     .tls_backend_preconfigured(tls)
                     .resolve("proxy.invalid", address),
-                &Environment {
-                    all_proxy: "http://127.0.0.1:1".into(),
-                    ..Environment::default()
-                },
-                || Ok(Route::Native(proxy)),
             )
             .unwrap()
             .build()
@@ -469,6 +475,7 @@ async fn environment_fallback_and_bypass_control_the_actual_connection() {
             },
             no_proxy: bypass.into(),
             cgi,
+            ..Environment::default()
         };
         let client = configure_with(reqwest::Client::builder(), &env, || {
             assert_ne!(per_scheme, "selected");

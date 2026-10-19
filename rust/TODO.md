@@ -408,14 +408,6 @@ Unless marked reproduced, implementation findings are based on source review.
 
 ## P3: Design, coverage, and maintenance
 
-- [ ] **Expose per-executor proxy selection and configuration errors.**
-  Support automatic, direct, and explicitly configured proxy modes without
-  process-global environment changes, following curl's `--proxy`/`--noproxy`.
-  Include executor-local bypass overrides; distinguish inheritance, an empty
-  replacement list, and `*`. Validate explicit proxy URLs instead of silently
-  ignoring unsupported schemes, as hyper-util 0.1.21 currently does. Apply
-  transport configuration before constructing the shared HTTP client.
-
 - [ ] **Accept proxy credentials separately from endpoint URLs.**
   Follow curl's `--proxy-user`: explicit username/password fields for HTTP Basic
   and SOCKS5, with redacted diagnostics and lossless credential encoding.

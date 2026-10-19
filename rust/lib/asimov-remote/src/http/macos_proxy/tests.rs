@@ -350,14 +350,21 @@ fn environment_and_cgi_take_precedence_without_reading_native_settings() {
     }
     let mut config = settings();
     exceptions(&mut config, &["service.invalid"]);
-    let env = Environment {
-        no_proxy: "other.invalid".into(),
-        ..Environment::default()
-    };
-    assert!(matches!(
-        select(&url, &env, || Ok(Some(config))).unwrap(),
-        Route::Native(_)
-    ));
+    for env in [
+        Environment {
+            no_proxy: "other.invalid".into(),
+            ..Environment::default()
+        },
+        Environment {
+            no_proxy_override: true,
+            ..Environment::default()
+        },
+    ] {
+        assert!(matches!(
+            select(&url, &env, || Ok(Some(config.clone()))).unwrap(),
+            Route::Native(_)
+        ));
+    }
 }
 
 struct Peer {

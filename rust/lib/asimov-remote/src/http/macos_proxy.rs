@@ -56,7 +56,7 @@ fn select_native(
     } else {
         return Ok(Route::Automatic);
     };
-    if env.no_proxy.is_empty() && bypasses(&settings, url) {
+    if env.use_native_bypass() && bypasses(&settings, url) {
         Ok(Route::Direct)
     } else {
         Ok(Route::Native(proxy))

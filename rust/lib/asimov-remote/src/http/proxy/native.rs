@@ -31,7 +31,7 @@ pub(super) fn route(
         _ => return Err(Error::InvalidProxy(setting)),
     };
     let proxy = step.to_url().ok_or(Error::InvalidProxy(setting))?;
-    if env.no_proxy.is_empty() && mode.bypass().is_some_and(|bypass| bypass.matches_url(url)) {
+    if env.use_native_bypass() && mode.bypass().is_some_and(|bypass| bypass.matches_url(url)) {
         Ok(Route::Direct)
     } else {
         Ok(Route::Native(proxy))
