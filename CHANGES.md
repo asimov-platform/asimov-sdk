@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- asimov-directory, asimov-remote: Manage named HTTP(S) remotes as plain-text
+  files rooted at a state directory
 - asimov-http: Resolve effective proxy endpoints for Hyper connectors
 - asimov-proxy: Support shared proxy options and bypass overrides with
   `ProxyConfig::from_options`

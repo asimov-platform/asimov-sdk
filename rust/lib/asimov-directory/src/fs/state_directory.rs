@@ -1,7 +1,8 @@
 // This is free and unencumbered software released into the public domain.
 
-use super::{ConfigDirectory, ModuleDirectory, ProgramDirectory};
+use super::{ConfigDirectory, ModuleDirectory, ProgramDirectory, RemoteDirectory};
 use alloc::format;
+use asimov_core::crates::cap_std;
 use camino::{Utf8Path, Utf8PathBuf};
 use derive_more::Display;
 use std::{
@@ -23,11 +24,24 @@ impl AsRef<Utf8PathBuf> for StateDirectory {
 }
 
 impl StateDirectory {
+    /// Opens `ASIMOV_ROOT`, falling back to the default home state directory.
+    pub fn from_env() -> Result<Self> {
+        match std::env::var_os("ASIMOV_ROOT") {
+            Some(path) if path.is_empty() => Err(Error::new(
+                ErrorKind::InvalidInput,
+                "ASIMOV_ROOT must not be empty",
+            )),
+            Some(path) => Self::open(path),
+            None => Self::home(),
+        }
+    }
+
     /// Opens the default state directory in the user's home directory.
     ///
     /// On Unix platforms, including macOS and Linux, this is `$HOME/.asimov/`.
     pub fn home() -> Result<Self> {
-        let home_dir = std::env::home_dir().expect("home directory not found"); // FIXME
+        let home_dir = std::env::home_dir()
+            .ok_or_else(|| Error::new(ErrorKind::NotFound, "home directory not found"))?;
         Self::open(home_dir.join(".asimov"))
     }
 
@@ -59,6 +73,17 @@ impl StateDirectory {
     /// Opens the program directory under this state directory.
     pub fn programs(&self) -> Result<ProgramDirectory> {
         ProgramDirectory::open(self.join("libexec"))
+    }
+
+    /// Opens remote storage rooted at this state directory.
+    ///
+    /// The `remotes/` subdirectory is created only when adding a remote.
+    pub fn remotes(&self) -> Result<RemoteDirectory> {
+        let root = cap_std::fs::Dir::open_ambient_dir(
+            self.path.as_std_path(),
+            cap_std::ambient_authority(),
+        )?;
+        Ok(RemoteDirectory::new(root))
     }
 
     pub fn join(&self, path: impl AsRef<Utf8Path>) -> Utf8PathBuf {

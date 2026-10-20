@@ -26,7 +26,7 @@ std = ["asimov-core/std", "asimov-protocol/std"]
 unstable = []
 
 # Features:
-fs = ["std", "dep:camino", "dep:tokio"]
+fs = ["std", "dep:camino", "dep:cap-tempfile", "dep:tokio"]
 tracing = []
 
 # Integrations:
@@ -44,9 +44,11 @@ serde_yaml_ng = { workspace = true }
 
 # Integrations:
 camino = { workspace = true, optional = true }
+cap-tempfile = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["fs"], optional = true }
 
 [dev-dependencies]
+tempfile.workspace = true
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 # Preview locally with: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features

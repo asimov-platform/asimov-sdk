@@ -86,6 +86,7 @@ pub use asimov_runner as runner;
 /// Remote pattern execution and owned request bodies.
 ///
 /// Enable `remote` and `jcs` for RFC 8785 canonical request serialization.
+/// With `std`, `remote` also exposes tracked-remote filesystem storage.
 ///
 /// ```
 /// # #[cfg(feature = "jcs")] {

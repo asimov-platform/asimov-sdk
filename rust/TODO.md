@@ -137,11 +137,16 @@ Unless marked reproduced, implementation findings are based on source review.
 
 - [ ] **Unify state-root selection across configuration and storage APIs.**
   `lib/asimov-env/src/paths.rs` honors `ASIMOV_ROOT` and platform defaults,
-  `lib/asimov-directory/src/fs/state_directory.rs` always uses `~/.asimov`, and
+  `StateDirectory::from_env()` honors `ASIMOV_ROOT` but defaults to `~/.asimov`, and
   core/env `config_dir` separately use `ASIMOV_HOME` and `~/.config/asimov`.
   Define their intended relationship, share root resolution, and propagate
   missing-home errors instead of panicking. Test custom roots, absent home
   variables, and Windows paths, including keyring and peer resolution.
+
+- [ ] **Make tracked-remote renames atomic across interruptions.**
+  `RemoteDirectory::rename` publishes a non-clobbering hard link before removing
+  the old name. Failure or interruption between these steps leaves both names.
+  Consider portable no-replace rename support and directory-sync durability.
 
 - [ ] **Honor optional configuration variables when reading a profile.**
   `read_variables` in `lib/asimov-module/src/models/module_manifest.rs` calls

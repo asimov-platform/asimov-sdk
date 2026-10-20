@@ -64,6 +64,7 @@ std = [
     "asimov-proxy?/std",
     "asimov-registry?/std",
     "asimov-remote?/std",
+    "asimov-remote?/fs",
     "asimov-runner?/std",
     "asimov-snapshot?/std",
     "asimov-telemetry?/std",

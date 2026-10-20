@@ -30,10 +30,16 @@
 //!   execution API and wire protocol are not implemented or specified here.
 //!
 //! Each adapter defines its response types, failures, and execution lifecycle.
-//! The default feature bundle includes `http`, `iroh`, and `serde`; disable
+//! The default feature bundle includes `fs`, `http`, `iroh`, and `serde`; disable
 //! defaults to use only request values or select individual encodings/transports.
 //! Local execution belongs to asimov-runner; domain APIs belong to their own
 //! crates.
+//!
+//! # Tracked remotes
+//!
+//! The `fs` feature provides [`RemotesRegistry`] for named HTTP(S) URLs stored as
+//! newline-terminated files under `StateDirectory::remotes()`. It requires
+//! `std` but does not enable a transport or perform network requests.
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -49,6 +55,11 @@ pub use asimov_patterns::{
 
 mod requests;
 pub use requests::{FetcherRequest, ListerRequest};
+
+#[cfg(feature = "fs")]
+mod registry;
+#[cfg(feature = "fs")]
+pub use registry::{Remote, RemotesRegistry};
 
 #[cfg(feature = "http")]
 pub mod http;

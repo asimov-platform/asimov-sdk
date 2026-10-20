@@ -18,5 +18,8 @@ pub use module_iterators::*;
 mod program_directory;
 pub use program_directory::*;
 
+mod remote_directory;
+pub use remote_directory::*;
+
 mod state_directory;
 pub use state_directory::*;
