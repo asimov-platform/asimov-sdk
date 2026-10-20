@@ -14,6 +14,7 @@ use tokio::{
     time::timeout,
 };
 
+mod check;
 mod digest;
 mod proxy;
 mod remote_identity;

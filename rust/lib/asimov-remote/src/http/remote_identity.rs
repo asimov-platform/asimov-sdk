@@ -36,6 +36,7 @@ struct Lookup {
 struct CachedIdentity {
     public_key: PublicKey,
     verifier: Verifier,
+    check_verifier: Verifier,
     etag: Option<HeaderValue>,
     cache_control: Option<String>,
     received: Instant,
@@ -60,6 +61,19 @@ impl RemoteIdentityCache {
         timeouts: TimeoutOptions,
     ) -> Result<Verifier, Error> {
         Ok(self.get(client, url, timeouts).await?.verifier.clone())
+    }
+
+    pub(super) async fn check_verifier(
+        &self,
+        client: &Client,
+        url: &Url,
+        timeouts: TimeoutOptions,
+    ) -> Result<Verifier, Error> {
+        Ok(self
+            .get(client, url, timeouts)
+            .await?
+            .check_verifier
+            .clone())
     }
 
     async fn get(
@@ -218,9 +232,13 @@ async fn discover(
         }
         bytes.extend_from_slice(&chunk);
     }
-    let (public_key, verifier) = if unchanged {
+    let (public_key, verifier, check_verifier) = if unchanged {
         let cached = previous.expect("validated conditional response");
-        (cached.public_key, cached.verifier.clone())
+        (
+            cached.public_key,
+            cached.verifier.clone(),
+            cached.check_verifier.clone(),
+        )
     } else {
         parse_identity(&bytes)?
     };
@@ -228,6 +246,7 @@ async fn discover(
     Ok(CachedIdentity {
         public_key,
         verifier,
+        check_verifier,
         etag,
         cache_control,
         received: Instant::now(),
@@ -294,7 +313,7 @@ struct Jwk {
     key_ops: Option<Vec<String>>,
 }
 
-fn parse_identity(bytes: &[u8]) -> Result<(PublicKey, Verifier), Box<Failure>> {
+fn parse_identity(bytes: &[u8]) -> Result<(PublicKey, Verifier, Verifier), Box<Failure>> {
     let jwks: Jwks = serde_json::from_slice(bytes)?;
     let mut keys = jwks.keys.into_iter().filter(|key| {
         key.kty == "OKP"
@@ -328,5 +347,11 @@ fn parse_identity(bytes: &[u8]) -> Result<(PublicKey, Verifier), Box<Failure>> {
     Ok((
         PublicKey::from(bytes),
         Verifier::new(key, &id, "asimov", policy)?,
+        Verifier::new(
+            key,
+            &id,
+            "asimov",
+            VerificationPolicy::new(vec![Component::new("@status")?]),
+        )?,
     ))
 }

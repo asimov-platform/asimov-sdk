@@ -65,10 +65,20 @@ fn request_signatures_use_fresh_nonces_and_the_shared_profile() {
     ));
 }
 
-struct Gated {
+pub(super) struct Gated {
     first: bool,
     last: bool,
     gate: oneshot::Receiver<()>,
+}
+
+impl Gated {
+    pub(super) fn new(gate: oneshot::Receiver<()>) -> Self {
+        Self {
+            first: false,
+            last: false,
+            gate,
+        }
+    }
 }
 
 impl Body for Gated {

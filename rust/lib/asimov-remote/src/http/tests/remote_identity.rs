@@ -19,10 +19,10 @@ use tokio::{
 };
 use tokio_rustls::TlsAcceptor;
 
-const KEY_ID: &str = "deployment-key";
+pub(super) const KEY_ID: &str = "deployment-key";
 
-struct Fixture {
-    executor: Executor,
+pub(super) struct Fixture {
+    pub(super) executor: Executor,
     connections: Arc<AtomicUsize>,
     handshakes: Arc<AtomicUsize>,
     task: JoinHandle<()>,
@@ -68,7 +68,7 @@ where
     }
 }
 
-async fn fixture<H, F>(version: Version, tls: bool, handler: H) -> Fixture
+pub(super) async fn fixture<H, F>(version: Version, tls: bool, handler: H) -> Fixture
 where
     H: Fn(Request<Bytes>) -> F + Send + Sync + 'static,
     F: Future<Output = Response<Bytes>> + Send + 'static,
@@ -178,7 +178,7 @@ fn jwk(key: &SecretKey) -> Value {
         "x": URL_SAFE_NO_PAD.encode(key.public().as_bytes()) })
 }
 
-fn metadata(key: &SecretKey, policy: &str) -> Response<Bytes> {
+pub(super) fn metadata(key: &SecretKey, policy: &str) -> Response<Bytes> {
     Response::builder()
         .header("content-type", "application/json")
         .header("cache-control", policy)

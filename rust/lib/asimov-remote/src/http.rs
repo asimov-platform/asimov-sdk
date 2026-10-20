@@ -1,6 +1,6 @@
 // This is free and unencumbered software released into the public domain.
 
-//! HTTP(S) execution adapters for resource fetches and collection listings.
+//! HTTP(S) adapters for resource fetches, collection listings, and remote checks.
 //!
 //! [`Executor`] owns the service URL, bearer credentials, connection pool, and
 //! local response batching. HTTPS uses rustls with platform certificate
@@ -250,6 +250,12 @@
 //! until EOF; an integrity failure is a terminal stream error. Validation time
 //! is response-header receipt. Content coding is not automatically decoded.
 //!
+//! [`Executor::check`] sends a signed, empty `OPTIONS` request to the original
+//! service URL and requires a verified successful response. It discovers the
+//! remote signing key unless an explicit verifier is configured. Its round-trip
+//! measurement excludes discovery and signing, and includes the complete
+//! response.
+//!
 //! # HTTP responses and lifecycle
 //!
 //! Both operations implement [`asimov_patterns::Execute`] with [`JsonlStream`]
@@ -316,6 +322,7 @@ pub use asimov_http::{DigestOptions, DigestPreference, SecretKey, Verifier};
 pub use asimov_id::PublicKey;
 
 pub use asimov_http::proxy::{ProxyMode, ProxyOptions};
+mod check;
 mod rate_limit;
 mod remote_identity;
 use remote_identity::RemoteIdentityCache;
@@ -378,6 +385,9 @@ pub enum Error {
     /// A redirection response, which is never followed automatically.
     #[error("HTTP redirect ({0}); configure the final service URL")]
     Redirect(reqwest::StatusCode),
+    /// A remote check received a status outside the successful 2xx range.
+    #[error("unexpected HTTP status: {0}")]
+    UnexpectedStatus(reqwest::StatusCode),
     /// HTTP 429, with the server's requested delay when usable.
     #[error("HTTP 429 Too Many Requests")]
     RateLimited {
@@ -487,6 +497,7 @@ pub struct TransportOptions {
 #[derive(Clone)]
 pub struct Executor {
     client: Client,
+    service_url: Url,
     base_url: Url,
     api_token: SecretString,
     batching: BatchOptions,
@@ -518,7 +529,8 @@ impl Executor {
     ///
     /// Uses rustls with HTTP/2 negotiation and HTTP/1.1 fallback. Plain HTTP URLs
     /// are accepted for development. Path prefixes and an optional trailing slash
-    /// are supported; query strings and fragments on the base URL are ignored.
+    /// are supported. Fetch/list endpoint resolution ignores query strings and
+    /// fragments; [`Self::check`] preserves the original path and query string.
     /// Sends an `Authorization: Bearer` header on operation requests. `Some(token)`
     /// uses the supplied token; `None` loads the current user's public key with
     /// [`Keyring::my_public_key`] and encodes it as Base58, without the non-ASCII
@@ -637,15 +649,17 @@ impl Executor {
                 "expected an HTTP(S) URL with a host".into(),
             ));
         }
+        base_url.set_fragment(None);
+        let service_url = base_url.clone();
         if !base_url.path().ends_with('/') {
             base_url.set_path(&format!("{}/", base_url.path()));
         }
         base_url.set_query(None);
-        base_url.set_fragment(None);
         let proxy = asimov_http::proxy::OriginProxy::resolve(&base_url, &options.proxy)?;
         let builder = proxy.configure_reqwest(client_builder(timeouts)?)?;
         Ok(Self {
             client: builder.build()?,
+            service_url,
             base_url,
             api_token: match api_token {
                 Some(token) => SecretString::from(token),

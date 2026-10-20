@@ -42,9 +42,9 @@ pub struct TimeoutOptions {
     /// A timed-out lookup never supplies a partial or stale identity.
     pub discovery: Option<Duration>,
     /// Optional wall-clock budget for an operation through body EOF. Starts
-    /// when `post_jsonl` is first polled and includes discovery and downstream
-    /// pauses. Expiry is observed when polling for more body data; complete
-    /// buffered records still precede the terminal timeout.
+    /// when `post_jsonl` or `check` is first polled and includes discovery and
+    /// downstream pauses. Expiry is observed while polling for body data;
+    /// complete buffered records still precede the terminal timeout.
     /// Does not apply to standalone `remote_public_key` calls. Default: `None`.
     pub total: Option<Duration>,
 }
