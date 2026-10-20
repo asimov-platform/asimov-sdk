@@ -10,7 +10,7 @@ use alloc::{
     vec::Vec,
 };
 use asimov_directory::{
-    UrlFile, UrlsFile,
+    UrlFile, UrlReader, UrlsFile,
     fs::{ResourcesDirectory, StateDirectory},
 };
 use std::{
@@ -217,8 +217,8 @@ async fn nested_collections_support_both_formats() -> io::Result<()> {
     let state = StateDirectory::open(temp.path())?;
     let resources = state.resources()?;
     let single = UrlFile::new("https://single.example").unwrap();
-    assert!(resources.write_url("my/x/tweet", &single)?);
-    assert!(!resources.write_url("my/x/tweet", &single)?);
+    assert!(resources.write_url("my/x/tweet", &single).await?);
+    assert!(!resources.write_url("my/x/tweet", &single).await?);
     resources
         .append_urls(
             "my/x/tweets",
@@ -227,7 +227,9 @@ async fn nested_collections_support_both_formats() -> io::Result<()> {
         .await?;
     std::fs::write(state.join("resources/ignored.txt"), "not a collection")?;
     assert_eq!(resources.files()?, ["my/x/tweet.url", "my/x/tweets.urls"]);
-    assert_eq!(resources.read_url("my/x/tweet")?, single);
+    let mut reader = resources.read_url("my/x/tweet")?;
+    assert_eq!(reader.next_url().await?, Some(single.url()));
+    assert_eq!(reader.next_url().await?, None);
     assert_eq!(
         std::fs::read_to_string(state.join("resources/my/x/tweet.url"))?,
         "https://single.example\n"
@@ -242,7 +244,7 @@ async fn nested_collections_support_both_formats() -> io::Result<()> {
             .await
             .is_err()
     );
-    assert!(resources.write_url("my/x/tweets", &single).is_err());
+    assert!(resources.write_url("my/x/tweets", &single).await.is_err());
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -258,6 +260,73 @@ async fn nested_collections_support_both_formats() -> io::Result<()> {
                 0o600
             );
         }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn single_url_reads_ignore_trailing_content_in_either_format() -> io::Result<()> {
+    let temp = tempfile::tempdir()?;
+    let state = StateDirectory::open(temp.path())?;
+    let resources = state.resources()?;
+    assert_eq!(
+        resources.read_url("missing").unwrap_err().kind(),
+        ErrorKind::NotFound
+    );
+    assert!(!state.join("resources").exists());
+    let first = UrlFile::new("urn:first").unwrap();
+    resources.write_url("single", &first).await?;
+    std::fs::write(state.join("resources/single.url"), b"urn:first\n\xff\n")?;
+    let mut reader = resources.read_url("single")?;
+    assert_eq!(reader.next_url().await?, Some("urn:first"));
+    assert_eq!(reader.next_url().await?, None);
+
+    resources
+        .append_urls("multiple", &urls(&["urn:first", "urn:second"]))
+        .await?;
+    let mut reader = UrlReader::from(resources.read_urls("multiple")?);
+    assert_eq!(reader.next_url().await?, Some("urn:first"));
+    assert_eq!(reader.next_url().await?, None);
+    assert_eq!(reader.into_inner().next_url().await?, Some("urn:second"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn single_url_writes_replace_atomically_and_reject_extra_records() -> io::Result<()> {
+    let temp = tempfile::tempdir()?;
+    let state = StateDirectory::open(temp.path())?;
+    let resources = state.resources()?;
+    let first = UrlFile::new("urn:first").unwrap();
+    let second = UrlFile::new("urn:second").unwrap();
+    resources.write_url("single", &first).await?;
+    let path = state.join("resources/single.url");
+    let mut old = std::fs::File::open(&path)?;
+    assert!(resources.write_url("single", &second).await?);
+    let mut observed = String::new();
+    old.read_to_string(&mut observed)?;
+    assert_eq!(observed, "urn:first\n");
+    assert_eq!(std::fs::read_to_string(&path)?, "urn:second\n");
+    assert!(!resources.write_url("single", &second).await?);
+
+    for contents in [
+        b"".as_slice(),
+        b"urn:first",
+        b"urn:first\nurn:second\n",
+        b"urn:first\n\xff\n",
+    ] {
+        std::fs::write(&path, contents)?;
+        for replacement in [&first, &second] {
+            assert_eq!(
+                resources
+                    .write_url("single", replacement)
+                    .await
+                    .unwrap_err()
+                    .kind(),
+                ErrorKind::InvalidData
+            );
+            assert_eq!(std::fs::read(&path)?, contents);
+        }
+        assert_eq!(std::fs::read_dir(state.join("resources"))?.count(), 1);
     }
     Ok(())
 }
@@ -288,7 +357,7 @@ async fn invalid_names_never_create_storage() -> io::Result<()> {
     ] {
         for result in [
             resources.read_url(name).map(|_| ()),
-            resources.write_url(name, &single).map(|_| ()),
+            resources.write_url(name, &single).await.map(|_| ()),
             resources.read_urls(name).map(|_| ()),
             resources.append_urls(name, &batch).await.map(|_| ()),
             resources.remove_urls(name, &batch).await.map(|_| ()),

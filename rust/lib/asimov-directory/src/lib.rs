@@ -29,6 +29,11 @@ pub use state_directory::*;
 mod url_file;
 pub use url_file::*;
 
+#[cfg(feature = "tokio")]
+mod url_reader;
+#[cfg(feature = "tokio")]
+pub use url_reader::*;
+
 mod urls_file;
 pub use urls_file::*;
 

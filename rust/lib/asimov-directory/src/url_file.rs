@@ -3,12 +3,14 @@
 use alloc::string::String;
 use core::{fmt, str::FromStr};
 
-/// The contents of a `.url` file: one URL followed by a newline.
+/// Owned contents of a `.url` file: one URL followed by a newline.
 ///
 /// URLs are validated but never normalized, so their original spelling survives
 /// a round trip. Parsing requires an LF terminator; empty lines, whitespace,
 /// and control characters in URLs are rejected.
 /// Validation checks absolute IRI syntax (RFC 3987), not scheme-specific rules.
+/// With the `tokio` feature, `UrlReader` borrows the first URL from input while
+/// ignoring trailing records; parsing this owned type requires exactly one URL.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UrlFile(String);
 

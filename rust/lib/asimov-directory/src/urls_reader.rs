@@ -15,6 +15,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt};
 /// Each slice borrows the reader until the next call, so this is a lending
 /// reader rather than a `Stream` of owned strings. Order, spelling, and duplicate
 /// URLs are preserved. Validation follows [`crate::UrlFile`].
+/// Wrap this in [`crate::UrlReader`] to consume only the next URL.
 ///
 /// ```
 /// # async fn example() -> std::io::Result<()> {

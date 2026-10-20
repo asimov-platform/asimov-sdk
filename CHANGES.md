@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- asimov-directory: Wrap `UrlsReader` in `UrlReader` to read only the first URL
 - asimov-directory: Read `.urls` files asynchronously as borrowed URL slices
 - asimov-directory: Track resource collections with reusable `.url`/`.urls`
   formats and confined storage under `resources/`
@@ -27,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: Expose shared proxy configuration, native discovery, and an
   origin-scoped reqwest adapter; available through SDK `http-proxy`/`http-client`
 ### Changed
+- asimov-directory: Return `UrlReader` from `read_url`; single-URL writes are
+  now async
 - asimov-directory: Stream resource collection reads and updates with bounded
   memory; appending and removing URLs are now async
 - asimov-directory: Validate URL files as absolute IRIs (RFC 3987)

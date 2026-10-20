@@ -1,14 +1,13 @@
 // This is free and unencumbered software released into the public domain.
 
-use crate::{UrlFile, UrlsFile, UrlsReader};
+use crate::{InvalidUrlFile, UrlFile, UrlReader, UrlsFile, UrlsReader};
 use alloc::{collections::BTreeSet, format, string::String, vec::Vec};
 use asimov_core::{
     crates::cap_std::fs::{Dir, DirBuilder, File, Metadata, OpenOptions},
     validate_filename_component,
 };
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
-use core::fmt::Display;
-use std::io::{self, ErrorKind, Read, Write};
+use std::io::{self, ErrorKind};
 use tokio::io::{AsyncWriteExt, BufWriter};
 
 /// Named `.url` and `.urls` collections under a state directory's `resources/`.
@@ -47,24 +46,47 @@ impl ResourcesDirectory {
         Ok(files)
     }
 
-    /// Reads a single-URL collection, requiring exactly one terminated URL.
-    pub fn read_url(&self, collection: &str) -> io::Result<UrlFile> {
-        let (directory, name) = self.location(collection, "url", false)?;
-        read_contents(&mut open_file(&directory, &name, false)?)?
-            .parse()
-            .map_err(|error| io::Error::new(ErrorKind::InvalidData, error))
+    /// Opens an async, borrowing reader for the first URL in a `.url` collection.
+    ///
+    /// Trailing records are ignored; missing collections return `NotFound`.
+    /// To read a `.urls` collection this way, wrap [`Self::read_urls`]'s result
+    /// in [`UrlReader`]. Both paths use the same confined file-opening checks.
+    pub fn read_url(&self, collection: &str) -> io::Result<UrlReader<tokio::fs::File>> {
+        self.open_reader(collection, "url").map(UrlReader::from)
     }
 
     /// Atomically writes a single-URL collection, returning whether it changed.
-    pub fn write_url(&self, collection: &str, contents: &UrlFile) -> io::Result<bool> {
+    ///
+    /// An existing file must contain exactly one valid URL; malformed files are
+    /// rejected before staging a replacement, including files with extra lines.
+    pub async fn write_url(&self, collection: &str, contents: &UrlFile) -> io::Result<bool> {
         match self.read_url(collection) {
-            Ok(existing) if existing == *contents => return Ok(false),
-            Ok(_) => {},
+            Ok(mut reader) => {
+                let existing = reader
+                    .next_url()
+                    .await?
+                    .ok_or_else(|| io::Error::new(ErrorKind::InvalidData, InvalidUrlFile))?;
+                let unchanged = existing == contents.url();
+                if reader.into_inner().next_url().await?.is_some() {
+                    return Err(io::Error::new(ErrorKind::InvalidData, InvalidUrlFile));
+                }
+                if unchanged {
+                    return Ok(false);
+                }
+            },
             Err(error) if error.kind() == ErrorKind::NotFound => {},
             Err(error) => return Err(error),
         }
         let (directory, name) = self.location(collection, "url", true)?;
-        replace(&directory, &name, contents)?;
+        let staged = stage(&directory)?;
+        let file = tokio::fs::File::from_std(staged.as_file().try_clone()?.into_std());
+        let mut output = BufWriter::new(file);
+        output.write_all(contents.url().as_bytes()).await?;
+        output.write_all(b"\n").await?;
+        output.flush().await?;
+        output.get_ref().sync_all().await?;
+        drop(output);
+        staged.replace(&name)?;
         Ok(true)
     }
 
@@ -74,14 +96,9 @@ impl ResourcesDirectory {
     /// path and file checks; contents are read asynchronously from that same
     /// confined file handle as [`UrlsReader::next_url`] is called.
     pub fn read_urls(&self, collection: &str) -> io::Result<UrlsReader<tokio::fs::File>> {
-        let result = (|| {
-            let (directory, name) = self.location(collection, "urls", false)?;
-            open_file(&directory, &name, false)
-        })();
-        match result {
-            Ok(file) => Ok(UrlsReader::new(tokio::fs::File::from_std(file.into_std()))),
+        match self.open_reader(collection, "urls") {
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(UrlsReader::empty()),
-            Err(error) => Err(error),
+            result => result,
         }
     }
 
@@ -152,6 +169,16 @@ impl ResourcesDirectory {
             staged.replace(&name)?;
         }
         Ok(removed)
+    }
+
+    fn open_reader(
+        &self,
+        collection: &str,
+        extension: &str,
+    ) -> io::Result<UrlsReader<tokio::fs::File>> {
+        let (directory, name) = self.location(collection, extension, false)?;
+        let file = open_file(&directory, &name, false)?;
+        Ok(UrlsReader::new(tokio::fs::File::from_std(file.into_std())))
     }
 
     fn directory(&self, create: bool) -> io::Result<Dir> {
@@ -251,12 +278,6 @@ fn open_file(directory: &Dir, name: &str, append: bool) -> io::Result<File> {
     Ok(file)
 }
 
-fn read_contents(file: &mut File) -> io::Result<String> {
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-    Ok(contents)
-}
-
 fn stage(directory: &Dir) -> io::Result<cap_tempfile::TempFile<'_>> {
     let staged = cap_tempfile::TempFile::new(directory)?;
     #[cfg(unix)]
@@ -267,13 +288,6 @@ fn stage(directory: &Dir) -> io::Result<cap_tempfile::TempFile<'_>> {
             .set_permissions(Permissions::from_mode(0o600))?;
     }
     Ok(staged)
-}
-
-fn replace(directory: &Dir, name: &str, contents: &impl Display) -> io::Result<()> {
-    let mut staged = stage(directory)?;
-    write!(staged, "{contents}")?;
-    staged.as_file().sync_all()?;
-    staged.replace(name)
 }
 
 fn collect_files(directory: &Dir, prefix: &str, files: &mut Vec<String>) -> io::Result<()> {
