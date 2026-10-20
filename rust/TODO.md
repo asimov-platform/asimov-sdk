@@ -148,6 +148,11 @@ Unless marked reproduced, implementation findings are based on source review.
   the old name. Failure or interruption between these steps leaves both names.
   Consider portable no-replace rename support and directory-sync durability.
 
+- [ ] **Coordinate concurrent resource-collection writers.**
+  `ResourcesDirectory` requires callers to serialize mutations. Add portable
+  cross-process coordination for append/deduplication and atomic removals while
+  preserving mutation-free no-ops; test competing writers and readers.
+
 - [ ] **Honor optional configuration variables when reading a profile.**
   `read_variables` in `lib/asimov-module/src/models/module_manifest.rs` calls
   `variable` for every declaration, including optional variables with no value,

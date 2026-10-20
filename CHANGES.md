@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- asimov-directory: Track resource collections with reusable `.url`/`.urls`
+  formats and confined storage under `resources/`
 - asimov-remote: Check remotes with signed OPTIONS requests, verified responses,
   and round-trip timing
 - asimov-directory, asimov-remote: Manage named HTTP(S) remotes as plain-text

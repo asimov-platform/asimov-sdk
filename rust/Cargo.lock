@@ -1186,12 +1186,14 @@ dependencies = [
  "asimov-module",
  "asimov-protocol",
  "camino",
+ "cap-fs-ext",
  "cap-tempfile",
  "derive_more",
  "serde_json",
  "serde_yaml_ng",
  "tempfile",
  "tokio",
+ "url",
 ]
 
 [[package]]
@@ -2665,6 +2667,18 @@ dependencies = [
  "cap-std",
  "directories",
  "rustix 1.1.5",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "cap-fs-ext"
+version = "4.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56ff379b70af8e08307a8f65e7040c7301cb4a572538ade16b4984f0da77847f"
+dependencies = [
+ "cap-primitives",
+ "cap-std",
+ "io-lifetimes 3.0.1",
  "windows-sys 0.61.2",
 ]
 

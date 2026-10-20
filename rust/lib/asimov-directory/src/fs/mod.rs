@@ -21,5 +21,8 @@ pub use program_directory::*;
 mod remote_directory;
 pub use remote_directory::*;
 
+mod resources_directory;
+pub use resources_directory::*;
+
 mod state_directory;
 pub use state_directory::*;

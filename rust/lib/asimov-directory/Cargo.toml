@@ -22,11 +22,11 @@ title = "ASIMOV.rs: State Management"
 [features]
 default = ["all", "std"]
 all = ["fs"]
-std = ["asimov-core/std", "asimov-protocol/std"]
+std = ["asimov-core/std", "asimov-protocol/std", "url/std"]
 unstable = []
 
 # Features:
-fs = ["std", "dep:camino", "dep:cap-tempfile", "dep:tokio"]
+fs = ["std", "dep:camino", "dep:cap-fs-ext", "dep:cap-tempfile", "dep:tokio"]
 tracing = []
 
 # Integrations:
@@ -41,9 +41,11 @@ asimov-protocol = { workspace = true, features = ["csv"] }
 derive_more = { workspace = true, features = ["display"] }
 serde_json = { workspace = true }
 serde_yaml_ng = { workspace = true }
+url.workspace = true
 
 # Integrations:
 camino = { workspace = true, optional = true }
+cap-fs-ext = { workspace = true, features = ["std"], optional = true }
 cap-tempfile = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["fs"], optional = true }
 

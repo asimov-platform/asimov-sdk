@@ -1,6 +1,8 @@
 // This is free and unencumbered software released into the public domain.
 
-use super::{ConfigDirectory, ModuleDirectory, ProgramDirectory, RemoteDirectory};
+use super::{
+    ConfigDirectory, ModuleDirectory, ProgramDirectory, RemoteDirectory, ResourcesDirectory,
+};
 use alloc::format;
 use asimov_core::crates::cap_std;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -84,6 +86,17 @@ impl StateDirectory {
             cap_std::ambient_authority(),
         )?;
         Ok(RemoteDirectory::new(root))
+    }
+
+    /// Opens resource collections rooted at this state directory.
+    ///
+    /// The `resources/` subdirectory is created only when writing a collection.
+    pub fn resources(&self) -> Result<ResourcesDirectory> {
+        let root = cap_std::fs::Dir::open_ambient_dir(
+            self.path.as_std_path(),
+            cap_std::ambient_authority(),
+        )?;
+        Ok(ResourcesDirectory::new(root))
     }
 
     pub fn join(&self, path: impl AsRef<Utf8Path>) -> Utf8PathBuf {

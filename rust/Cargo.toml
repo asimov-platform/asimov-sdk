@@ -132,6 +132,7 @@ bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
 bytes = { version = "1.10", default-features = false }
 camino = { version = "1.2", default-features = false }
 cap-directories = { version = "4.0", default-features = false }
+cap-fs-ext = { version = "4.0", default-features = false }
 cap-std = { version = "4.0", default-features = false, features = ["fs_utf8"] }
 cap-tempfile = { version = "4.0", default-features = false }
 cargo-generate = { version = "0.23", default-features = false }
