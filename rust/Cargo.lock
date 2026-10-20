@@ -1379,12 +1379,14 @@ dependencies = [
  "iroh-base",
  "keyring-core",
  "secrecy",
+ "secret-service",
  "serde",
  "tempfile",
  "thiserror 2.0.21",
  "tracing",
  "whoami",
  "windows-native-keyring-store",
+ "zbus",
  "zbus-secret-service-keyring-store",
 ]
 

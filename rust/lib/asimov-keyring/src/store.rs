@@ -55,12 +55,8 @@ impl Store {
             Err(error) => return Err(error.into()),
         }
 
-        // A locked Secret Service opens successfully; only a missing session bus
-        // or service fails here, as on headless machines and in containers.
         match native() {
-            Err(KeyringError::KeyringError(
-                keyring_core::Error::PlatformFailure(_) | keyring_core::Error::NoStorageAccess(_),
-            )) => Self::file(root),
+            Err(error) if secret_service_absent(&error) => Self::file(root),
             other => other,
         }
     }
@@ -176,6 +172,29 @@ impl Store {
     }
 }
 
+// Only a missing session bus or Secret Service means no identity can be stored
+// there. Other failures, such as denied access or a service restarting, may hide
+// an existing identity, so they must not select the file store.
+#[cfg(target_os = "linux")]
+fn secret_service_absent(error: &KeyringError) -> bool {
+    use secret_service::Error;
+    let KeyringError::KeyringError(keyring_core::Error::PlatformFailure(error)) = error else {
+        return false;
+    };
+    // `Error::Unavailable` also covers a malformed bus address, a configuration
+    // error rather than absence.
+    match error.downcast_ref::<Error>() {
+        Some(Error::Zbus(zbus::Error::Connection(error, _) | zbus::Error::InputOutput(error))) => {
+            error.kind() == std::io::ErrorKind::NotFound
+        },
+        Some(Error::Zbus(zbus::Error::MethodError(name, ..))) => {
+            name.as_str() == "org.freedesktop.DBus.Error.ServiceUnknown"
+        },
+        Some(Error::ZbusFdo(zbus::fdo::Error::ServiceUnknown(_))) => true,
+        _ => false,
+    }
+}
+
 fn platform_backend() -> keyring_core::Result<Arc<CredentialStore>> {
     #[cfg(target_vendor = "apple")]
     let store = apple_native_keyring_store::keychain::Store::new()?;
@@ -205,9 +224,10 @@ mod tests {
         )
         .unwrap();
         let unavailable = || {
+            let missing = std::io::Error::from(std::io::ErrorKind::NotFound);
             Err(
-                keyring_core::Error::PlatformFailure(Box::new(std::io::Error::from(
-                    std::io::ErrorKind::NotFound,
+                keyring_core::Error::PlatformFailure(Box::new(secret_service::Error::Zbus(
+                    zbus::Error::InputOutput(Arc::new(missing)),
                 )))
                 .into(),
             )
@@ -230,6 +250,8 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn automatic_selection_keeps_accessible_native_storage_and_other_errors() {
+        use alloc::boxed::Box;
+
         let path = tempfile::tempdir().unwrap();
         let root = Dir::open_ambient_dir(
             path.path(),
@@ -247,6 +269,18 @@ mod tests {
         assert!(matches!(
             Store::automatic(&root, || Err(KeyringError::LockPoisoned)),
             Err(KeyringError::LockPoisoned)
+        ));
+        let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        assert!(matches!(
+            Store::automatic(&root, || Err(keyring_core::Error::PlatformFailure(
+                Box::new(secret_service::Error::Zbus(zbus::Error::InputOutput(
+                    Arc::new(denied)
+                )))
+            )
+            .into())),
+            Err(KeyringError::KeyringError(
+                keyring_core::Error::PlatformFailure(_)
+            ))
         ));
         assert!(matches!(
             Store::automatic(&root, || Err(keyring_core::Error::Invalid(
