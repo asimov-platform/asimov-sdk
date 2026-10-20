@@ -103,15 +103,15 @@ async fn appends_preserve_existing_bytes_and_removals_replace_atomically() -> io
                 "tracked",
                 &urls(&[
                     "https://a.example",
-                    "https://c.example",
-                    "https://c.example",
-                    "https://d.example"
+                    "https://d.example",
+                    "https://d.example",
+                    "https://c.example"
                 ])
             )
             .await?,
         2
     );
-    let appended = format!("{original}https://c.example\nhttps://d.example\n");
+    let appended = format!("{original}https://d.example\nhttps://c.example\n");
     let mut observed = String::new();
     opened.read_to_string(&mut observed)?;
     assert_eq!(observed, appended, "append must retain the original file");
@@ -119,9 +119,9 @@ async fn appends_preserve_existing_bytes_and_removals_replace_atomically() -> io
     let mut old = std::fs::File::open(&path)?;
     assert_eq!(
         resources
-            .remove_urls("tracked", &urls(&["https://b.example"]))
+            .remove_urls("tracked", &urls(&["https://a.example"]))
             .await?,
-        2
+        1
     );
     let mut observed = String::new();
     old.read_to_string(&mut observed)?;
@@ -131,10 +131,20 @@ async fn appends_preserve_existing_bytes_and_removals_replace_atomically() -> io
     );
     assert_eq!(
         std::fs::read_to_string(&path)?,
-        "https://a.example\nhttps://c.example\nhttps://d.example\n"
+        "https://b.example\nhttps://b.example\nhttps://d.example\nhttps://c.example\n"
+    );
+    assert_eq!(
+        resources
+            .remove_urls("tracked", &urls(&["https://b.example"]))
+            .await?,
+        2
+    );
+    assert_eq!(
+        std::fs::read_to_string(&path)?,
+        "https://d.example\nhttps://c.example\n"
     );
     let remaining = collect_urls(&resources, "tracked").await?;
-    assert_eq!(resources.remove_urls("tracked", &remaining).await?, 3);
+    assert_eq!(resources.remove_urls("tracked", &remaining).await?, 2);
     assert_eq!(std::fs::read(&path)?, b"");
     assert_eq!(resources.files()?, ["tracked.urls"]);
     assert_eq!(std::fs::read_dir(state.join("resources"))?.count(), 1);

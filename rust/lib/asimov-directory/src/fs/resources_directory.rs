@@ -105,6 +105,7 @@ impl ResourcesDirectory {
             let (directory, name) = self.location(collection, "urls", true)?;
             let file = open_file(&directory, &name, true)?;
             let mut output = BufWriter::new(tokio::fs::File::from_std(file.into_std()));
+            // The set tests membership; the input batch determines write order.
             for url in urls.urls() {
                 if pending.remove(url.as_str()) {
                     output.write_all(url.as_bytes()).await?;
@@ -119,6 +120,7 @@ impl ResourcesDirectory {
 
     /// Atomically removes matching URLs, returning the number removed.
     ///
+    /// Surviving URLs retain their original order, spelling, and duplicates.
     /// Absent URLs are ignored. If nothing matches, no file, directory, or
     /// temporary file is created, removed, or rewritten.
     /// Two streaming passes validate the input before staging the replacement;
