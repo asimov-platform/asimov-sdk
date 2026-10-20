@@ -746,11 +746,11 @@ impl Keyring {
     /// an explicit secret-key operation; reading public keys needs only files.
     ///
     /// Uses the native Keychain store on Apple platforms, the native Windows
-    /// store on Windows, and the kernel keyutils store on Linux. Other platforms
-    /// use the mock store. Overlapping native handles reuse the backend. Does
-    /// not read or change the process-wide `keyring_core` default store.
-    /// By default on Linux, reuses an existing file store or selects one if
-    /// kernel-keyring access is unavailable, including in Docker containers.
+    /// store on Windows, and the Secret Service on Linux. Other platforms use
+    /// the mock store. Overlapping native handles reuse the backend. Does not
+    /// read or change the process-wide `keyring_core` default store.
+    /// By default on Linux, reuses an existing file store or selects one if no
+    /// Secret Service is available, including in Docker containers.
     /// On Unix, `ASIMOV_KEYRING_BACKEND=file` selects private, persistent files
     /// explicitly; `native` forces the platform backend without fallback.
     /// See the [crate documentation](crate) for storage and deployment.
@@ -881,18 +881,9 @@ impl Keyring {
     }
 
     fn read_secret_key(&self, user: &str) -> Result<Option<SecretKey>, KeyringError> {
-        match self.store()?.entry(user)?.get_secret() {
-            Ok(secret) => {
-                let secret = Zeroizing::new(secret);
-                let secret_bytes: &[u8; 32] =
-                    secret
-                        .as_slice()
-                        .try_into()
-                        .map_err(|_| KeyringError::CorruptSecret {
-                            length: secret.len(),
-                        })?;
-                Ok(Some(SecretKey::from_bytes(secret_bytes)))
-            },
+        let store = self.store()?;
+        match store.entry(user)?.get_secret() {
+            Ok(secret) => store.secret_key(&Zeroizing::new(secret)).map(Some),
             Err(keyring_core::Error::NoEntry) => Ok(None),
             Err(error) => Err(error.into()),
         }
@@ -950,7 +941,8 @@ impl Keyring {
     }
 
     fn replace_key_pair(&self, user: &str) -> Result<(SecretKey, PublicKey), KeyringError> {
-        let entry = self.store()?.entry(user)?;
+        let store = self.store()?;
+        let entry = store.entry(user)?;
         let previous_secret = match entry.get_secret() {
             Ok(secret) => Some(Zeroizing::new(secret)),
             Err(keyring_core::Error::NoEntry) => None,
@@ -959,10 +951,7 @@ impl Keyring {
         let secret_key = SecretKey::generate();
         let public_key = secret_key.public().into();
         let staged = self.stage_public_key(public_key)?;
-        {
-            let secret_bytes = Zeroizing::new(secret_key.to_bytes());
-            entry.set_secret(secret_bytes.as_slice())?;
-        }
+        store.set_secret_key(&entry, &secret_key)?;
         if let Err(error) = staged.replace(user) {
             let rollback = match previous_secret {
                 Some(secret) => entry.set_secret(secret.as_slice()),

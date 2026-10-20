@@ -6,10 +6,12 @@
 //! the secret-key backend. The backend is opened only to initialize a missing
 //! identity or perform an explicit secret-key operation.
 //!
-//! On Linux, the default backend uses private files when access to the kernel
-//! keyrings is unavailable, including under Docker's default seccomp policy.
-//! No environment configuration is needed. Once the file store exists, it is
-//! reused even if kernel keyrings later become available, preserving identity.
+//! On Linux, the default backend is the Secret Service, such as GNOME Keyring
+//! or KDE Wallet, which stores secret keys as Base58 text. It uses private
+//! files when no Secret Service is available on the session bus, as on
+//! headless machines and in containers. No environment configuration is
+//! needed. Once the file store exists, it is reused even if a Secret Service
+//! later becomes available, preserving identity.
 //! Other platforms default to their native backend.
 //!
 //! File secrets are stored in `$HOME/.asimov/.keyring/<user>/secret` as
@@ -21,7 +23,7 @@
 //! `ASIMOV_KEYRING_BACKEND=native` forces the platform backend without fallback;
 //! `ASIMOV_KEYRING_BACKEND=file` forces file storage on Unix. Native and file
 //! secrets are separate; initializing an empty backend creates a new identity.
-//! Automatic fallback only handles unavailable kernel-keyring access on opening;
+//! Automatic fallback only handles an unavailable Secret Service on opening;
 //! subsequent secret-read, corruption, and write errors are returned as errors.
 
 #![no_std]
