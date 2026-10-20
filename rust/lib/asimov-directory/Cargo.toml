@@ -22,16 +22,16 @@ title = "ASIMOV.rs: State Management"
 [features]
 default = ["all", "std"]
 all = ["fs"]
-std = ["asimov-core/std", "asimov-protocol/std", "url/std"]
+std = ["asimov-core/std", "asimov-protocol/std", "iri-string/std", "memchr?/std"]
 unstable = []
 
 # Features:
-fs = ["std", "dep:camino", "dep:cap-fs-ext", "dep:cap-tempfile", "dep:tokio"]
+fs = ["std", "dep:camino", "dep:cap-fs-ext", "dep:cap-tempfile", "tokio"]
 tracing = []
 
 # Integrations:
 camino = ["dep:camino"]
-tokio = ["dep:tokio"]
+tokio = ["std", "dep:tokio", "dep:memchr"]
 
 [dependencies]
 asimov-config.workspace = true
@@ -39,17 +39,19 @@ asimov-core.workspace = true
 asimov-module = { workspace = true, features = ["serde"] }
 asimov-protocol = { workspace = true, features = ["csv"] }
 derive_more = { workspace = true, features = ["display"] }
+iri-string.workspace = true
 serde_json = { workspace = true }
 serde_yaml_ng = { workspace = true }
-url.workspace = true
 
 # Integrations:
 camino = { workspace = true, optional = true }
 cap-fs-ext = { workspace = true, features = ["std"], optional = true }
 cap-tempfile = { workspace = true, optional = true }
-tokio = { workspace = true, features = ["fs"], optional = true }
+memchr = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 
 [dev-dependencies]
+allocation-counter.workspace = true
 tempfile.workspace = true
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 

@@ -1,7 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
-use crate::{UrlFile, UrlsFile};
-use alloc::{format, string::String, vec::Vec};
+use crate::{UrlFile, UrlsFile, UrlsReader};
+use alloc::{collections::BTreeSet, format, string::String, vec::Vec};
 use asimov_core::{
     crates::cap_std::fs::{Dir, DirBuilder, File, Metadata, OpenOptions},
     validate_filename_component,
@@ -9,6 +9,7 @@ use asimov_core::{
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
 use core::fmt::Display;
 use std::io::{self, ErrorKind, Read, Write};
+use tokio::io::{AsyncWriteExt, BufWriter};
 
 /// Named `.url` and `.urls` collections under a state directory's `resources/`.
 ///
@@ -67,42 +68,51 @@ impl ResourcesDirectory {
         Ok(true)
     }
 
-    /// Reads a multi-URL collection; a missing collection is empty.
-    pub fn read_urls(&self, collection: &str) -> io::Result<UrlsFile> {
+    /// Opens an async, borrowing reader for a multi-URL collection.
+    ///
+    /// A missing collection yields an empty reader. Opening performs synchronous
+    /// path and file checks; contents are read asynchronously from that same
+    /// confined file handle as [`UrlsReader::next_url`] is called.
+    pub fn read_urls(&self, collection: &str) -> io::Result<UrlsReader<tokio::fs::File>> {
         let result = (|| {
             let (directory, name) = self.location(collection, "urls", false)?;
-            read_contents(&mut open_file(&directory, &name, false)?)?
-                .parse()
-                .map_err(|error| io::Error::new(ErrorKind::InvalidData, error))
+            open_file(&directory, &name, false)
         })();
         match result {
-            Err(error) if error.kind() == ErrorKind::NotFound => Ok(UrlsFile::default()),
-            result => result,
+            Ok(file) => Ok(UrlsReader::new(tokio::fs::File::from_std(file.into_std()))),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(UrlsReader::empty()),
+            Err(error) => Err(error),
         }
     }
 
     /// Appends absent URLs in input order, returning the number added.
     ///
     /// The validated batch is deduplicated against itself and the existing
-    /// file. Existing bytes are preserved; a no-op does not write the file.
-    pub fn append_urls(&self, collection: &str, urls: &UrlsFile) -> io::Result<usize> {
+    /// file. Only the input batch is retained in memory. Existing bytes are
+    /// preserved; a no-op does not write the file.
+    pub async fn append_urls(&self, collection: &str, urls: &UrlsFile) -> io::Result<usize> {
         validate_collection(collection)?;
         if urls.urls().is_empty() {
             return Ok(0);
         }
-        let mut existing = self.read_urls(collection)?;
-        let before = existing.urls().len();
-        let added = existing.append(urls);
+        let mut pending: BTreeSet<_> = urls.urls().iter().map(String::as_str).collect();
+        let mut reader = self.read_urls(collection)?;
+        while let Some(url) = reader.next_url().await? {
+            pending.remove(url);
+        }
+        let added = pending.len();
         if added != 0 {
             let (directory, name) = self.location(collection, "urls", true)?;
-            let mut file = open_file(&directory, &name, true)?;
-            let mut suffix = String::new();
-            for url in &existing.urls()[before..] {
-                suffix.push_str(url);
-                suffix.push('\n');
+            let file = open_file(&directory, &name, true)?;
+            let mut output = BufWriter::new(tokio::fs::File::from_std(file.into_std()));
+            for url in urls.urls() {
+                if pending.remove(url.as_str()) {
+                    output.write_all(url.as_bytes()).await?;
+                    output.write_all(b"\n").await?;
+                }
             }
-            file.write_all(suffix.as_bytes())?;
-            file.sync_all()?;
+            output.flush().await?;
+            output.get_ref().sync_all().await?;
         }
         Ok(added)
     }
@@ -111,12 +121,33 @@ impl ResourcesDirectory {
     ///
     /// Absent URLs are ignored. If nothing matches, no file, directory, or
     /// temporary file is created, removed, or rewritten.
-    pub fn remove_urls(&self, collection: &str, urls: &UrlsFile) -> io::Result<usize> {
-        let mut existing = self.read_urls(collection)?;
-        let removed = existing.remove(urls);
+    /// Two streaming passes validate the input before staging the replacement;
+    /// memory use depends on the removal batch and longest line, not file size.
+    pub async fn remove_urls(&self, collection: &str, urls: &UrlsFile) -> io::Result<usize> {
+        let targets: BTreeSet<_> = urls.urls().iter().map(String::as_str).collect();
+        let mut reader = self.read_urls(collection)?;
+        let mut removed = 0;
+        while let Some(url) = reader.next_url().await? {
+            if targets.contains(url) {
+                removed += 1;
+            }
+        }
         if removed != 0 {
+            reader.rewind().await?;
             let (directory, name) = self.location(collection, "urls", false)?;
-            replace(&directory, &name, &existing)?;
+            let staged = stage(&directory)?;
+            let file = tokio::fs::File::from_std(staged.as_file().try_clone()?.into_std());
+            let mut output = BufWriter::new(file);
+            while let Some(url) = reader.next_url().await? {
+                if !targets.contains(url) {
+                    output.write_all(url.as_bytes()).await?;
+                    output.write_all(b"\n").await?;
+                }
+            }
+            output.flush().await?;
+            output.get_ref().sync_all().await?;
+            drop(output);
+            staged.replace(&name)?;
         }
         Ok(removed)
     }
@@ -224,8 +255,8 @@ fn read_contents(file: &mut File) -> io::Result<String> {
     Ok(contents)
 }
 
-fn replace(directory: &Dir, name: &str, contents: &impl Display) -> io::Result<()> {
-    let mut staged = cap_tempfile::TempFile::new(directory)?;
+fn stage(directory: &Dir) -> io::Result<cap_tempfile::TempFile<'_>> {
+    let staged = cap_tempfile::TempFile::new(directory)?;
     #[cfg(unix)]
     {
         use asimov_core::crates::cap_std::fs::{Permissions, PermissionsExt};
@@ -233,6 +264,11 @@ fn replace(directory: &Dir, name: &str, contents: &impl Display) -> io::Result<(
             .as_file()
             .set_permissions(Permissions::from_mode(0o600))?;
     }
+    Ok(staged)
+}
+
+fn replace(directory: &Dir, name: &str, contents: &impl Display) -> io::Result<()> {
+    let mut staged = stage(directory)?;
     write!(staged, "{contents}")?;
     staged.as_file().sync_all()?;
     staged.replace(name)

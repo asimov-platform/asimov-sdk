@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- asimov-directory: Read `.urls` files asynchronously as borrowed URL slices
 - asimov-directory: Track resource collections with reusable `.url`/`.urls`
   formats and confined storage under `resources/`
 - asimov-remote: Check remotes with signed OPTIONS requests, verified responses,
@@ -26,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: Expose shared proxy configuration, native discovery, and an
   origin-scoped reqwest adapter; available through SDK `http-proxy`/`http-client`
 ### Changed
+- asimov-directory: Stream resource collection reads and updates with bounded
+  memory; appending and removing URLs are now async
+- asimov-directory: Validate URL files as absolute IRIs (RFC 3987)
 - asimov-protocol: Reject method-changing publication redirects and HTTPS
   downgrades for Pkarr address records
 - asimov-proxy: Default OpenRouter forwarding to automatic proxy discovery;

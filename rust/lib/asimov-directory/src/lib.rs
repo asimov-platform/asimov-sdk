@@ -31,3 +31,8 @@ pub use url_file::*;
 
 mod urls_file;
 pub use urls_file::*;
+
+#[cfg(feature = "tokio")]
+mod urls_reader;
+#[cfg(feature = "tokio")]
+pub use urls_reader::*;

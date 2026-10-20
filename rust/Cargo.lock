@@ -101,6 +101,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocation-counter"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "beb9e990c0a33699f1984d85a6abead615ccc72dd8130bf3e15dcabe2ca149c9"
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1181,6 +1187,7 @@ dependencies = [
 name = "asimov-directory"
 version = "25.8.0"
 dependencies = [
+ "allocation-counter",
  "asimov-config",
  "asimov-core",
  "asimov-module",
@@ -1189,11 +1196,12 @@ dependencies = [
  "cap-fs-ext",
  "cap-tempfile",
  "derive_more",
+ "iri-string",
+ "memchr",
  "serde_json",
  "serde_yaml_ng",
  "tempfile",
  "tokio",
- "url",
 ]
 
 [[package]]

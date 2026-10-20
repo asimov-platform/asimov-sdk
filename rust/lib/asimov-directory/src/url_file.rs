@@ -8,6 +8,7 @@ use core::{fmt, str::FromStr};
 /// URLs are validated but never normalized, so their original spelling survives
 /// a round trip. Parsing requires an LF terminator; empty lines, whitespace,
 /// and control characters in URLs are rejected.
+/// Validation checks absolute IRI syntax (RFC 3987), not scheme-specific rules.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UrlFile(String);
 
@@ -52,7 +53,9 @@ impl fmt::Display for InvalidUrlFile {
 impl core::error::Error for InvalidUrlFile {}
 
 pub(crate) fn validate_url(url: &str) -> Result<(), InvalidUrlFile> {
-    if url.chars().any(|c| c.is_control() || c.is_whitespace()) || url::Url::parse(url).is_err() {
+    if url.chars().any(|c| c.is_control() || c.is_whitespace())
+        || iri_string::types::IriStr::new(url).is_err()
+    {
         return Err(InvalidUrlFile);
     }
     Ok(())

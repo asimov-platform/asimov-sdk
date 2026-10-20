@@ -113,6 +113,7 @@ known-types-whatsapp = { version = "0.1.5", default-features = false, features =
 known-types-x = { version = "0.1.5", default-features = false, features = ["alloc"] }
 
 agent-detector = { version = "0.2", default-features = false }
+allocation-counter = { version = "0.8", default-features = false }
 alloy = { version = "2.2", default-features = false }
 anyhow = { version = "1", default-features = false }
 async-flow = { version = "0.1.5", default-features = false }
@@ -184,6 +185,7 @@ hyper = { version = "1.12.0", default-features = false }
 hyper-rustls = { version = "0.27.10", default-features = false }
 hyper-util = { version = "0.1.21", default-features = false }
 indicatif = "0.18.6"
+iri-string = { version = "0.7", default-features = false }
 jiff = { version = "0.2", default-features = false }
 keyring-core = { version = "1.0", default-features = false }
 know = { version = "0", default-features = true }

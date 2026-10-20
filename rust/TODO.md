@@ -151,7 +151,8 @@ Unless marked reproduced, implementation findings are based on source review.
 - [ ] **Coordinate concurrent resource-collection writers.**
   `ResourcesDirectory` requires callers to serialize mutations. Add portable
   cross-process coordination for append/deduplication and atomic removals while
-  preserving mutation-free no-ops; test competing writers and readers.
+  preserving mutation-free no-ops; test competing writers and readers across
+  both removal passes.
 
 - [ ] **Honor optional configuration variables when reading a profile.**
   `read_variables` in `lib/asimov-module/src/models/module_manifest.rs` calls

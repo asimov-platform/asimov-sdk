@@ -4,10 +4,12 @@ use crate::{InvalidUrlFile, url_file::validate_url};
 use alloc::{collections::BTreeSet, string::String, vec::Vec};
 use core::{fmt, str::FromStr};
 
-/// The contents of a `.urls` file: zero or more newline-terminated URLs.
+/// Owned contents of a `.urls` file: zero or more newline-terminated URLs.
 ///
 /// Parsing preserves order, spelling, and existing duplicates. Like
 /// [`crate::UrlFile`], this type validates URLs without normalizing them.
+/// With the `tokio` feature, `UrlsReader` reads large files incrementally without
+/// allocating owned strings for their URLs.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct UrlsFile(Vec<String>);
 
