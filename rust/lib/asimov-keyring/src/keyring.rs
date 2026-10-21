@@ -516,6 +516,29 @@ mod tests {
         ));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn secret_key_operations_wait_for_other_processes() {
+        use core::time::Duration;
+
+        let directory = tempfile::tempdir().unwrap();
+        // A separately opened lock behaves like one held by another process.
+        let held = std::fs::File::open(directory.path()).unwrap();
+        held.lock().unwrap();
+        let path = directory.path().to_path_buf();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            let mut keyring =
+                Keyring::with_store(path, keyring_core::mock::Store::new().unwrap()).unwrap();
+            keyring.ensure_secret_key("alice").unwrap();
+            sender.send(()).unwrap();
+        });
+        assert!(receiver.recv_timeout(Duration::from_millis(200)).is_err());
+        drop(held);
+        receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+        thread.join().unwrap();
+    }
+
     #[test]
     fn concurrent_ensure_creates_one_identity() {
         let directory = tempfile::tempdir().unwrap();
@@ -811,6 +834,21 @@ impl Keyring {
         Ok(store)
     }
 
+    // Serializes secret-key operations across processes, as backends other than
+    // the file store have no lock of their own. User names may begin with a dot,
+    // so no lock file inside the directory is collision-free; lock it instead.
+    #[cfg(unix)]
+    fn lock_directory(&self) -> Result<std::fs::File, KeyringError> {
+        let directory = self.directory.open(".")?.into_std();
+        directory.lock()?;
+        Ok(directory)
+    }
+
+    #[cfg(not(unix))]
+    fn lock_directory(&self) -> Result<(), KeyringError> {
+        Ok(())
+    }
+
     /// Consumes this handle without deleting keys or affecting other handles.
     ///
     /// Equivalent to dropping it. Currently always returns `Ok(())`.
@@ -876,6 +914,7 @@ impl Keyring {
         let store = self.store()?;
         let lock = store.user_lock(user)?;
         let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
+        let _directory_lock = self.lock_directory()?;
         let _file_lock = store.file_lock(user)?;
         self.read_secret_key(user)
     }
@@ -906,6 +945,7 @@ impl Keyring {
         let store = self.store()?;
         let lock = store.user_lock(user)?;
         let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
+        let _directory_lock = self.lock_directory()?;
         let _file_lock = store.file_lock(user)?;
         match self.read_secret_key(user)? {
             Some(secret_key) => {
@@ -936,6 +976,7 @@ impl Keyring {
         let store = self.store()?;
         let lock = store.user_lock(user)?;
         let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
+        let _directory_lock = self.lock_directory()?;
         let _file_lock = store.file_lock(user)?;
         self.replace_key_pair(user)
     }
