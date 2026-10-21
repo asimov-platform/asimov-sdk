@@ -5,7 +5,7 @@
 extern crate alloc;
 
 use alloc::format;
-use asimov_directory::UrlsReader;
+use asimov_directory::UrisReader;
 use core::{
     future::Future,
     pin::{Pin, pin},
@@ -49,14 +49,14 @@ fn ready<F: Future>(future: F) -> F::Output {
 }
 
 #[tokio::test]
-async fn fragments_and_buffer_boundaries_preserve_url_bytes() -> io::Result<()> {
-    let urls = [
+async fn fragments_and_buffer_boundaries_preserve_uri_bytes() -> io::Result<()> {
+    let uris = [
         "HTTPS://Example.COM/%2f?q=%41#fragment",
         "https://例え.テスト/🦀",
         "urn:isbn:9780140328721",
         "urn:isbn:9780140328721",
     ];
-    let input = format!("{}\n", urls.join("\n"));
+    let input = format!("{}\n", uris.join("\n"));
     for capacity in [1, 7, 64] {
         for chunk in [1, 2, 7, 31, 64] {
             let input = Fragmented {
@@ -64,26 +64,26 @@ async fn fragments_and_buffer_boundaries_preserve_url_bytes() -> io::Result<()> 
                 chunk,
                 pending: false,
             };
-            let mut reader = UrlsReader::with_capacity(capacity, input);
-            for url in urls {
-                assert_eq!(reader.next_url().await?, Some(url));
+            let mut reader = UrisReader::with_capacity(capacity, input);
+            for uri in uris {
+                assert_eq!(reader.next_uri().await?, Some(uri));
             }
-            assert_eq!(reader.next_url().await?, None);
-            assert_eq!(reader.next_url().await?, None);
+            assert_eq!(reader.next_uri().await?, None);
+            assert_eq!(reader.next_uri().await?, None);
         }
     }
     Ok(())
 }
 
 #[test]
-fn reading_many_urls_performs_no_per_line_allocations() {
-    let url = "https://例え.テスト/%2f?x=%41#fragment";
-    let input = format!("{url}\n").repeat(20_000);
-    let mut reader = UrlsReader::with_capacity(128, input.as_bytes());
+fn reading_many_uris_performs_no_per_line_allocations() {
+    let uri = "https://例え.テスト/%2f?x=%41#fragment";
+    let input = format!("{uri}\n").repeat(20_000);
+    let mut reader = UrisReader::with_capacity(128, input.as_bytes());
     let mut count = 0;
     let allocations = allocation_counter::measure(|| {
-        while let Some(line) = ready(reader.next_url()).unwrap() {
-            assert_eq!(line, url);
+        while let Some(line) = ready(reader.next_uri()).unwrap() {
+            assert_eq!(line, uri);
             count += 1;
         }
     });
@@ -95,14 +95,14 @@ fn reading_many_urls_performs_no_per_line_allocations() {
 fn long_lines_grow_the_buffer_once_then_reuse_it() {
     let long = format!("https://example.com/{}", "x".repeat(128 * 1024));
     let input = format!("{long}\nurn:short\n").repeat(8);
-    let mut reader = UrlsReader::with_capacity(8, input.as_bytes());
-    assert_eq!(ready(reader.next_url()).unwrap(), Some(long.as_str()));
+    let mut reader = UrisReader::with_capacity(8, input.as_bytes());
+    assert_eq!(ready(reader.next_uri()).unwrap(), Some(long.as_str()));
     let allocations = allocation_counter::measure(|| {
         for index in 0..15 {
             let expected = if index % 2 == 0 { "urn:short" } else { &long };
-            assert_eq!(ready(reader.next_url()).unwrap(), Some(expected));
+            assert_eq!(ready(reader.next_uri()).unwrap(), Some(expected));
         }
-        assert_eq!(ready(reader.next_url()).unwrap(), None);
+        assert_eq!(ready(reader.next_uri()).unwrap(), None);
     });
     assert_eq!(allocations.count_total, 0, "{allocations:?}");
 }
@@ -116,21 +116,23 @@ async fn malformed_lines_fail_after_prior_output_and_stop_iteration() -> io::Res
         b"https://example.com/\xff\n",
         b"https://example.com",
         b"https://example.com/%zz\n",
+        b"# comment\n",
+        b"#https://example.com\n",
     ] {
         let mut input = b"https://valid.example\n".to_vec();
         input.extend_from_slice(invalid);
-        let mut reader = UrlsReader::with_capacity(4, input.as_slice());
-        assert_eq!(reader.next_url().await?, Some("https://valid.example"));
+        let mut reader = UrisReader::with_capacity(4, input.as_slice());
+        assert_eq!(reader.next_uri().await?, Some("https://valid.example"));
         assert_eq!(
-            reader.next_url().await.unwrap_err().kind(),
+            reader.next_uri().await.unwrap_err().kind(),
             ErrorKind::InvalidData
         );
-        assert_eq!(reader.next_url().await?, None);
+        assert_eq!(reader.next_uri().await?, None);
     }
-    let mut empty = UrlsReader::<&[u8]>::empty();
-    assert_eq!(empty.next_url().await?, None);
-    let mut empty_file = UrlsReader::new(b"".as_slice());
-    assert_eq!(empty_file.next_url().await?, None);
+    let mut empty = UrisReader::<&[u8]>::empty();
+    assert_eq!(empty.next_uri().await?, None);
+    let mut empty_file = UrisReader::new(b"".as_slice());
+    assert_eq!(empty_file.next_uri().await?, None);
     Ok(())
 }
 
@@ -141,17 +143,17 @@ async fn cancellation_retains_a_partially_read_line() -> io::Result<()> {
         chunk: 3,
         pending: false,
     };
-    let mut reader = UrlsReader::with_capacity(4, input);
+    let mut reader = UrisReader::with_capacity(4, input);
     {
-        let next = pin!(reader.next_url());
+        let next = pin!(reader.next_uri());
         assert!(
             next.poll(&mut Context::from_waker(Waker::noop()))
                 .is_pending()
         );
     }
-    assert_eq!(reader.next_url().await?, Some("https://first.example"));
-    assert_eq!(reader.next_url().await?, Some("https://second.example"));
-    assert_eq!(reader.next_url().await?, None);
+    assert_eq!(reader.next_uri().await?, Some("https://first.example"));
+    assert_eq!(reader.next_uri().await?, Some("https://second.example"));
+    assert_eq!(reader.next_uri().await?, None);
     Ok(())
 }
 
@@ -175,18 +177,18 @@ impl AsyncRead for Failing<'_> {
 
 #[tokio::test]
 async fn io_errors_are_preserved_and_rewind_restarts_iteration() -> io::Result<()> {
-    let mut reader = UrlsReader::new(Failing(b"https://example.com\nhttps://partial"));
-    assert_eq!(reader.next_url().await?, Some("https://example.com"));
+    let mut reader = UrisReader::new(Failing(b"https://example.com\nhttps://partial"));
+    assert_eq!(reader.next_uri().await?, Some("https://example.com"));
     assert_eq!(
-        reader.next_url().await.unwrap_err().kind(),
+        reader.next_uri().await.unwrap_err().kind(),
         ErrorKind::PermissionDenied
     );
-    assert_eq!(reader.next_url().await?, None);
+    assert_eq!(reader.next_uri().await?, None);
 
-    let mut reader = UrlsReader::new(io::Cursor::new(b"https://example.com\n"));
+    let mut reader = UrisReader::new(io::Cursor::new(b"https://example.com\n"));
     for _ in 0..2 {
-        assert_eq!(reader.next_url().await?, Some("https://example.com"));
-        assert_eq!(reader.next_url().await?, None);
+        assert_eq!(reader.next_uri().await?, Some("https://example.com"));
+        assert_eq!(reader.next_uri().await?, None);
         reader.rewind().await?;
     }
     Ok(())

@@ -1,35 +1,35 @@
 // This is free and unencumbered software released into the public domain.
 
-use crate::UrlsReader;
+use crate::UrisReader;
 use std::io;
 use tokio::io::{AsyncRead, AsyncSeek};
 
-/// A single-URL view of a [`UrlsReader`], borrowing its next URL once.
+/// A single-IRI view of a [`UrisReader`], borrowing its next IRI once.
 ///
-/// This supports reading either `.url` or `.urls` input as one URL. Buffering,
+/// This supports reading either `.uri` or `.uris` input as one IRI. Buffering,
 /// validation, and allocation behavior come from the wrapped reader. Buffered
 /// I/O may read ahead, but trailing records are neither parsed nor validated.
 ///
 /// ```
 /// # async fn example() -> std::io::Result<()> {
-/// use asimov_directory::{UrlReader, UrlsReader};
+/// use asimov_directory::{UriReader, UrisReader};
 ///
-/// let urls = UrlsReader::new(&b"urn:example:first\nurn:example:second\n"[..]);
-/// let mut reader = UrlReader::new(urls);
-/// assert_eq!(reader.next_url().await?, Some("urn:example:first"));
-/// assert_eq!(reader.next_url().await?, None);
+/// let uris = UrisReader::new(&b"urn:example:first\nurn:example:second\n"[..]);
+/// let mut reader = UriReader::new(uris);
+/// assert_eq!(reader.next_uri().await?, Some("urn:example:first"));
+/// assert_eq!(reader.next_uri().await?, None);
 /// # Ok(())
 /// # }
 /// ```
 #[derive(Debug)]
-pub struct UrlReader<R> {
-    reader: UrlsReader<R>,
+pub struct UriReader<R> {
+    reader: UrisReader<R>,
     finished: bool,
 }
 
-impl<R> UrlReader<R> {
+impl<R> UriReader<R> {
     /// Wraps a reader at its current position, reusing its existing buffer.
-    pub fn new(reader: UrlsReader<R>) -> Self {
+    pub fn new(reader: UrisReader<R>) -> Self {
         Self {
             reader,
             finished: false,
@@ -37,36 +37,36 @@ impl<R> UrlReader<R> {
     }
 
     /// Recovers the wrapped reader, including any buffered trailing records.
-    pub fn into_inner(self) -> UrlsReader<R> {
+    pub fn into_inner(self) -> UrisReader<R> {
         self.reader
     }
 }
 
-impl<R> From<UrlsReader<R>> for UrlReader<R> {
-    fn from(reader: UrlsReader<R>) -> Self {
+impl<R> From<UrisReader<R>> for UriReader<R> {
+    fn from(reader: UrisReader<R>) -> Self {
         Self::new(reader)
     }
 }
 
-impl<R: AsyncRead + Unpin> UrlReader<R> {
-    /// Borrows the next URL once, returning `None` on subsequent calls.
+impl<R: AsyncRead + Unpin> UriReader<R> {
+    /// Borrows the next IRI once, returning `None` on subsequent calls.
     ///
     /// Empty input returns `None`. Errors in the first record propagate and
     /// terminate iteration. Cancellation retains the partially read first record.
-    pub async fn next_url(&mut self) -> io::Result<Option<&str>> {
+    pub async fn next_uri(&mut self) -> io::Result<Option<&str>> {
         if self.finished {
             return Ok(None);
         }
-        let result = self.reader.next_url().await;
+        let result = self.reader.next_uri().await;
         self.finished = true;
         result
     }
 }
 
-impl<R: AsyncSeek + Unpin> UrlReader<R> {
-    /// Rewinds the underlying input and permits one URL to be read again.
+impl<R: AsyncSeek + Unpin> UriReader<R> {
+    /// Rewinds the underlying input and permits one IRI to be read again.
     ///
-    /// Cancellation and failure follow [`UrlsReader::rewind`].
+    /// Cancellation and failure follow [`UrisReader::rewind`].
     pub async fn rewind(&mut self) -> io::Result<()> {
         self.finished = true;
         self.reader.rewind().await?;

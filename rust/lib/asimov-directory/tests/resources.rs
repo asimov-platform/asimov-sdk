@@ -10,7 +10,7 @@ use alloc::{
     vec::Vec,
 };
 use asimov_directory::{
-    UrlFile, UrlReader, UrlsFile,
+    UriFile, UriReader, UrisFile,
     fs::{ResourcesDirectory, StateDirectory},
 };
 use std::{
@@ -18,17 +18,17 @@ use std::{
     time::{Duration, UNIX_EPOCH},
 };
 
-fn urls(values: &[&str]) -> UrlsFile {
-    UrlsFile::new(values).unwrap()
+fn uris(values: &[&str]) -> UrisFile {
+    UrisFile::new(values).unwrap()
 }
 
-async fn collect_urls(resources: &ResourcesDirectory, collection: &str) -> io::Result<UrlsFile> {
-    let mut reader = resources.read_urls(collection)?;
-    let mut urls = Vec::new();
-    while let Some(url) = reader.next_url().await? {
-        urls.push(url.to_string());
+async fn collect_uris(resources: &ResourcesDirectory, collection: &str) -> io::Result<UrisFile> {
+    let mut reader = resources.read_uris(collection)?;
+    let mut uris = Vec::new();
+    while let Some(uri) = reader.next_uri().await? {
+        uris.push(uri.to_string());
     }
-    Ok(UrlsFile::new(urls).unwrap())
+    Ok(UrisFile::new(uris).unwrap())
 }
 
 #[tokio::test]
@@ -36,25 +36,25 @@ async fn storage_is_lazy_and_no_op_updates_preserve_the_file() -> io::Result<()>
     let temp = tempfile::tempdir()?;
     let state = StateDirectory::open(temp.path())?;
     let resources = state.resources()?;
-    let absent = urls(&["https://absent.example"]);
+    let absent = uris(&["https://absent.example"]);
     assert!(resources.files()?.is_empty());
-    assert!(resources.read_urls("tracked")?.next_url().await?.is_none());
-    assert_eq!(resources.remove_urls("tracked", &absent).await?, 0);
+    assert!(resources.read_uris("tracked")?.next_uri().await?.is_none());
+    assert_eq!(resources.remove_uris("tracked", &absent).await?, 0);
     assert_eq!(
         resources
-            .append_urls("tracked", &UrlsFile::default())
+            .append_uris("tracked", &UrisFile::default())
             .await?,
         0
     );
     assert!(!state.join("resources").exists());
 
-    let initial = urls(&[
+    let initial = uris(&[
         "https://b.example",
         "https://a.example",
         "https://b.example",
     ]);
-    assert_eq!(resources.append_urls("tracked", &initial).await?, 2);
-    let path = state.join("resources/tracked.urls");
+    assert_eq!(resources.append_uris("tracked", &initial).await?, 2);
+    let path = state.join("resources/tracked.uris");
     let file = std::fs::File::options().write(true).open(&path)?;
     file.set_modified(UNIX_EPOCH + Duration::from_secs(1234567890))?;
     let original_permissions = file.metadata()?.permissions();
@@ -62,9 +62,9 @@ async fn storage_is_lazy_and_no_op_updates_preserve_the_file() -> io::Result<()>
     permissions.set_readonly(true);
     file.set_permissions(permissions)?;
     let before = std::fs::metadata(&path)?;
-    assert_eq!(resources.append_urls("tracked", &initial).await?, 0);
-    assert_eq!(resources.remove_urls("tracked", &absent).await?, 0);
-    assert_eq!(resources.remove_urls("missing/nested", &absent).await?, 0);
+    assert_eq!(resources.append_uris("tracked", &initial).await?, 0);
+    assert_eq!(resources.remove_uris("tracked", &absent).await?, 0);
+    assert_eq!(resources.remove_uris("missing/nested", &absent).await?, 0);
     assert!(!state.join("resources/missing").exists());
     let after = std::fs::metadata(&path)?;
     assert_eq!(after.modified()?, before.modified()?);
@@ -76,7 +76,7 @@ async fn storage_is_lazy_and_no_op_updates_preserve_the_file() -> io::Result<()>
             (before.ino(), before.ctime(), before.ctime_nsec())
         );
     }
-    assert_eq!(resources.files()?, ["tracked.urls"]);
+    assert_eq!(resources.files()?, ["tracked.uris"]);
     assert_eq!(
         std::fs::read_to_string(&path)?,
         "https://b.example\nhttps://a.example\n"
@@ -91,17 +91,17 @@ async fn appends_preserve_existing_bytes_and_removals_replace_atomically() -> io
     let state = StateDirectory::open(temp.path())?;
     let resources = state.resources()?;
     resources
-        .append_urls("tracked", &urls(&["https://a.example"]))
+        .append_uris("tracked", &uris(&["https://a.example"]))
         .await?;
-    let path = state.join("resources/tracked.urls");
+    let path = state.join("resources/tracked.uris");
     let original = "https://b.example\nhttps://a.example\nhttps://b.example\n";
     std::fs::write(&path, original)?;
     let mut opened = std::fs::File::open(&path)?;
     assert_eq!(
         resources
-            .append_urls(
+            .append_uris(
                 "tracked",
-                &urls(&[
+                &uris(&[
                     "https://a.example",
                     "https://d.example",
                     "https://d.example",
@@ -119,7 +119,7 @@ async fn appends_preserve_existing_bytes_and_removals_replace_atomically() -> io
     let mut old = std::fs::File::open(&path)?;
     assert_eq!(
         resources
-            .remove_urls("tracked", &urls(&["https://a.example"]))
+            .remove_uris("tracked", &uris(&["https://a.example"]))
             .await?,
         1
     );
@@ -135,7 +135,7 @@ async fn appends_preserve_existing_bytes_and_removals_replace_atomically() -> io
     );
     assert_eq!(
         resources
-            .remove_urls("tracked", &urls(&["https://b.example"]))
+            .remove_uris("tracked", &uris(&["https://b.example"]))
             .await?,
         2
     );
@@ -143,10 +143,10 @@ async fn appends_preserve_existing_bytes_and_removals_replace_atomically() -> io
         std::fs::read_to_string(&path)?,
         "https://d.example\nhttps://c.example\n"
     );
-    let remaining = collect_urls(&resources, "tracked").await?;
-    assert_eq!(resources.remove_urls("tracked", &remaining).await?, 2);
+    let remaining = collect_uris(&resources, "tracked").await?;
+    assert_eq!(resources.remove_uris("tracked", &remaining).await?, 2);
     assert_eq!(std::fs::read(&path)?, b"");
-    assert_eq!(resources.files()?, ["tracked.urls"]);
+    assert_eq!(resources.files()?, ["tracked.uris"]);
     assert_eq!(std::fs::read_dir(state.join("resources"))?.count(), 1);
     Ok(())
 }
@@ -159,9 +159,9 @@ async fn streaming_updates_preserve_order_across_many_buffers() -> io::Result<()
     let state = StateDirectory::open(temp.path())?;
     let resources = state.resources()?;
     resources
-        .append_urls("tracked", &urls(&["urn:placeholder"]))
+        .append_uris("tracked", &uris(&["urn:placeholder"]))
         .await?;
-    let path = state.join("resources/tracked.urls");
+    let path = state.join("resources/tracked.uris");
     let mut fixture = std::io::BufWriter::new(std::fs::File::create(&path)?);
     for index in 0..20_000 {
         writeln!(fixture, "urn:item:{index}")?;
@@ -171,9 +171,9 @@ async fn streaming_updates_preserve_order_across_many_buffers() -> io::Result<()
 
     assert_eq!(
         resources
-            .append_urls(
+            .append_uris(
                 "tracked",
-                &urls(&[
+                &uris(&[
                     "urn:item:19999",
                     "urn:new:one",
                     "urn:new:one",
@@ -185,9 +185,9 @@ async fn streaming_updates_preserve_order_across_many_buffers() -> io::Result<()
     );
     assert_eq!(
         resources
-            .remove_urls(
+            .remove_uris(
                 "tracked",
-                &urls(&[
+                &uris(&[
                     "urn:item:0",
                     "urn:item:10000",
                     "urn:item:19999",
@@ -197,16 +197,16 @@ async fn streaming_updates_preserve_order_across_many_buffers() -> io::Result<()
             .await?,
         3
     );
-    let mut reader = resources.read_urls("tracked")?;
+    let mut reader = resources.read_uris("tracked")?;
     for index in (1..19_999).filter(|index| *index != 10_000) {
         assert_eq!(
-            reader.next_url().await?,
+            reader.next_uri().await?,
             Some(format!("urn:item:{index}").as_str())
         );
     }
-    assert_eq!(reader.next_url().await?, Some("urn:new:one"));
-    assert_eq!(reader.next_url().await?, Some("urn:new:two"));
-    assert_eq!(reader.next_url().await?, None);
+    assert_eq!(reader.next_uri().await?, Some("urn:new:one"));
+    assert_eq!(reader.next_uri().await?, Some("urn:new:two"));
+    assert_eq!(reader.next_uri().await?, None);
     assert_eq!(std::fs::read_dir(state.join("resources"))?.count(), 1);
     Ok(())
 }
@@ -216,35 +216,35 @@ async fn nested_collections_support_both_formats() -> io::Result<()> {
     let temp = tempfile::tempdir()?;
     let state = StateDirectory::open(temp.path())?;
     let resources = state.resources()?;
-    let single = UrlFile::new("https://single.example").unwrap();
-    assert!(resources.write_url("my/x/tweet", &single).await?);
-    assert!(!resources.write_url("my/x/tweet", &single).await?);
+    let single = UriFile::new("https://例え.テスト/🦀#片").unwrap();
+    assert!(resources.write_uri("my/x/tweet", &single).await?);
+    assert!(!resources.write_uri("my/x/tweet", &single).await?);
     resources
-        .append_urls(
+        .append_uris(
             "my/x/tweets",
-            &urls(&["https://first.example", "https://second.example"]),
+            &uris(&["https://first.example", single.uri()]),
         )
         .await?;
     std::fs::write(state.join("resources/ignored.txt"), "not a collection")?;
-    assert_eq!(resources.files()?, ["my/x/tweet.url", "my/x/tweets.urls"]);
-    let mut reader = resources.read_url("my/x/tweet")?;
-    assert_eq!(reader.next_url().await?, Some(single.url()));
-    assert_eq!(reader.next_url().await?, None);
+    assert_eq!(resources.files()?, ["my/x/tweet.uri", "my/x/tweets.uris"]);
+    let mut reader = resources.read_uri("my/x/tweet")?;
+    assert_eq!(reader.next_uri().await?, Some(single.uri()));
+    assert_eq!(reader.next_uri().await?, None);
     assert_eq!(
-        std::fs::read_to_string(state.join("resources/my/x/tweet.url"))?,
-        "https://single.example\n"
+        std::fs::read_to_string(state.join("resources/my/x/tweet.uri"))?,
+        "https://例え.テスト/🦀#片\n"
     );
     assert_eq!(
-        collect_urls(&resources, "my/x/tweets").await?.urls(),
-        ["https://first.example", "https://second.example"]
+        collect_uris(&resources, "my/x/tweets").await?.uris(),
+        ["https://first.example", single.uri()]
     );
     assert!(
         resources
-            .append_urls("my/x/tweet", &urls(&["https://other.example"]))
+            .append_uris("my/x/tweet", &uris(&["https://other.example"]))
             .await
             .is_err()
     );
-    assert!(resources.write_url("my/x/tweets", &single).await.is_err());
+    assert!(resources.write_uri("my/x/tweets", &single).await.is_err());
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -254,7 +254,7 @@ async fn nested_collections_support_both_formats() -> io::Result<()> {
                 0o700
             );
         }
-        for path in ["resources/my/x/tweet.url", "resources/my/x/tweets.urls"] {
+        for path in ["resources/my/x/tweet.uri", "resources/my/x/tweets.uris"] {
             assert_eq!(
                 std::fs::metadata(state.join(path))?.permissions().mode() & 0o777,
                 0o600
@@ -265,48 +265,48 @@ async fn nested_collections_support_both_formats() -> io::Result<()> {
 }
 
 #[tokio::test]
-async fn single_url_reads_ignore_trailing_content_in_either_format() -> io::Result<()> {
+async fn single_uri_reads_ignore_trailing_content_in_either_format() -> io::Result<()> {
     let temp = tempfile::tempdir()?;
     let state = StateDirectory::open(temp.path())?;
     let resources = state.resources()?;
     assert_eq!(
-        resources.read_url("missing").unwrap_err().kind(),
+        resources.read_uri("missing").unwrap_err().kind(),
         ErrorKind::NotFound
     );
     assert!(!state.join("resources").exists());
-    let first = UrlFile::new("urn:first").unwrap();
-    resources.write_url("single", &first).await?;
-    std::fs::write(state.join("resources/single.url"), b"urn:first\n\xff\n")?;
-    let mut reader = resources.read_url("single")?;
-    assert_eq!(reader.next_url().await?, Some("urn:first"));
-    assert_eq!(reader.next_url().await?, None);
+    let first = UriFile::new("urn:first").unwrap();
+    resources.write_uri("single", &first).await?;
+    std::fs::write(state.join("resources/single.uri"), b"urn:first\n\xff\n")?;
+    let mut reader = resources.read_uri("single")?;
+    assert_eq!(reader.next_uri().await?, Some("urn:first"));
+    assert_eq!(reader.next_uri().await?, None);
 
     resources
-        .append_urls("multiple", &urls(&["urn:first", "urn:second"]))
+        .append_uris("multiple", &uris(&["urn:first", "urn:second"]))
         .await?;
-    let mut reader = UrlReader::from(resources.read_urls("multiple")?);
-    assert_eq!(reader.next_url().await?, Some("urn:first"));
-    assert_eq!(reader.next_url().await?, None);
-    assert_eq!(reader.into_inner().next_url().await?, Some("urn:second"));
+    let mut reader = UriReader::from(resources.read_uris("multiple")?);
+    assert_eq!(reader.next_uri().await?, Some("urn:first"));
+    assert_eq!(reader.next_uri().await?, None);
+    assert_eq!(reader.into_inner().next_uri().await?, Some("urn:second"));
     Ok(())
 }
 
 #[tokio::test]
-async fn single_url_writes_replace_atomically_and_reject_extra_records() -> io::Result<()> {
+async fn single_uri_writes_replace_atomically_and_reject_extra_records() -> io::Result<()> {
     let temp = tempfile::tempdir()?;
     let state = StateDirectory::open(temp.path())?;
     let resources = state.resources()?;
-    let first = UrlFile::new("urn:first").unwrap();
-    let second = UrlFile::new("urn:second").unwrap();
-    resources.write_url("single", &first).await?;
-    let path = state.join("resources/single.url");
+    let first = UriFile::new("urn:first").unwrap();
+    let second = UriFile::new("urn:second").unwrap();
+    resources.write_uri("single", &first).await?;
+    let path = state.join("resources/single.uri");
     let mut old = std::fs::File::open(&path)?;
-    assert!(resources.write_url("single", &second).await?);
+    assert!(resources.write_uri("single", &second).await?);
     let mut observed = String::new();
     old.read_to_string(&mut observed)?;
     assert_eq!(observed, "urn:first\n");
     assert_eq!(std::fs::read_to_string(&path)?, "urn:second\n");
-    assert!(!resources.write_url("single", &second).await?);
+    assert!(!resources.write_uri("single", &second).await?);
 
     for contents in [
         b"".as_slice(),
@@ -318,7 +318,7 @@ async fn single_url_writes_replace_atomically_and_reject_extra_records() -> io::
         for replacement in [&first, &second] {
             assert_eq!(
                 resources
-                    .write_url("single", replacement)
+                    .write_uri("single", replacement)
                     .await
                     .unwrap_err()
                     .kind(),
@@ -336,8 +336,8 @@ async fn invalid_names_never_create_storage() -> io::Result<()> {
     let temp = tempfile::tempdir()?;
     let state = StateDirectory::open(temp.path())?;
     let resources = state.resources()?;
-    let batch = urls(&["https://example.com"]);
-    let single = UrlFile::new("https://example.com").unwrap();
+    let batch = uris(&["https://example.com"]);
+    let single = UriFile::new("https://example.com").unwrap();
     for name in [
         "",
         ".",
@@ -356,11 +356,11 @@ async fn invalid_names_never_create_storage() -> io::Result<()> {
         "a\n",
     ] {
         for result in [
-            resources.read_url(name).map(|_| ()),
-            resources.write_url(name, &single).await.map(|_| ()),
-            resources.read_urls(name).map(|_| ()),
-            resources.append_urls(name, &batch).await.map(|_| ()),
-            resources.remove_urls(name, &batch).await.map(|_| ()),
+            resources.read_uri(name).map(|_| ()),
+            resources.write_uri(name, &single).await.map(|_| ()),
+            resources.read_uris(name).map(|_| ()),
+            resources.append_uris(name, &batch).await.map(|_| ()),
+            resources.remove_uris(name, &batch).await.map(|_| ()),
         ] {
             assert_eq!(
                 result.unwrap_err().kind(),
@@ -378,15 +378,21 @@ async fn malformed_collections_are_not_overwritten() -> io::Result<()> {
     let temp = tempfile::tempdir()?;
     let state = StateDirectory::open(temp.path())?;
     let resources = state.resources()?;
-    let batch = urls(&["https://example.com"]);
-    resources.append_urls("tracked", &batch).await?;
-    let path = state.join("resources/tracked.urls");
-    for contents in [b"https://example.com".as_slice(), b"not a URL\n", b"\xff\n"] {
+    let batch = uris(&["https://example.com"]);
+    resources.append_uris("tracked", &batch).await?;
+    let path = state.join("resources/tracked.uris");
+    for contents in [
+        b"https://example.com".as_slice(),
+        b"not an IRI\n",
+        b"\xff\n",
+        b"https://example.com\r\n",
+        b"# comment\nhttps://example.com\n",
+    ] {
         std::fs::write(&path, contents)?;
         assert_eq!(
             resources
-                .read_urls("tracked")?
-                .next_url()
+                .read_uris("tracked")?
+                .next_uri()
                 .await
                 .unwrap_err()
                 .kind(),
@@ -394,7 +400,7 @@ async fn malformed_collections_are_not_overwritten() -> io::Result<()> {
         );
         assert_eq!(
             resources
-                .append_urls("tracked", &batch)
+                .append_uris("tracked", &batch)
                 .await
                 .unwrap_err()
                 .kind(),
@@ -402,7 +408,7 @@ async fn malformed_collections_are_not_overwritten() -> io::Result<()> {
         );
         assert_eq!(
             resources
-                .remove_urls("tracked", &batch)
+                .remove_uris("tracked", &batch)
                 .await
                 .unwrap_err()
                 .kind(),
@@ -424,49 +430,49 @@ async fn links_cannot_redirect_access_outside_resources() -> io::Result<()> {
     let sibling = state.join("private");
     std::fs::create_dir(&sibling)?;
     let resources = state.resources()?;
-    let batch = urls(&["https://untouched.example"]);
+    let batch = uris(&["https://untouched.example"]);
     for target in [outside.path(), sibling.as_std_path()] {
-        std::fs::write(target.join("tracked.urls"), "https://untouched.example\n")?;
+        std::fs::write(target.join("tracked.uris"), "https://untouched.example\n")?;
         symlink(target, state.join("resources"))?;
         assert!(resources.files().is_err());
-        assert!(resources.read_urls("tracked").is_err());
-        assert!(resources.append_urls("tracked", &batch).await.is_err());
-        assert!(resources.remove_urls("tracked", &batch).await.is_err());
+        assert!(resources.read_uris("tracked").is_err());
+        assert!(resources.append_uris("tracked", &batch).await.is_err());
+        assert!(resources.remove_uris("tracked", &batch).await.is_err());
         std::fs::remove_file(state.join("resources"))?;
     }
     std::fs::create_dir(state.join("resources"))?;
     symlink(&sibling, state.join("resources/nested"))?;
     assert!(resources.files().is_err());
-    assert!(resources.read_urls("nested/tracked").is_err());
-    assert!(resources.append_urls("nested/new", &batch).await.is_err());
+    assert!(resources.read_uris("nested/tracked").is_err());
+    assert!(resources.append_uris("nested/new", &batch).await.is_err());
     assert!(
         resources
-            .remove_urls("nested/tracked", &batch)
+            .remove_uris("nested/tracked", &batch)
             .await
             .is_err()
     );
-    assert!(!sibling.join("new.urls").exists());
+    assert!(!sibling.join("new.uris").exists());
     std::fs::remove_file(state.join("resources/nested"))?;
 
-    for target in [sibling.join("tracked.urls"), sibling.join("missing.urls")] {
-        symlink(&target, state.join("resources/tracked.urls"))?;
+    for target in [sibling.join("tracked.uris"), sibling.join("missing.uris")] {
+        symlink(&target, state.join("resources/tracked.uris"))?;
         assert!(resources.files().is_err());
-        assert!(resources.read_urls("tracked").is_err());
-        assert!(resources.append_urls("tracked", &batch).await.is_err());
-        assert!(resources.remove_urls("tracked", &batch).await.is_err());
-        std::fs::remove_file(state.join("resources/tracked.urls"))?;
+        assert!(resources.read_uris("tracked").is_err());
+        assert!(resources.append_uris("tracked", &batch).await.is_err());
+        assert!(resources.remove_uris("tracked", &batch).await.is_err());
+        std::fs::remove_file(state.join("resources/tracked.uris"))?;
     }
-    assert!(!sibling.join("missing.urls").exists());
+    assert!(!sibling.join("missing.uris").exists());
     std::fs::hard_link(
-        sibling.join("tracked.urls"),
-        state.join("resources/tracked.urls"),
+        sibling.join("tracked.uris"),
+        state.join("resources/tracked.uris"),
     )?;
     assert!(resources.files().is_err());
-    assert!(resources.read_urls("tracked").is_err());
-    assert!(resources.append_urls("tracked", &batch).await.is_err());
-    assert!(resources.remove_urls("tracked", &batch).await.is_err());
+    assert!(resources.read_uris("tracked").is_err());
+    assert!(resources.append_uris("tracked", &batch).await.is_err());
+    assert!(resources.remove_uris("tracked", &batch).await.is_err());
     assert_eq!(
-        std::fs::read_to_string(sibling.join("tracked.urls"))?,
+        std::fs::read_to_string(sibling.join("tracked.uris"))?,
         "https://untouched.example\n"
     );
     Ok(())

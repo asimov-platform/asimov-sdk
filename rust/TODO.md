@@ -150,9 +150,9 @@ Unless marked reproduced, implementation findings are based on source review.
 
 - [ ] **Coordinate concurrent resource-collection writers.**
   `ResourcesDirectory` requires callers to serialize mutations. Add portable
-  cross-process coordination for append/deduplication, single-URL replacements,
+  cross-process coordination for append/deduplication, single-IRI replacements,
   and atomic removals while preserving mutation-free no-ops; test competing
-  writers and readers across both removal passes, including stable URL order
+  writers and readers across both removal passes, including stable IRI order
   and retained duplicates.
 
 - [ ] **Honor optional configuration variables when reading a profile.**
@@ -434,6 +434,10 @@ Unless marked reproduced, implementation findings are based on source review.
   concurrent first starts and disabling while another invocation is active.
 
 ## P3: Design, coverage, and maintenance
+
+- [ ] **Consider URI-list comment support.**
+  `asimov-directory` currently rejects `#` comment lines. Define preservation
+  during collection updates and single-IRI reader behavior before enabling them.
 
 - [ ] **Verify Hugging Face cache contents against their content IDs.**
   `lib/asimov-huggingface/src/download.rs` validates ranges and lengths. Add

@@ -2,7 +2,7 @@
 
 #![cfg(feature = "tokio")]
 
-use asimov_directory::{UrlReader, UrlsReader};
+use asimov_directory::{UriReader, UrisReader};
 use core::{
     future::Future,
     pin::{Pin, pin},
@@ -27,25 +27,25 @@ async fn trailing_records_are_ignored_even_when_malformed() -> io::Result<()> {
         b"urn:first\nunterminated",
         b"urn:first\n\n",
     ] {
-        let mut reader = UrlReader::new(UrlsReader::new(input));
-        assert_eq!(reader.next_url().await?, Some("urn:first"));
-        assert_eq!(reader.next_url().await?, None);
-        assert_eq!(reader.next_url().await?, None);
+        let mut reader = UriReader::new(UrisReader::new(input));
+        assert_eq!(reader.next_uri().await?, Some("urn:first"));
+        assert_eq!(reader.next_uri().await?, None);
+        assert_eq!(reader.next_uri().await?, None);
     }
     Ok(())
 }
 
 #[test]
 fn wrapping_preserves_position_and_buffered_remainder_without_allocating() {
-    let mut urls = UrlsReader::new(b"urn:first\nurn:second\nurn:third\n".as_slice());
-    assert_eq!(ready(urls.next_url()).unwrap(), Some("urn:first"));
+    let mut uris = UrisReader::new(b"urn:first\nurn:second\nurn:third\n".as_slice());
+    assert_eq!(ready(uris.next_uri()).unwrap(), Some("urn:first"));
     let allocations = allocation_counter::measure(|| {
-        let mut reader = UrlReader::from(urls);
-        assert_eq!(ready(reader.next_url()).unwrap(), Some("urn:second"));
-        assert_eq!(ready(reader.next_url()).unwrap(), None);
-        let mut urls = reader.into_inner();
-        assert_eq!(ready(urls.next_url()).unwrap(), Some("urn:third"));
-        assert_eq!(ready(urls.next_url()).unwrap(), None);
+        let mut reader = UriReader::from(uris);
+        assert_eq!(ready(reader.next_uri()).unwrap(), Some("urn:second"));
+        assert_eq!(ready(reader.next_uri()).unwrap(), None);
+        let mut uris = reader.into_inner();
+        assert_eq!(ready(uris.next_uri()).unwrap(), Some("urn:third"));
+        assert_eq!(ready(uris.next_uri()).unwrap(), None);
     });
     assert_eq!(allocations.count_total, 0, "{allocations:?}");
 }
@@ -58,20 +58,21 @@ async fn empty_input_and_first_record_errors_follow_the_wrapped_reader() -> io::
         b"relative/path\nurn:valid\n",
         b"\xff\n",
         b"urn:unterminated",
+        b"# comment\nurn:valid\n",
     ] {
-        let mut reader = UrlReader::new(UrlsReader::new(input));
+        let mut reader = UriReader::new(UrisReader::new(input));
         if input.is_empty() {
-            assert_eq!(reader.next_url().await?, None);
+            assert_eq!(reader.next_uri().await?, None);
         } else {
             assert_eq!(
-                reader.next_url().await.unwrap_err().kind(),
+                reader.next_uri().await.unwrap_err().kind(),
                 ErrorKind::InvalidData
             );
         }
-        assert_eq!(reader.next_url().await?, None);
+        assert_eq!(reader.next_uri().await?, None);
     }
-    let mut reader = UrlReader::from(UrlsReader::<&[u8]>::empty());
-    assert_eq!(reader.next_url().await?, None);
+    let mut reader = UriReader::from(UrisReader::<&[u8]>::empty());
+    assert_eq!(reader.next_uri().await?, None);
     Ok(())
 }
 
@@ -95,49 +96,49 @@ impl AsyncRead for Failing<'_> {
 }
 
 #[tokio::test]
-async fn io_errors_propagate_only_when_reading_the_first_url() -> io::Result<()> {
-    let mut reader = UrlReader::new(UrlsReader::new(Failing(b"")));
+async fn io_errors_propagate_only_when_reading_the_first_uri() -> io::Result<()> {
+    let mut reader = UriReader::new(UrisReader::new(Failing(b"")));
     assert_eq!(
-        reader.next_url().await.unwrap_err().kind(),
+        reader.next_uri().await.unwrap_err().kind(),
         ErrorKind::PermissionDenied
     );
-    assert_eq!(reader.next_url().await?, None);
+    assert_eq!(reader.next_uri().await?, None);
 
-    let mut reader = UrlReader::new(UrlsReader::new(Failing(b"urn:first\n")));
-    assert_eq!(reader.next_url().await?, Some("urn:first"));
-    assert_eq!(reader.next_url().await?, None);
+    let mut reader = UriReader::new(UrisReader::new(Failing(b"urn:first\n")));
+    assert_eq!(reader.next_uri().await?, Some("urn:first"));
+    assert_eq!(reader.next_uri().await?, None);
     assert_eq!(
-        reader.into_inner().next_url().await.unwrap_err().kind(),
+        reader.into_inner().next_uri().await.unwrap_err().kind(),
         ErrorKind::PermissionDenied
     );
     Ok(())
 }
 
 #[tokio::test]
-async fn cancellation_does_not_consume_the_one_url_allowance() -> io::Result<()> {
+async fn cancellation_does_not_consume_the_one_uri_allowance() -> io::Result<()> {
     let (mut writer, input) = tokio::io::duplex(64);
-    let mut reader = UrlReader::new(UrlsReader::with_capacity(4, input));
+    let mut reader = UriReader::new(UrisReader::with_capacity(4, input));
     writer.write_all(b"urn:").await?;
     {
-        let next = pin!(reader.next_url());
+        let next = pin!(reader.next_uri());
         assert!(
             next.poll(&mut Context::from_waker(Waker::noop()))
                 .is_pending()
         );
     }
     writer.write_all(b"first\nurn:second\n").await?;
-    assert_eq!(reader.next_url().await?, Some("urn:first"));
-    assert_eq!(reader.next_url().await?, None);
+    assert_eq!(reader.next_uri().await?, Some("urn:first"));
+    assert_eq!(reader.next_uri().await?, None);
     Ok(())
 }
 
 #[tokio::test]
-async fn rewind_permits_one_url_again() -> io::Result<()> {
+async fn rewind_permits_one_uri_again() -> io::Result<()> {
     let input = io::Cursor::new(b"urn:first\nurn:second\n");
-    let mut reader = UrlReader::new(UrlsReader::new(input));
+    let mut reader = UriReader::new(UrisReader::new(input));
     for _ in 0..2 {
-        assert_eq!(reader.next_url().await?, Some("urn:first"));
-        assert_eq!(reader.next_url().await?, None);
+        assert_eq!(reader.next_uri().await?, Some("urn:first"));
+        assert_eq!(reader.next_uri().await?, None);
         reader.rewind().await?;
     }
     Ok(())

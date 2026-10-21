@@ -26,18 +26,18 @@ pub use programs_directory::*;
 mod state_directory;
 pub use state_directory::*;
 
-mod url_file;
-pub use url_file::*;
+mod uri_file;
+pub use uri_file::*;
 
 #[cfg(feature = "tokio")]
-mod url_reader;
+mod uri_reader;
 #[cfg(feature = "tokio")]
-pub use url_reader::*;
+pub use uri_reader::*;
 
-mod urls_file;
-pub use urls_file::*;
+mod uris_file;
+pub use uris_file::*;
 
 #[cfg(feature = "tokio")]
-mod urls_reader;
+mod uris_reader;
 #[cfg(feature = "tokio")]
-pub use urls_reader::*;
+pub use uris_reader::*;

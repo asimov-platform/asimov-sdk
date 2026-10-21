@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
-- asimov-directory: Wrap `UrlsReader` in `UrlReader` to read only the first URL
-- asimov-directory: Read `.urls` files asynchronously as borrowed URL slices
-- asimov-directory: Track resource collections with reusable `.url`/`.urls`
+- asimov-directory: Wrap `UrisReader` in `UriReader` to read only the first IRI
+- asimov-directory: Read `.uris` files asynchronously as borrowed IRI slices
+- asimov-directory: Track resource collections with reusable `.uri`/`.uris`
   formats and confined storage under `resources/`
 - asimov-remote: Check remotes with signed OPTIONS requests, verified responses,
   and round-trip timing
@@ -28,13 +28,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: Expose shared proxy configuration, native discovery, and an
   origin-scoped reqwest adapter; available through SDK `http-proxy`/`http-client`
 ### Changed
+- asimov-directory: Rename file types to `UriFile`/`UrisFile`, readers to
+  `UriReader`/`UrisReader`, and their error to `InvalidUriFile`; use `uri`/`uris`
+  in accessors and collection methods
+- asimov-directory: Use IANA's `.uri`/`.uris` extensions for URI-list files,
+  with UTF-8 IRIs, LF newlines, and no comments; rename existing files
+- asimov-snapshot: Rename `.url` metadata to `.uri`; new files end with LF.
+  Existing metadata files need renaming.
 - asimov-config, asimov-directory: Rename directory types to `ConfigsDirectory`,
   `ModulesDirectory`, `ProgramsDirectory`, and `RemotesDirectory`
-- asimov-directory: Return `UrlReader` from `read_url`; single-URL writes are
+- asimov-directory: Return `UriReader` from `read_uri`; single-IRI writes are
   now async
 - asimov-directory: Stream resource collection reads and updates with bounded
-  memory; appending and removing URLs are now async
-- asimov-directory: Validate URL files as absolute IRIs (RFC 3987)
+  memory; appending and removing IRIs are now async
+- asimov-directory: Validate URI-list files as absolute IRIs (RFC 3987)
 - asimov-protocol: Reject method-changing publication redirects and HTTPS
   downgrades for Pkarr address records
 - asimov-proxy: Default OpenRouter forwarding to automatic proxy discovery;

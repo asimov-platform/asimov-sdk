@@ -15,6 +15,7 @@ use crate::Snapshot;
 
 const TIMESTAMP_FORMAT_STRING: &str = "%Y%m%dT%H%M%SZ";
 
+/// Filesystem snapshots with the original IRI in an LF-terminated `.uri` file.
 pub struct Fs {
     root: cap_std::fs::Dir,
 }
@@ -49,18 +50,18 @@ impl super::Storage for Fs {
         tracing::debug!(hash = url_hash, "Creating directory for url");
         self.root.create_dir_all(&final_url_dir)?;
 
-        let url_path = final_url_dir.join(".url");
+        let url_path = final_url_dir.join(".uri");
         if !self
             .root
             .metadata(&url_path)
             .map(|m| m.is_file())
             .unwrap_or(false)
         {
-            tracing::debug!(path = ?url_path, "Creating `url` metadata file");
+            tracing::debug!(path = ?url_path, "Creating `.uri` metadata file");
             let mut url_file = self.root.create(&url_path)?;
-            url_file.write_all(snapshot.url.as_bytes())?;
+            writeln!(url_file, "{}", snapshot.url)?;
 
-            tracing::debug!("Setting `url` metadata file permissions");
+            tracing::debug!("Setting `.uri` metadata file permissions");
             let mut permissions = url_file.metadata()?.permissions();
             permissions.set_readonly(true);
             url_file.set_permissions(permissions)?;
@@ -201,14 +202,18 @@ impl super::Storage for Fs {
                 continue;
             }
 
-            let url_link = std::path::Path::new(&file_name).join(".url");
+            let url_link = std::path::Path::new(&file_name).join(".uri");
 
-            tracing::debug!(hash = ?file_name, path=?url_link, "Reading `url` metadata file");
-            let url = match self.root.read_to_string(&url_link) {
+            tracing::debug!(hash = ?file_name, path=?url_link, "Reading `.uri` metadata file");
+            let mut url = match self.root.read_to_string(&url_link) {
                 Ok(url) => url,
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(err) => return Err(err),
             };
+            // Also accept older metadata renamed without adding an LF.
+            if url.ends_with('\n') {
+                url.pop();
+            }
 
             let current = self.current_version(&url)?;
 
@@ -246,7 +251,7 @@ impl super::Storage for Fs {
             if stem == "current" {
                 continue;
             }
-            if stem == ".url" {
+            if stem == ".uri" {
                 continue;
             }
 
@@ -391,7 +396,7 @@ mod tests {
 
         let fs = Fs { root };
 
-        let url = "http://example.org/";
+        let url = "HTTPS://例え.テスト/🦀/%2f?q=%41#片";
         let first_ts = Timestamp::now().round(Unit::Second).unwrap();
 
         let snapshot = Snapshot::builder()
@@ -401,6 +406,12 @@ mod tests {
             .data(r"v1")
             .build();
         fs.save(&snapshot).unwrap();
+
+        let metadata_path = Path::new(&hex::encode(sha256(url))).join(".uri");
+        assert_eq!(
+            fs.root.read_to_string(&metadata_path).unwrap(),
+            format!("{url}\n")
+        );
 
         let current = fs.current_version(url).unwrap();
         assert_eq!(current, first_ts);

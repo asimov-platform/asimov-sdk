@@ -1,6 +1,6 @@
 // This is free and unencumbered software released into the public domain.
 
-use crate::{InvalidUrlFile, UrlFile, UrlReader, UrlsFile, UrlsReader};
+use crate::{InvalidUriFile, UriFile, UriReader, UrisFile, UrisReader};
 use alloc::{collections::BTreeSet, format, string::String, vec::Vec};
 use asimov_core::{
     crates::cap_std::fs::{Dir, DirBuilder, File, Metadata, OpenOptions},
@@ -10,7 +10,10 @@ use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
 use std::io::{self, ErrorKind};
 use tokio::io::{AsyncWriteExt, BufWriter};
 
-/// Named `.url` and `.urls` collections under a state directory's `resources/`.
+/// Named `.uri` and `.uris` collections under a state directory's `resources/`.
+///
+/// Files use the `text/uri-list` extensions with UTF-8 IRIs, LF terminators, and
+/// no comment support, as documented by [`UriFile`].
 ///
 /// Obtain this through [`super::StateDirectory::resources`]. Collection names
 /// omit the extension and may contain `/`-separated portable components, e.g.
@@ -23,14 +26,14 @@ pub struct ResourcesDirectory {
 }
 
 impl ResourcesDirectory {
-    /// The collection used when none is specified by the application.
+    /// The default collection name, stored as `resources/tracked.uris`.
     pub const DEFAULT_COLLECTION: &str = "tracked";
 
     pub(super) fn new(root: Dir) -> Self {
         Self { root }
     }
 
-    /// Lists relative `.url`/`.urls` filenames recursively in lexical order.
+    /// Lists relative `.uri`/`.uris` filenames recursively in lexical order.
     ///
     /// Missing storage is empty. Unsupported file extensions are ignored;
     /// symlinks are rejected, including directory symlinks and dangling links.
@@ -46,29 +49,29 @@ impl ResourcesDirectory {
         Ok(files)
     }
 
-    /// Opens an async, borrowing reader for the first URL in a `.url` collection.
+    /// Opens an async, borrowing reader for the first IRI in a `.uri` collection.
     ///
     /// Trailing records are ignored; missing collections return `NotFound`.
-    /// To read a `.urls` collection this way, wrap [`Self::read_urls`]'s result
-    /// in [`UrlReader`]. Both paths use the same confined file-opening checks.
-    pub fn read_url(&self, collection: &str) -> io::Result<UrlReader<tokio::fs::File>> {
-        self.open_reader(collection, "url").map(UrlReader::from)
+    /// To read a `.uris` collection this way, wrap [`Self::read_uris`]'s result
+    /// in [`UriReader`]. Both paths use the same confined file-opening checks.
+    pub fn read_uri(&self, collection: &str) -> io::Result<UriReader<tokio::fs::File>> {
+        self.open_reader(collection, "uri").map(UriReader::from)
     }
 
-    /// Atomically writes a single-URL collection, returning whether it changed.
+    /// Atomically writes a single-IRI collection, returning whether it changed.
     ///
-    /// An existing file must contain exactly one valid URL; malformed files are
+    /// An existing file must contain exactly one valid IRI; malformed files are
     /// rejected before staging a replacement, including files with extra lines.
-    pub async fn write_url(&self, collection: &str, contents: &UrlFile) -> io::Result<bool> {
-        match self.read_url(collection) {
+    pub async fn write_uri(&self, collection: &str, contents: &UriFile) -> io::Result<bool> {
+        match self.read_uri(collection) {
             Ok(mut reader) => {
                 let existing = reader
-                    .next_url()
+                    .next_uri()
                     .await?
-                    .ok_or_else(|| io::Error::new(ErrorKind::InvalidData, InvalidUrlFile))?;
-                let unchanged = existing == contents.url();
-                if reader.into_inner().next_url().await?.is_some() {
-                    return Err(io::Error::new(ErrorKind::InvalidData, InvalidUrlFile));
+                    .ok_or_else(|| io::Error::new(ErrorKind::InvalidData, InvalidUriFile))?;
+                let unchanged = existing == contents.uri();
+                if reader.into_inner().next_uri().await?.is_some() {
+                    return Err(io::Error::new(ErrorKind::InvalidData, InvalidUriFile));
                 }
                 if unchanged {
                     return Ok(false);
@@ -77,11 +80,11 @@ impl ResourcesDirectory {
             Err(error) if error.kind() == ErrorKind::NotFound => {},
             Err(error) => return Err(error),
         }
-        let (directory, name) = self.location(collection, "url", true)?;
+        let (directory, name) = self.location(collection, "uri", true)?;
         let staged = stage(&directory)?;
         let file = tokio::fs::File::from_std(staged.as_file().try_clone()?.into_std());
         let mut output = BufWriter::new(file);
-        output.write_all(contents.url().as_bytes()).await?;
+        output.write_all(contents.uri().as_bytes()).await?;
         output.write_all(b"\n").await?;
         output.flush().await?;
         output.get_ref().sync_all().await?;
@@ -90,42 +93,42 @@ impl ResourcesDirectory {
         Ok(true)
     }
 
-    /// Opens an async, borrowing reader for a multi-URL collection.
+    /// Opens an async, borrowing reader for a multi-IRI collection.
     ///
     /// A missing collection yields an empty reader. Opening performs synchronous
     /// path and file checks; contents are read asynchronously from that same
-    /// confined file handle as [`UrlsReader::next_url`] is called.
-    pub fn read_urls(&self, collection: &str) -> io::Result<UrlsReader<tokio::fs::File>> {
-        match self.open_reader(collection, "urls") {
-            Err(error) if error.kind() == ErrorKind::NotFound => Ok(UrlsReader::empty()),
+    /// confined file handle as [`UrisReader::next_uri`] is called.
+    pub fn read_uris(&self, collection: &str) -> io::Result<UrisReader<tokio::fs::File>> {
+        match self.open_reader(collection, "uris") {
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(UrisReader::empty()),
             result => result,
         }
     }
 
-    /// Appends absent URLs in input order, returning the number added.
+    /// Appends absent IRIs in input order, returning the number added.
     ///
     /// The validated batch is deduplicated against itself and the existing
     /// file. Only the input batch is retained in memory. Existing bytes are
     /// preserved; a no-op does not write the file.
-    pub async fn append_urls(&self, collection: &str, urls: &UrlsFile) -> io::Result<usize> {
+    pub async fn append_uris(&self, collection: &str, uris: &UrisFile) -> io::Result<usize> {
         validate_collection(collection)?;
-        if urls.urls().is_empty() {
+        if uris.uris().is_empty() {
             return Ok(0);
         }
-        let mut pending: BTreeSet<_> = urls.urls().iter().map(String::as_str).collect();
-        let mut reader = self.read_urls(collection)?;
-        while let Some(url) = reader.next_url().await? {
-            pending.remove(url);
+        let mut pending: BTreeSet<_> = uris.uris().iter().map(String::as_str).collect();
+        let mut reader = self.read_uris(collection)?;
+        while let Some(uri) = reader.next_uri().await? {
+            pending.remove(uri);
         }
         let added = pending.len();
         if added != 0 {
-            let (directory, name) = self.location(collection, "urls", true)?;
+            let (directory, name) = self.location(collection, "uris", true)?;
             let file = open_file(&directory, &name, true)?;
             let mut output = BufWriter::new(tokio::fs::File::from_std(file.into_std()));
             // The set tests membership; the input batch determines write order.
-            for url in urls.urls() {
-                if pending.remove(url.as_str()) {
-                    output.write_all(url.as_bytes()).await?;
+            for uri in uris.uris() {
+                if pending.remove(uri.as_str()) {
+                    output.write_all(uri.as_bytes()).await?;
                     output.write_all(b"\n").await?;
                 }
             }
@@ -135,31 +138,31 @@ impl ResourcesDirectory {
         Ok(added)
     }
 
-    /// Atomically removes matching URLs, returning the number removed.
+    /// Atomically removes matching IRIs, returning the number removed.
     ///
-    /// Surviving URLs retain their original order, spelling, and duplicates.
-    /// Absent URLs are ignored. If nothing matches, no file, directory, or
+    /// Surviving IRIs retain their original order, spelling, and duplicates.
+    /// Absent IRIs are ignored. If nothing matches, no file, directory, or
     /// temporary file is created, removed, or rewritten.
     /// Two streaming passes validate the input before staging the replacement;
     /// memory use depends on the removal batch and longest line, not file size.
-    pub async fn remove_urls(&self, collection: &str, urls: &UrlsFile) -> io::Result<usize> {
-        let targets: BTreeSet<_> = urls.urls().iter().map(String::as_str).collect();
-        let mut reader = self.read_urls(collection)?;
+    pub async fn remove_uris(&self, collection: &str, uris: &UrisFile) -> io::Result<usize> {
+        let targets: BTreeSet<_> = uris.uris().iter().map(String::as_str).collect();
+        let mut reader = self.read_uris(collection)?;
         let mut removed = 0;
-        while let Some(url) = reader.next_url().await? {
-            if targets.contains(url) {
+        while let Some(uri) = reader.next_uri().await? {
+            if targets.contains(uri) {
                 removed += 1;
             }
         }
         if removed != 0 {
             reader.rewind().await?;
-            let (directory, name) = self.location(collection, "urls", false)?;
+            let (directory, name) = self.location(collection, "uris", false)?;
             let staged = stage(&directory)?;
             let file = tokio::fs::File::from_std(staged.as_file().try_clone()?.into_std());
             let mut output = BufWriter::new(file);
-            while let Some(url) = reader.next_url().await? {
-                if !targets.contains(url) {
-                    output.write_all(url.as_bytes()).await?;
+            while let Some(uri) = reader.next_uri().await? {
+                if !targets.contains(uri) {
+                    output.write_all(uri.as_bytes()).await?;
                     output.write_all(b"\n").await?;
                 }
             }
@@ -175,10 +178,10 @@ impl ResourcesDirectory {
         &self,
         collection: &str,
         extension: &str,
-    ) -> io::Result<UrlsReader<tokio::fs::File>> {
+    ) -> io::Result<UrisReader<tokio::fs::File>> {
         let (directory, name) = self.location(collection, extension, false)?;
         let file = open_file(&directory, &name, false)?;
-        Ok(UrlsReader::new(tokio::fs::File::from_std(file.into_std())))
+        Ok(UrisReader::new(tokio::fs::File::from_std(file.into_std())))
     }
 
     fn directory(&self, create: bool) -> io::Result<Dir> {
@@ -196,14 +199,14 @@ impl ResourcesDirectory {
         let mut components = collection.split('/').peekable();
         while let Some(component) = components.next() {
             if components.peek().is_none() {
-                let other = if extension == "urls" { "url" } else { "urls" };
+                let other = if extension == "uris" { "uri" } else { "uris" };
                 match directory.symlink_metadata(format!("{component}.{other}")) {
                     Err(error) if error.kind() == ErrorKind::NotFound => {},
                     Err(error) => return Err(error),
                     Ok(_) => {
                         return Err(io::Error::new(
                             ErrorKind::InvalidData,
-                            "collection already uses the other URL file extension",
+                            "collection already uses the other URI-list file extension",
                         ));
                     },
                 }
@@ -312,8 +315,8 @@ fn collect_files(directory: &Dir, prefix: &str, files: &mut Vec<String>) -> io::
                 files,
             )?;
         } else if let Some(stem) = name
-            .strip_suffix(".urls")
-            .or_else(|| name.strip_suffix(".url"))
+            .strip_suffix(".uris")
+            .or_else(|| name.strip_suffix(".uri"))
         {
             validate_collection(stem)?;
             require_file(&directory.symlink_metadata(&name)?)?;
