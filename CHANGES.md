@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: HTTP integrity APIs now require `integrity` (enabled by default);
   consumers enabling only `std` must add `integrity`
 ### Fixed
+- Update TLS certificate verification and trusted roots for CA security fixes
 - asimov-protocol: Use shared proxy discovery for native Pkarr publication,
   address resolution, and redirects
 - asimov-proxy: Preserve bytes following CONNECT headers and enforce the header
