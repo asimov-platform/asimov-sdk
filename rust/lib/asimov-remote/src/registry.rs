@@ -7,7 +7,7 @@ use std::io::{self, ErrorKind};
 /// A tracked remote and its URL, preserving the URL's original spelling.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Remote {
-    /// The remote's filename within the state directory's `remotes/` directory.
+    /// The remote's name, stored as `remotes/NAME.uri` in the state directory.
     pub name: String,
     /// An absolute HTTP(S) URL without a terminating newline.
     pub url: String,
@@ -15,8 +15,10 @@ pub struct Remote {
 
 /// A registry of named remotes backed exclusively by a [`StateDirectory`].
 ///
-/// Files contain exactly one HTTP(S) URL followed by a newline. Invalid names
-/// or URLs return `InvalidInput`; malformed stored URLs return `InvalidData`.
+/// Files use the `.uri` extension and contain exactly one HTTP(S) IRI followed
+/// by LF. Reads use [`asimov_directory::UriReader`] and require a Tokio runtime.
+/// Invalid names or URLs return `InvalidInput`; malformed stored URLs return
+/// `InvalidData`.
 /// Existing destinations return `AlreadyExists`, and absent remotes return
 /// `NotFound`. Other filesystem errors retain their original kind.
 #[derive(Debug)]
@@ -34,31 +36,34 @@ impl RemotesRegistry {
 
     /// Lists remotes in name order, validating every stored URL before return.
     /// An absent `remotes/` directory is an empty list.
-    pub fn list(&self) -> io::Result<Vec<Remote>> {
-        self.directory
-            .names()?
-            .iter()
-            .map(|name| self.get(name))
-            .collect()
+    pub async fn list(&self) -> io::Result<Vec<Remote>> {
+        let names = self.directory.names()?;
+        let mut remotes = Vec::with_capacity(names.len());
+        for name in names {
+            remotes.push(self.get(&name).await?);
+        }
+        Ok(remotes)
     }
 
     /// Reads and validates a tracked remote.
-    pub fn get(&self, name: &str) -> io::Result<Remote> {
-        let contents = self.directory.read(name)?;
-        let url = contents.strip_suffix('\n').ok_or_else(|| {
-            io::Error::new(
-                ErrorKind::InvalidData,
-                format!("remote {name:?} is missing its terminating newline"),
-            )
+    pub async fn get(&self, name: &str) -> io::Result<Remote> {
+        let mut reader = self.directory.read(name)?;
+        let url = reader.next_uri().await?.ok_or_else(|| {
+            io::Error::new(ErrorKind::InvalidData, format!("remote {name:?} is empty"))
         })?;
-        // Accept CRLF from files edited on Windows, while always writing LF.
-        let url = url.strip_suffix('\r').unwrap_or(url);
         validate_url(url).map_err(|error| {
             io::Error::new(ErrorKind::InvalidData, format!("remote {name:?}: {error}"))
         })?;
+        let url = String::from(url);
+        if reader.into_inner().next_uri().await?.is_some() {
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                format!("remote {name:?} contains more than one IRI"),
+            ));
+        }
         Ok(Remote {
             name: name.into(),
-            url: url.into(),
+            url,
         })
     }
 

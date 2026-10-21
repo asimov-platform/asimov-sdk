@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   formats and confined storage under `resources/`
 - asimov-remote: Check remotes with signed OPTIONS requests, verified responses,
   and round-trip timing
-- asimov-directory, asimov-remote: Manage named HTTP(S) remotes as plain-text
+- asimov-directory, asimov-remote: Manage named HTTP(S) remotes as `.uri`
   files rooted at a state directory
 - asimov-http: Resolve effective proxy endpoints for Hyper connectors
 - asimov-proxy: Support shared proxy options and bypass overrides with
@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: Expose shared proxy configuration, native discovery, and an
   origin-scoped reqwest adapter; available through SDK `http-proxy`/`http-client`
 ### Changed
+- asimov-directory, asimov-remote: Store remotes as `NAME.uri` and read through
+  `UriReader`; registry `get`/`list` are now async and require LF line endings
 - asimov-directory: Rename file types to `UriFile`/`UrisFile`, readers to
   `UriReader`/`UrisReader`, and their error to `InvalidUriFile`; use `uri`/`uris`
   in accessors and collection methods

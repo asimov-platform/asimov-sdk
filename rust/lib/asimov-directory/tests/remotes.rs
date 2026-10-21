@@ -8,15 +8,21 @@ use alloc::vec::Vec;
 use asimov_directory::fs::StateDirectory;
 use std::io::ErrorKind;
 
-#[test]
-fn remote_files_are_complete_and_never_overwritten() -> std::io::Result<()> {
+#[tokio::test]
+async fn remote_files_are_complete_and_never_overwritten() -> std::io::Result<()> {
     let temp = tempfile::tempdir()?;
     let state = StateDirectory::open(temp.path())?;
     let remotes = state.remotes()?;
     assert!(remotes.names()?.is_empty());
     assert!(!state.join("remotes").exists());
     remotes.create("origin", "https://example.com")?;
-    assert_eq!(remotes.read("origin")?, "https://example.com\n");
+    assert_eq!(
+        std::fs::read_to_string(state.join("remotes/origin.uri"))?,
+        "https://example.com\n"
+    );
+    let mut reader = remotes.read("origin")?;
+    assert_eq!(reader.next_uri().await?, Some("https://example.com"));
+    assert_eq!(reader.next_uri().await?, None);
     assert_eq!(
         remotes
             .create("origin", "http://other.example")
@@ -25,20 +31,36 @@ fn remote_files_are_complete_and_never_overwritten() -> std::io::Result<()> {
         ErrorKind::AlreadyExists
     );
     remotes.create("backup", "http://localhost:8080/api")?;
+    std::fs::write(state.join("remotes/ignored.txt"), "not a remote")?;
+    std::fs::write(state.join("remotes/legacy"), "https://legacy.example\n")?;
+    std::fs::create_dir(state.join("remotes/nested.uri"))?;
     assert_eq!(remotes.names()?, ["backup", "origin"]);
+    remotes.create("backup.uri", "urn:remote:suffix")?;
+    assert!(state.join("remotes/backup.uri.uri").is_file());
+    assert_eq!(remotes.names()?, ["backup", "backup.uri", "origin"]);
+    remotes.remove("backup.uri")?;
     assert_eq!(
         remotes.rename("origin", "backup").unwrap_err().kind(),
         ErrorKind::AlreadyExists
     );
-    assert_eq!(remotes.read("backup")?, "http://localhost:8080/api\n");
+    assert_eq!(
+        remotes.read("backup")?.next_uri().await?,
+        Some("http://localhost:8080/api")
+    );
     remotes.rename("origin", "origin")?;
     remotes.rename("origin", "upstream")?;
     assert_eq!(
         remotes.read("origin").unwrap_err().kind(),
         ErrorKind::NotFound
     );
-    assert_eq!(remotes.read("upstream")?, "https://example.com\n");
+    assert_eq!(
+        remotes.read("upstream")?.next_uri().await?,
+        Some("https://example.com")
+    );
+    assert!(state.join("remotes/upstream.uri").is_file());
+    assert!(!state.join("remotes/origin.uri").exists());
     remotes.remove("upstream")?;
+    assert!(!state.join("remotes/upstream.uri").exists());
     assert_eq!(
         remotes.remove("upstream").unwrap_err().kind(),
         ErrorKind::NotFound
@@ -81,7 +103,14 @@ fn invalid_names_are_rejected_before_access() -> std::io::Result<()> {
             );
         }
     }
-    for value in ["", "a\nb", "a\rb", "a\n"] {
+    for value in [
+        "",
+        "a\nb",
+        "a\rb",
+        "a\n",
+        "relative/path",
+        "https://example.com/%zz",
+    ] {
         assert_eq!(
             remotes.create("valid", value).unwrap_err().kind(),
             ErrorKind::InvalidInput
@@ -91,8 +120,8 @@ fn invalid_names_are_rejected_before_access() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn concurrent_additions_publish_exactly_one_complete_file() -> std::io::Result<()> {
+#[tokio::test]
+async fn concurrent_additions_publish_exactly_one_complete_file() -> std::io::Result<()> {
     let temp = tempfile::tempdir()?;
     let state = StateDirectory::open(temp.path())?;
     let remotes = state.remotes()?;
@@ -117,8 +146,8 @@ fn concurrent_additions_publish_exactly_one_complete_file() -> std::io::Result<(
         );
     });
     assert!(matches!(
-        remotes.read("origin")?.as_str(),
-        "https://one.example\n" | "https://two.example\n"
+        remotes.read("origin")?.next_uri().await?,
+        Some("https://one.example" | "https://two.example")
     ));
     assert_eq!(remotes.names()?, ["origin"]);
     Ok(())
@@ -133,7 +162,7 @@ fn symlinks_cannot_redirect_remote_access() -> std::io::Result<()> {
     let state = StateDirectory::open(temp.path())?;
     let outside = tempfile::tempdir()?;
     let outside_state = StateDirectory::open(outside.path())?;
-    let target = outside_state.join("origin");
+    let target = outside_state.join("origin.uri");
     std::fs::write(&target, "https://untouched.example\n")?;
     symlink(outside.path(), state.join("remotes"))?;
     let remotes = state.remotes()?;
@@ -144,7 +173,7 @@ fn symlinks_cannot_redirect_remote_access() -> std::io::Result<()> {
     assert!(remotes.remove("origin").is_err());
     std::fs::remove_file(state.join("remotes"))?;
     std::fs::create_dir(state.join("remotes"))?;
-    symlink(&target, state.join("remotes/origin"))?;
+    symlink(&target, state.join("remotes/origin.uri"))?;
     assert!(remotes.names().is_err());
     assert!(remotes.read("origin").is_err());
     assert!(remotes.rename("origin", "new").is_err());
@@ -160,6 +189,6 @@ fn symlinks_cannot_redirect_remote_access() -> std::io::Result<()> {
         std::fs::read_to_string(target)?,
         "https://untouched.example\n"
     );
-    assert!(!outside_state.join("new").exists());
+    assert!(!outside_state.join("new.uri").exists());
     Ok(())
 }

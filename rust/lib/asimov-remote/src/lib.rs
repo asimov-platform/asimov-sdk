@@ -38,8 +38,9 @@
 //! # Tracked remotes
 //!
 //! The `fs` feature provides [`RemotesRegistry`] for named HTTP(S) URLs stored as
-//! newline-terminated files under `StateDirectory::remotes()`. It requires
-//! `std` but does not enable a transport or perform network requests.
+//! LF-terminated `.uri` files under `StateDirectory::remotes()`. Reads are
+//! asynchronous and use the directory crate's `UriReader`. This requires `std`
+//! and a Tokio runtime, but does not enable a transport or make network requests.
 
 #![no_std]
 #![forbid(unsafe_code)]
