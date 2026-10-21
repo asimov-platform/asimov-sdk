@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: Expose shared proxy configuration, native discovery, and an
   origin-scoped reqwest adapter; available through SDK `http-proxy`/`http-client`
 ### Changed
+- asimov-config, asimov-directory: Rename directory types to `ConfigsDirectory`,
+  `ModulesDirectory`, `ProgramsDirectory`, and `RemotesDirectory`
 - asimov-directory: Return `UrlReader` from `read_url`; single-URL writes are
   now async
 - asimov-directory: Stream resource collection reads and updates with bounded

@@ -1,7 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
 use super::{
-    ConfigDirectory, ModuleDirectory, ProgramDirectory, RemoteDirectory, ResourcesDirectory,
+    ConfigsDirectory, ModulesDirectory, ProgramsDirectory, RemotesDirectory, ResourcesDirectory,
 };
 use alloc::format;
 use asimov_core::crates::cap_std;
@@ -63,29 +63,29 @@ impl StateDirectory {
     }
 
     /// Opens the configuration directory under this state directory.
-    pub fn configs(&self) -> Result<ConfigDirectory> {
-        ConfigDirectory::open(self.join("configs"))
+    pub fn configs(&self) -> Result<ConfigsDirectory> {
+        ConfigsDirectory::open(self.join("configs"))
     }
 
     /// Opens the module directory under this state directory.
-    pub fn modules(&self) -> Result<ModuleDirectory> {
-        ModuleDirectory::open(self.join("modules"))
+    pub fn modules(&self) -> Result<ModulesDirectory> {
+        ModulesDirectory::open(self.join("modules"))
     }
 
     /// Opens the program directory under this state directory.
-    pub fn programs(&self) -> Result<ProgramDirectory> {
-        ProgramDirectory::open(self.join("libexec"))
+    pub fn programs(&self) -> Result<ProgramsDirectory> {
+        ProgramsDirectory::open(self.join("libexec"))
     }
 
     /// Opens remote storage rooted at this state directory.
     ///
     /// The `remotes/` subdirectory is created only when adding a remote.
-    pub fn remotes(&self) -> Result<RemoteDirectory> {
+    pub fn remotes(&self) -> Result<RemotesDirectory> {
         let root = cap_std::fs::Dir::open_ambient_dir(
             self.path.as_std_path(),
             cap_std::ambient_authority(),
         )?;
-        Ok(RemoteDirectory::new(root))
+        Ok(RemotesDirectory::new(root))
     }
 
     /// Opens resource collections rooted at this state directory.

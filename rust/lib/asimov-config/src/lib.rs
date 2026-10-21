@@ -9,8 +9,8 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-mod config_directory;
-pub use config_directory::*;
+mod configs_directory;
+pub use configs_directory::*;
 
 mod config_profile;
 pub use config_profile::*;

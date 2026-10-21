@@ -1,7 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
 use alloc::{format, string::String, vec::Vec};
-use asimov_directory::fs::{RemoteDirectory, StateDirectory};
+use asimov_directory::fs::{RemotesDirectory, StateDirectory};
 use std::io::{self, ErrorKind};
 
 /// A tracked remote and its URL, preserving the URL's original spelling.
@@ -21,7 +21,7 @@ pub struct Remote {
 /// `NotFound`. Other filesystem errors retain their original kind.
 #[derive(Debug)]
 pub struct RemotesRegistry {
-    directory: RemoteDirectory,
+    directory: RemotesDirectory,
 }
 
 impl RemotesRegistry {
@@ -69,7 +69,7 @@ impl RemotesRegistry {
     }
 
     /// Renames a remote without replacing an existing destination.
-    /// See [`RemoteDirectory::rename`] for interruption behavior.
+    /// See [`RemotesDirectory::rename`] for interruption behavior.
     pub fn rename(&self, old: &str, new: &str) -> io::Result<()> {
         self.directory.rename(old, new)
     }

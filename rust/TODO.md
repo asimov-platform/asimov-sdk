@@ -144,7 +144,7 @@ Unless marked reproduced, implementation findings are based on source review.
   variables, and Windows paths, including keyring and peer resolution.
 
 - [ ] **Make tracked-remote renames atomic across interruptions.**
-  `RemoteDirectory::rename` publishes a non-clobbering hard link before removing
+  `RemotesDirectory::rename` publishes a non-clobbering hard link before removing
   the old name. Failure or interruption between these steps leaves both names.
   Consider portable no-replace rename support and directory-sync durability.
 
@@ -173,7 +173,7 @@ Unless marked reproduced, implementation findings are based on source review.
   paths; return a missing-home error from tilde expansion instead of panicking.
 
 - [ ] **Make directory/configuration interfaces report real state and errors.**
-  `lib/asimov-directory/src/fs/module_directory.rs` returns `false` for both
+  `lib/asimov-directory/src/fs/modules_directory.rs` returns `false` for both
   installation/enabling checks; `config_profile.rs` always returns no prompt.
   Implement these contracts against the shared layout. Change the iterators in
   `fs/module_iterators.rs` to expose directory/read/parse failures rather than

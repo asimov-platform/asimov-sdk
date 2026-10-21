@@ -11,11 +11,11 @@ use std::io::{self, ErrorKind, Read, Write};
 /// rejected; directory-relative access confines resolution to the state root.
 /// URL validation belongs to `asimov-remote`.
 #[derive(Debug)]
-pub struct RemoteDirectory {
+pub struct RemotesDirectory {
     root: Dir,
 }
 
-impl RemoteDirectory {
+impl RemotesDirectory {
     pub(super) fn new(root: Dir) -> Self {
         Self { root }
     }

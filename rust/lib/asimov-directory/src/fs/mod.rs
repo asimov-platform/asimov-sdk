@@ -1,7 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
-mod config_directory;
-pub use config_directory::*;
+mod configs_directory;
+pub use configs_directory::*;
 
 mod config_profile;
 pub use config_profile::*;
@@ -9,17 +9,17 @@ pub use config_profile::*;
 mod handle_resolver;
 pub use handle_resolver::*;
 
-mod module_directory;
-pub use module_directory::*;
+mod modules_directory;
+pub use modules_directory::*;
 
 mod module_iterators;
 pub use module_iterators::*;
 
-mod program_directory;
-pub use program_directory::*;
+mod programs_directory;
+pub use programs_directory::*;
 
-mod remote_directory;
-pub use remote_directory::*;
+mod remotes_directory;
+pub use remotes_directory::*;
 
 mod resources_directory;
 pub use resources_directory::*;

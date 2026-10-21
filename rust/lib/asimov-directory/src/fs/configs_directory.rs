@@ -1,6 +1,6 @@
 // This is free and unencumbered software released into the public domain.
 
-use super::StateDirectory;
+use super::{ConfigProfile, StateDirectory};
 use alloc::format;
 use camino::{Utf8Path, Utf8PathBuf};
 use derive_more::Display;
@@ -9,28 +9,28 @@ use std::{
     path::Path,
 };
 
-/// A program directory stored on a file system (e.g., `$HOME/.asimov/libexec/`).
+/// A configuration directory stored on a file system (e.g., `$HOME/.asimov/configs/`).
 #[derive(Debug, Display)]
-#[display("ProgramDirectory({:?})", path)]
-pub struct ProgramDirectory {
+#[display("ConfigsDirectory({:?})", path)]
+pub struct ConfigsDirectory {
     path: Utf8PathBuf,
 }
 
-impl AsRef<Utf8PathBuf> for ProgramDirectory {
+impl AsRef<Utf8PathBuf> for ConfigsDirectory {
     fn as_ref(&self) -> &Utf8PathBuf {
         &self.path
     }
 }
 
-impl ProgramDirectory {
-    /// Opens the default program directory in the user's home directory.
+impl ConfigsDirectory {
+    /// Opens the default configuration directory in the user's home directory.
     ///
-    /// On Unix platforms, including macOS and Linux, this is `$HOME/.asimov/libexec/`.
+    /// On Unix platforms, including macOS and Linux, this is `$HOME/.asimov/configs/`.
     pub fn home() -> Result<Self> {
-        StateDirectory::home().map(|base_dir| base_dir.programs())?
+        StateDirectory::home().map(|base_dir| base_dir.configs())?
     }
 
-    /// Opens a program directory from a file system path.
+    /// Opens a configuration directory from a file system path.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         if !path.exists() {
@@ -42,7 +42,13 @@ impl ProgramDirectory {
                 format!("failed to open non-UTF-8 path: {}", e.display()),
             )
         })?;
-        Ok(ProgramDirectory { path })
+        Ok(ConfigsDirectory { path })
+    }
+
+    /// Returns the default configuration profile (e.g., at
+    /// `$HOME/.asimov/configs/default/`).
+    pub fn default_profile(&self) -> Result<ConfigProfile> {
+        ConfigProfile::open(self.join("default"))
     }
 
     pub fn join(&self, path: impl AsRef<Utf8Path>) -> Utf8PathBuf {
@@ -54,23 +60,23 @@ impl ProgramDirectory {
     }
 }
 
-impl AsRef<str> for ProgramDirectory {
+impl AsRef<str> for ConfigsDirectory {
     fn as_ref(&self) -> &str {
         self.path.as_str()
     }
 }
 
-impl AsRef<Path> for ProgramDirectory {
+impl AsRef<Path> for ConfigsDirectory {
     fn as_ref(&self) -> &Path {
         self.path.as_std_path()
     }
 }
 
 #[cfg(feature = "camino")]
-impl AsRef<Utf8Path> for ProgramDirectory {
+impl AsRef<Utf8Path> for ConfigsDirectory {
     fn as_ref(&self) -> &Utf8Path {
         self.path.as_path()
     }
 }
 
-impl crate::ProgramDirectory for ProgramDirectory {}
+impl crate::ConfigsDirectory for ConfigsDirectory {}

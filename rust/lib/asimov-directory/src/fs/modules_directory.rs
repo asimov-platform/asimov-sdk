@@ -11,18 +11,18 @@ use std::{
 
 /// A module directory stored on a file system (e.g., `$HOME/.asimov/modules/`).
 #[derive(Debug, Display)]
-#[display("ModuleDirectory({:?})", path)]
-pub struct ModuleDirectory {
+#[display("ModulesDirectory({:?})", path)]
+pub struct ModulesDirectory {
     pub(crate) path: Utf8PathBuf,
 }
 
-impl AsRef<Utf8PathBuf> for ModuleDirectory {
+impl AsRef<Utf8PathBuf> for ModulesDirectory {
     fn as_ref(&self) -> &Utf8PathBuf {
         &self.path
     }
 }
 
-impl ModuleDirectory {
+impl ModulesDirectory {
     /// Opens the default module directory in the user's home directory.
     ///
     /// On Unix platforms, including macOS and Linux, this is `$HOME/.asimov/modules/`.
@@ -42,7 +42,7 @@ impl ModuleDirectory {
                 format!("failed to open non-UTF-8 path: {}", e.display()),
             )
         })?;
-        Ok(ModuleDirectory { path })
+        Ok(ModulesDirectory { path })
     }
 
     pub async fn iter_enabled(&self) -> Result<ModuleNameIterator> {
@@ -66,26 +66,26 @@ impl ModuleDirectory {
     }
 }
 
-impl AsRef<str> for ModuleDirectory {
+impl AsRef<str> for ModulesDirectory {
     fn as_ref(&self) -> &str {
         self.path.as_str()
     }
 }
 
-impl AsRef<Path> for ModuleDirectory {
+impl AsRef<Path> for ModulesDirectory {
     fn as_ref(&self) -> &Path {
         self.path.as_std_path()
     }
 }
 
 #[cfg(feature = "camino")]
-impl AsRef<Utf8Path> for ModuleDirectory {
+impl AsRef<Utf8Path> for ModulesDirectory {
     fn as_ref(&self) -> &Utf8Path {
         self.path.as_path()
     }
 }
 
-impl crate::ModuleDirectory for ModuleDirectory {
+impl crate::ModulesDirectory for ModulesDirectory {
     fn is_installed(&self, _module_name: impl AsRef<str>) -> bool {
         false // TODO
     }
