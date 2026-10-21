@@ -21,21 +21,24 @@ title = "ASIMOV.rs: Keyring"
 
 [features]
 default = ["all", "std"]
-std = [
-    "asimov-core/std",
-    "dep:apple-native-keyring-store",
-    "dep:bs58",
-    "dep:cap-tempfile",
-    "dep:secret-service",
-    "dep:whoami",
-    "dep:windows-native-keyring-store",
-    "dep:zbus",
-    "dep:zbus-secret-service-keyring-store",
-]
+std = ["asimov-core/std", "dep:cap-tempfile", "dep:whoami", "native"]
 unstable = []
 
 # Features:
 all = []
+
+# Platform keyring stores, enabled by `std`:
+native = [
+    "dep:apple-native-keyring-store",
+    "dep:windows-native-keyring-store",
+    "secret-service",
+]
+secret-service = [
+    "dep:bs58",
+    "dep:secret-service",
+    "dep:zbus",
+    "dep:zbus-secret-service-keyring-store",
+]
 
 # Interoperability:
 clap = ["dep:clap"]
