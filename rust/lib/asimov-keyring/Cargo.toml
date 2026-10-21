@@ -21,7 +21,17 @@ title = "ASIMOV.rs: Keyring"
 
 [features]
 default = ["all", "std"]
-std = ["asimov-core/std", "dep:cap-tempfile", "dep:whoami"]
+std = [
+    "asimov-core/std",
+    "dep:apple-native-keyring-store",
+    "dep:bs58",
+    "dep:cap-tempfile",
+    "dep:secret-service",
+    "dep:whoami",
+    "dep:windows-native-keyring-store",
+    "dep:zbus",
+    "dep:zbus-secret-service-keyring-store",
+]
 unstable = []
 
 # Features:
@@ -52,16 +62,16 @@ tracing = { workspace = true, optional = true }
 whoami = { workspace = true, features = ["std"], optional = true }
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
-apple-native-keyring-store = { version = "1.0", features = ["keychain"] }
+apple-native-keyring-store = { version = "1.0", features = ["keychain"], optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-native-keyring-store = "1.1"
+windows-native-keyring-store = { version = "1.1", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-bs58.workspace = true
-secret-service = { version = "5", default-features = false }
-zbus = { version = "5", default-features = false }
-zbus-secret-service-keyring-store = { version = "1.0", features = ["rt-async-io-crypto-rust"] }
+bs58 = { workspace = true, optional = true }
+secret-service = { version = "5", default-features = false, optional = true }
+zbus = { version = "5", default-features = false, optional = true }
+zbus-secret-service-keyring-store = { version = "1.0", features = ["rt-async-io-crypto-rust"], optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
