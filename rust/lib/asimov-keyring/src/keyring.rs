@@ -48,6 +48,300 @@ enum StoreState {
     Open(Arc<Store>),
 }
 
+impl Keyring {
+    /// Returns the current operating-system user's locally stored public key.
+    ///
+    /// Uses `"default"` as the user name if the operating-system user name cannot
+    /// be obtained. Uses [`Self::ensure_public_key`] to initialize a missing
+    /// identity. An existing public key never requires opening or reading the
+    /// secret-key backend, even if that backend is locked or unavailable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if reading the public-key file or initializing a missing
+    /// identity fails. Malformed or unreadable files are reported without
+    /// accessing the secret-key backend.
+    pub fn my_public_key() -> Result<PublicKey, KeyringError> {
+        let mut keyring = Keyring::open()?;
+        let user = whoami::username().unwrap_or_else(|_| "default".to_string());
+        keyring.ensure_public_key(&user)
+    }
+
+    /// Opens the public-key directory, creating it if necessary.
+    ///
+    /// Defers secret-key backend selection and opening until initialization or
+    /// an explicit secret-key operation; reading public keys needs only files.
+    ///
+    /// Uses the native Keychain store on Apple platforms, the native Windows
+    /// store on Windows, and the Secret Service on Linux. Other platforms use
+    /// the mock store. Overlapping native handles reuse the backend. Does not
+    /// read or change the process-wide `keyring_core` default store.
+    /// By default on Linux, reuses an existing file store or selects one if no
+    /// Secret Service is available, including in Docker containers.
+    /// On Unix, `ASIMOV_KEYRING_BACKEND=file` selects private, persistent files
+    /// explicitly; `native` forces the platform backend without fallback.
+    /// See the [crate documentation](crate) for storage and deployment.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if locating or opening the public-key directory fails.
+    /// Backend configuration and access errors are deferred to secret-key
+    /// operations. Unrecognized backend names never select a fallback store.
+    pub fn open() -> Result<Self, KeyringError> {
+        let state = StateDirectory::home()?;
+        let root = Dir::open_ambient_dir(state.as_str(), cap_std::ambient_authority())?;
+        root.create_dir_all("keyring")?;
+        let directory = Arc::new(root.open_dir("keyring")?);
+        Ok(Self {
+            #[cfg(test)]
+            path: state.join("keyring").into(),
+            directory,
+            store: Arc::new(Mutex::new(StoreState::Unopened(root))),
+        })
+    }
+
+    /// Opens a handle with an explicit backend and public-key cache directory.
+    ///
+    /// Handles supplied clones of the same backend [`Arc`] share coordination.
+    /// Distinct backend instances are independent. Creates the directory if
+    /// needed, without changing the `keyring_core` default store. The backend
+    /// remains alive while any handle or caller retains ownership.
+    /// The supplied path selects the trusted cache root. Its opened directory
+    /// handle is retained, so later path/symlink replacement cannot redirect I/O.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the cache directory cannot be created or a
+    /// coordination lock has been poisoned.
+    pub fn with_store(
+        path: impl Into<PathBuf>,
+        backend: Arc<keyring_core::CredentialStore>,
+    ) -> Result<Self, KeyringError> {
+        let path = path.into();
+        std::fs::create_dir_all(&path)?;
+        let directory = Arc::new(Dir::open_ambient_dir(&path, cap_std::ambient_authority())?);
+        Ok(Self {
+            #[cfg(test)]
+            path,
+            directory,
+            store: Arc::new(Mutex::new(StoreState::Open(Store::shared(backend)?))),
+        })
+    }
+
+    fn store(&self) -> Result<Arc<Store>, KeyringError> {
+        let mut state = self.store.lock().map_err(|_| KeyringError::LockPoisoned)?;
+        let store = match &*state {
+            StoreState::Open(store) => return Ok(store.clone()),
+            StoreState::Unopened(root) => Store::configured(root)?,
+        };
+        *state = StoreState::Open(store.clone());
+        Ok(store)
+    }
+
+    // Serializes secret-key operations across processes, as backends other than
+    // the file store have no lock of their own. User names may begin with a dot,
+    // so no lock file inside the directory is collision-free; lock it instead.
+    #[cfg(unix)]
+    fn lock_directory(&self) -> Result<std::fs::File, KeyringError> {
+        let directory = self.directory.open(".")?.into_std();
+        directory.lock()?;
+        Ok(directory)
+    }
+
+    #[cfg(not(unix))]
+    fn lock_directory(&self) -> Result<(), KeyringError> {
+        Ok(())
+    }
+
+    /// Consumes this handle without deleting keys or affecting other handles.
+    ///
+    /// Equivalent to dropping it. Currently always returns `Ok(())`.
+    pub fn close(self) -> Result<(), KeyringError> {
+        drop(self);
+        Ok(())
+    }
+
+    /// Reads a user's public key from its local file.
+    ///
+    /// Trims surrounding whitespace before parsing. Returns `Ok(None)` when
+    /// the file does not exist; does not consult the secret-key store.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read for a reason other than a
+    /// missing file, or its contents cannot be parsed as a public key.
+    pub fn get_public_key(&self, user: &str) -> Result<Option<PublicKey>, KeyringError> {
+        asimov_core::validate_filename_component(user)?;
+        self.read_public_key(user)
+    }
+
+    /// Returns a local public key, initializing the identity if its file is absent.
+    ///
+    /// An existing file is read without opening or consulting the secret-key
+    /// backend. If absent, uses [`Self::ensure_secret_key`] to create the key
+    /// pair or recover its public key from an existing secret. A public-key
+    /// lookup never checks whether an existing file matches the stored secret;
+    /// [`Self::ensure_secret_key`] repairs stale or malformed public keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns file read/parse errors without accessing the backend. If the
+    /// file is absent, also returns errors from [`Self::ensure_secret_key`].
+    pub fn ensure_public_key(&mut self, user: &str) -> Result<PublicKey, KeyringError> {
+        if let Some(public_key) = self.get_public_key(user)? {
+            return Ok(public_key);
+        }
+        self.ensure_secret_key(user)
+            .map(|secret| secret.public().into())
+    }
+
+    // Publication is atomic, so public-only readers need no secret-store lock.
+    fn read_public_key(&self, user: &str) -> Result<Option<PublicKey>, KeyringError> {
+        match self.directory.read_to_string(user) {
+            Ok(encoded_pk) => Ok(Some(encoded_pk.trim().parse()?)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    /// Retrieves a user's secret key from this handle's backend.
+    ///
+    /// Returns `Ok(None)` when no entry exists for [`KEYRING_SERVICE`] and
+    /// `user`. Temporary secret-byte buffers are zeroized on success and error.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the keyring entry cannot be accessed or read, or
+    /// [`KeyringError::CorruptSecret`] if it is not exactly 32 bytes long.
+    pub fn get_secret_key(&self, user: &str) -> Result<Option<SecretKey>, KeyringError> {
+        asimov_core::validate_filename_component(user)?;
+        let store = self.store()?;
+        let lock = store.user_lock(user)?;
+        let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
+        let _directory_lock = self.lock_directory()?;
+        let _file_lock = store.file_lock(user)?;
+        self.read_secret_key(user)
+    }
+
+    fn read_secret_key(&self, user: &str) -> Result<Option<SecretKey>, KeyringError> {
+        let store = self.store()?;
+        match store.entry(user)?.get_secret() {
+            Ok(secret) => store.secret_key(&Zeroizing::new(secret)).map(Some),
+            Err(keyring_core::Error::NoEntry) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    /// Returns a user's existing secret key, or generates and stores a key pair.
+    ///
+    /// Atomically repairs a missing, stale, or malformed public-key cache from
+    /// the stored secret. A matching cache is left untouched. If no secret
+    /// exists, delegates to [`Self::rekey`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if retrieving the secret, repairing the cache, or
+    /// storing a new key pair fails, including [`KeyringError::CorruptSecret`]
+    /// for a stored secret that is not exactly 32 bytes long. A cache repair
+    /// failure never changes the stored secret; retry after fixing the cache.
+    pub fn ensure_secret_key(&mut self, user: &str) -> Result<SecretKey, KeyringError> {
+        asimov_core::validate_filename_component(user)?;
+        let store = self.store()?;
+        let lock = store.user_lock(user)?;
+        let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
+        let _directory_lock = self.lock_directory()?;
+        let _file_lock = store.file_lock(user)?;
+        match self.read_secret_key(user)? {
+            Some(secret_key) => {
+                self.repair_public_key(user, secret_key.public().into())?;
+                Ok(secret_key)
+            },
+            None => self
+                .replace_key_pair(user)
+                .map(|(secret_key, _)| secret_key),
+        }
+    }
+
+    /// Generates and stores a new key pair, replacing any existing keys for `user`.
+    ///
+    /// Returns the secret key followed by its public key. Stages and syncs the
+    /// public-key file before changing the secret, then atomically publishes
+    /// the cache. Holds the shared user's lock through publication or rollback.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if accessing storage or storing either key fails. If
+    /// publishing the cache fails, restores the previous secret (or removes a
+    /// newly created entry). If rollback also fails, returns
+    /// [`KeyringError::RekeyRollbackFailed`]. After an interrupted rekey, use
+    /// [`Self::ensure_secret_key`] to repair the cache from the stored secret.
+    pub fn rekey(&mut self, user: &str) -> Result<(SecretKey, PublicKey), KeyringError> {
+        asimov_core::validate_filename_component(user)?;
+        let store = self.store()?;
+        let lock = store.user_lock(user)?;
+        let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
+        let _directory_lock = self.lock_directory()?;
+        let _file_lock = store.file_lock(user)?;
+        self.replace_key_pair(user)
+    }
+
+    fn replace_key_pair(&self, user: &str) -> Result<(SecretKey, PublicKey), KeyringError> {
+        let store = self.store()?;
+        let entry = store.entry(user)?;
+        let previous_secret = match entry.get_secret() {
+            Ok(secret) => Some(Zeroizing::new(secret)),
+            Err(keyring_core::Error::NoEntry) => None,
+            Err(error) => return Err(error.into()),
+        };
+        let secret_key = SecretKey::generate();
+        let public_key = secret_key.public().into();
+        let staged = self.stage_public_key(public_key)?;
+        store.set_secret_key(&entry, &secret_key)?;
+        if let Err(error) = staged.replace(user) {
+            let rollback = match previous_secret {
+                Some(secret) => entry.set_secret(secret.as_slice()),
+                None => entry.delete_credential(),
+            };
+            return Err(match rollback {
+                Ok(()) => error.into(),
+                Err(rollback_error) => KeyringError::RekeyRollbackFailed {
+                    cache_error: error,
+                    rollback_error,
+                },
+            });
+        }
+        Ok((secret_key, public_key))
+    }
+
+    fn repair_public_key(&self, user: &str, public_key: PublicKey) -> Result<(), KeyringError> {
+        match self.read_public_key(user) {
+            Ok(Some(cached)) if cached == public_key => return Ok(()),
+            Ok(_) | Err(KeyringError::KeyError(_)) => {},
+            Err(KeyringError::IoError(error))
+                if error.kind() == std::io::ErrorKind::InvalidData => {},
+            Err(error) => return Err(error),
+        }
+        self.stage_public_key(public_key)?.replace(user)?;
+        Ok(())
+    }
+
+    fn stage_public_key(
+        &self,
+        public_key: PublicKey,
+    ) -> Result<cap_tempfile::TempFile<'_>, std::io::Error> {
+        let mut file = cap_tempfile::TempFile::new(&self.directory)?;
+        #[cfg(unix)]
+        {
+            use cap_std::fs::{Permissions, PermissionsExt};
+            file.as_file()
+                .set_permissions(Permissions::from_mode(0o600))?;
+        }
+        writeln!(file, "{public_key}")?;
+        file.as_file().sync_all()?;
+        Ok(file)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,299 +1035,5 @@ mod tests {
             std::fs::read_to_string(outside.join("alice")).unwrap(),
             "untouched"
         );
-    }
-}
-
-impl Keyring {
-    /// Returns the current operating-system user's locally stored public key.
-    ///
-    /// Uses `"default"` as the user name if the operating-system user name cannot
-    /// be obtained. Uses [`Self::ensure_public_key`] to initialize a missing
-    /// identity. An existing public key never requires opening or reading the
-    /// secret-key backend, even if that backend is locked or unavailable.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if reading the public-key file or initializing a missing
-    /// identity fails. Malformed or unreadable files are reported without
-    /// accessing the secret-key backend.
-    pub fn my_public_key() -> Result<PublicKey, KeyringError> {
-        let mut keyring = Keyring::open()?;
-        let user = whoami::username().unwrap_or_else(|_| "default".to_string());
-        keyring.ensure_public_key(&user)
-    }
-
-    /// Opens the public-key directory, creating it if necessary.
-    ///
-    /// Defers secret-key backend selection and opening until initialization or
-    /// an explicit secret-key operation; reading public keys needs only files.
-    ///
-    /// Uses the native Keychain store on Apple platforms, the native Windows
-    /// store on Windows, and the Secret Service on Linux. Other platforms use
-    /// the mock store. Overlapping native handles reuse the backend. Does not
-    /// read or change the process-wide `keyring_core` default store.
-    /// By default on Linux, reuses an existing file store or selects one if no
-    /// Secret Service is available, including in Docker containers.
-    /// On Unix, `ASIMOV_KEYRING_BACKEND=file` selects private, persistent files
-    /// explicitly; `native` forces the platform backend without fallback.
-    /// See the [crate documentation](crate) for storage and deployment.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if locating or opening the public-key directory fails.
-    /// Backend configuration and access errors are deferred to secret-key
-    /// operations. Unrecognized backend names never select a fallback store.
-    pub fn open() -> Result<Self, KeyringError> {
-        let state = StateDirectory::home()?;
-        let root = Dir::open_ambient_dir(state.as_str(), cap_std::ambient_authority())?;
-        root.create_dir_all("keyring")?;
-        let directory = Arc::new(root.open_dir("keyring")?);
-        Ok(Self {
-            #[cfg(test)]
-            path: state.join("keyring").into(),
-            directory,
-            store: Arc::new(Mutex::new(StoreState::Unopened(root))),
-        })
-    }
-
-    /// Opens a handle with an explicit backend and public-key cache directory.
-    ///
-    /// Handles supplied clones of the same backend [`Arc`] share coordination.
-    /// Distinct backend instances are independent. Creates the directory if
-    /// needed, without changing the `keyring_core` default store. The backend
-    /// remains alive while any handle or caller retains ownership.
-    /// The supplied path selects the trusted cache root. Its opened directory
-    /// handle is retained, so later path/symlink replacement cannot redirect I/O.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the cache directory cannot be created or a
-    /// coordination lock has been poisoned.
-    pub fn with_store(
-        path: impl Into<PathBuf>,
-        backend: Arc<keyring_core::CredentialStore>,
-    ) -> Result<Self, KeyringError> {
-        let path = path.into();
-        std::fs::create_dir_all(&path)?;
-        let directory = Arc::new(Dir::open_ambient_dir(&path, cap_std::ambient_authority())?);
-        Ok(Self {
-            #[cfg(test)]
-            path,
-            directory,
-            store: Arc::new(Mutex::new(StoreState::Open(Store::shared(backend)?))),
-        })
-    }
-
-    fn store(&self) -> Result<Arc<Store>, KeyringError> {
-        let mut state = self.store.lock().map_err(|_| KeyringError::LockPoisoned)?;
-        let store = match &*state {
-            StoreState::Open(store) => return Ok(store.clone()),
-            StoreState::Unopened(root) => Store::configured(root)?,
-        };
-        *state = StoreState::Open(store.clone());
-        Ok(store)
-    }
-
-    // Serializes secret-key operations across processes, as backends other than
-    // the file store have no lock of their own. User names may begin with a dot,
-    // so no lock file inside the directory is collision-free; lock it instead.
-    #[cfg(unix)]
-    fn lock_directory(&self) -> Result<std::fs::File, KeyringError> {
-        let directory = self.directory.open(".")?.into_std();
-        directory.lock()?;
-        Ok(directory)
-    }
-
-    #[cfg(not(unix))]
-    fn lock_directory(&self) -> Result<(), KeyringError> {
-        Ok(())
-    }
-
-    /// Consumes this handle without deleting keys or affecting other handles.
-    ///
-    /// Equivalent to dropping it. Currently always returns `Ok(())`.
-    pub fn close(self) -> Result<(), KeyringError> {
-        drop(self);
-        Ok(())
-    }
-
-    /// Reads a user's public key from its local file.
-    ///
-    /// Trims surrounding whitespace before parsing. Returns `Ok(None)` when
-    /// the file does not exist; does not consult the secret-key store.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the file cannot be read for a reason other than a
-    /// missing file, or its contents cannot be parsed as a public key.
-    pub fn get_public_key(&self, user: &str) -> Result<Option<PublicKey>, KeyringError> {
-        asimov_core::validate_filename_component(user)?;
-        self.read_public_key(user)
-    }
-
-    /// Returns a local public key, initializing the identity if its file is absent.
-    ///
-    /// An existing file is read without opening or consulting the secret-key
-    /// backend. If absent, uses [`Self::ensure_secret_key`] to create the key
-    /// pair or recover its public key from an existing secret. A public-key
-    /// lookup never checks whether an existing file matches the stored secret;
-    /// [`Self::ensure_secret_key`] repairs stale or malformed public keys.
-    ///
-    /// # Errors
-    ///
-    /// Returns file read/parse errors without accessing the backend. If the
-    /// file is absent, also returns errors from [`Self::ensure_secret_key`].
-    pub fn ensure_public_key(&mut self, user: &str) -> Result<PublicKey, KeyringError> {
-        if let Some(public_key) = self.get_public_key(user)? {
-            return Ok(public_key);
-        }
-        self.ensure_secret_key(user)
-            .map(|secret| secret.public().into())
-    }
-
-    // Publication is atomic, so public-only readers need no secret-store lock.
-    fn read_public_key(&self, user: &str) -> Result<Option<PublicKey>, KeyringError> {
-        match self.directory.read_to_string(user) {
-            Ok(encoded_pk) => Ok(Some(encoded_pk.trim().parse()?)),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error.into()),
-        }
-    }
-
-    /// Retrieves a user's secret key from this handle's backend.
-    ///
-    /// Returns `Ok(None)` when no entry exists for [`KEYRING_SERVICE`] and
-    /// `user`. Temporary secret-byte buffers are zeroized on success and error.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the keyring entry cannot be accessed or read, or
-    /// [`KeyringError::CorruptSecret`] if it is not exactly 32 bytes long.
-    pub fn get_secret_key(&self, user: &str) -> Result<Option<SecretKey>, KeyringError> {
-        asimov_core::validate_filename_component(user)?;
-        let store = self.store()?;
-        let lock = store.user_lock(user)?;
-        let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
-        let _directory_lock = self.lock_directory()?;
-        let _file_lock = store.file_lock(user)?;
-        self.read_secret_key(user)
-    }
-
-    fn read_secret_key(&self, user: &str) -> Result<Option<SecretKey>, KeyringError> {
-        let store = self.store()?;
-        match store.entry(user)?.get_secret() {
-            Ok(secret) => store.secret_key(&Zeroizing::new(secret)).map(Some),
-            Err(keyring_core::Error::NoEntry) => Ok(None),
-            Err(error) => Err(error.into()),
-        }
-    }
-
-    /// Returns a user's existing secret key, or generates and stores a key pair.
-    ///
-    /// Atomically repairs a missing, stale, or malformed public-key cache from
-    /// the stored secret. A matching cache is left untouched. If no secret
-    /// exists, delegates to [`Self::rekey`].
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if retrieving the secret, repairing the cache, or
-    /// storing a new key pair fails, including [`KeyringError::CorruptSecret`]
-    /// for a stored secret that is not exactly 32 bytes long. A cache repair
-    /// failure never changes the stored secret; retry after fixing the cache.
-    pub fn ensure_secret_key(&mut self, user: &str) -> Result<SecretKey, KeyringError> {
-        asimov_core::validate_filename_component(user)?;
-        let store = self.store()?;
-        let lock = store.user_lock(user)?;
-        let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
-        let _directory_lock = self.lock_directory()?;
-        let _file_lock = store.file_lock(user)?;
-        match self.read_secret_key(user)? {
-            Some(secret_key) => {
-                self.repair_public_key(user, secret_key.public().into())?;
-                Ok(secret_key)
-            },
-            None => self
-                .replace_key_pair(user)
-                .map(|(secret_key, _)| secret_key),
-        }
-    }
-
-    /// Generates and stores a new key pair, replacing any existing keys for `user`.
-    ///
-    /// Returns the secret key followed by its public key. Stages and syncs the
-    /// public-key file before changing the secret, then atomically publishes
-    /// the cache. Holds the shared user's lock through publication or rollback.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if accessing storage or storing either key fails. If
-    /// publishing the cache fails, restores the previous secret (or removes a
-    /// newly created entry). If rollback also fails, returns
-    /// [`KeyringError::RekeyRollbackFailed`]. After an interrupted rekey, use
-    /// [`Self::ensure_secret_key`] to repair the cache from the stored secret.
-    pub fn rekey(&mut self, user: &str) -> Result<(SecretKey, PublicKey), KeyringError> {
-        asimov_core::validate_filename_component(user)?;
-        let store = self.store()?;
-        let lock = store.user_lock(user)?;
-        let _guard = lock.lock().map_err(|_| KeyringError::LockPoisoned)?;
-        let _directory_lock = self.lock_directory()?;
-        let _file_lock = store.file_lock(user)?;
-        self.replace_key_pair(user)
-    }
-
-    fn replace_key_pair(&self, user: &str) -> Result<(SecretKey, PublicKey), KeyringError> {
-        let store = self.store()?;
-        let entry = store.entry(user)?;
-        let previous_secret = match entry.get_secret() {
-            Ok(secret) => Some(Zeroizing::new(secret)),
-            Err(keyring_core::Error::NoEntry) => None,
-            Err(error) => return Err(error.into()),
-        };
-        let secret_key = SecretKey::generate();
-        let public_key = secret_key.public().into();
-        let staged = self.stage_public_key(public_key)?;
-        store.set_secret_key(&entry, &secret_key)?;
-        if let Err(error) = staged.replace(user) {
-            let rollback = match previous_secret {
-                Some(secret) => entry.set_secret(secret.as_slice()),
-                None => entry.delete_credential(),
-            };
-            return Err(match rollback {
-                Ok(()) => error.into(),
-                Err(rollback_error) => KeyringError::RekeyRollbackFailed {
-                    cache_error: error,
-                    rollback_error,
-                },
-            });
-        }
-        Ok((secret_key, public_key))
-    }
-
-    fn repair_public_key(&self, user: &str, public_key: PublicKey) -> Result<(), KeyringError> {
-        match self.read_public_key(user) {
-            Ok(Some(cached)) if cached == public_key => return Ok(()),
-            Ok(_) | Err(KeyringError::KeyError(_)) => {},
-            Err(KeyringError::IoError(error))
-                if error.kind() == std::io::ErrorKind::InvalidData => {},
-            Err(error) => return Err(error),
-        }
-        self.stage_public_key(public_key)?.replace(user)?;
-        Ok(())
-    }
-
-    fn stage_public_key(
-        &self,
-        public_key: PublicKey,
-    ) -> Result<cap_tempfile::TempFile<'_>, std::io::Error> {
-        let mut file = cap_tempfile::TempFile::new(&self.directory)?;
-        #[cfg(unix)]
-        {
-            use cap_std::fs::{Permissions, PermissionsExt};
-            file.as_file()
-                .set_permissions(Permissions::from_mode(0o600))?;
-        }
-        writeln!(file, "{public_key}")?;
-        file.as_file().sync_all()?;
-        Ok(file)
     }
 }
