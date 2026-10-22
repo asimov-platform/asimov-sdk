@@ -103,21 +103,23 @@ impl Store {
     }
 
     pub(crate) fn secret_key(&self, stored: &[u8]) -> Result<SecretKey, KeyringError> {
-        let corrupt = || KeyringError::CorruptSecret {
-            length: stored.len(),
+        let parse = |bytes: &[u8]| {
+            bytes
+                .try_into()
+                .map(SecretKey::from_bytes)
+                .map_err(|_| KeyringError::CorruptSecret {
+                    length: bytes.len(),
+                })
         };
         #[cfg(target_os = "linux")]
         if self.is_secret_service() {
-            let mut secret = Zeroizing::new([0; 32]);
-            return match bs58::decode(stored).onto(&mut secret[..]) {
-                Ok(32) => Ok(SecretKey::from_bytes(&secret)),
-                _ => Err(corrupt()),
-            };
+            let mut decoded = Zeroizing::new(alloc::vec![0; stored.len()]);
+            let length = bs58::decode(stored).onto(&mut decoded[..]).map_err(|_| {
+                keyring_core::Error::BadStoreFormat("secret key is not Base58".into())
+            })?;
+            return parse(&decoded[..length]);
         }
-        stored
-            .try_into()
-            .map(SecretKey::from_bytes)
-            .map_err(|_| corrupt())
+        parse(stored)
     }
 
     pub(crate) fn set_secret_key(
