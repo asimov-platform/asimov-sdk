@@ -104,14 +104,15 @@ Unless marked reproduced, implementation findings are based on source review.
 
 ## P2: Modules, environment, and persistent state
 
-- [ ] **Restrict Secret Service fallback to confirmed unavailability.**
-  Review `nuqzzmuw`: `lib/asimov-keyring/src/store.rs::automatic` treats every
-  `PlatformFailure` as absence, including connection and session-negotiation
-  errors. Creating `.keyring` permanently selects files on later opens, even
-  when the service recovers; `ensure_secret_key` can replace an existing native
-  identity. Propagate other initialization failures. An invalid D-Bus address
-  reproduced silent file creation; live D-Bus tests were blocked by sandbox
-  socket restrictions.
+- [ ] **Keep the Secret Service selected after a temporary absence.**
+  `lib/asimov-keyring/src/store.rs::automatic` falls back to files when the
+  session bus socket is missing or no Secret Service is on the bus. A desktop
+  user's run without that bus, such as from cron or a service after logout, is
+  indistinguishable from a headless machine: it creates `.keyring`, which
+  permanently selects files, and `ensure_secret_key` then generates a new
+  identity, orphaning the Secret Service one. Record the selected backend (for
+  example in a marker file) and refuse automatic fallback once the Secret
+  Service has been used.
 
 - [ ] **Provide explicit identity migration between keyring backends.**
   `lib/asimov-keyring/` keeps native and file secrets separate. Add an explicit
