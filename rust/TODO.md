@@ -471,14 +471,6 @@ Unless marked reproduced, implementation findings are based on source review.
   Extend remote identity resolution to overlapping rotation keys by signature
   key ID, defining the singular `remote_public_key()` contract during rotation.
 
-- [ ] **Make workspace publish dry runs dependency-aware.**
-  Internal dependencies in `Cargo.toml` use versions with local
-  `[patch.crates-io]` overrides. During 25.7.3 preparation,
-  `cargo publish --workspace --dry-run --allow-dirty --locked` starts with
-  `asimov-account` and cannot resolve unpublished `asimov-core = "^25.7.3"`.
-  Add release tooling or path/version wiring that supports dependency-ordered
-  publishing and pre-publication package verification.
-
 - [ ] **Resolve shared execution semantics before generalizing pipelines.**
   Follow `lib/asimov-flow/DESIGN.md`: define logical entry boundaries separately
   from JSONL lines, typed port schemas, completion/cancellation outcomes, and
