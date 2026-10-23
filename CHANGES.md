@@ -5,75 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 25.9.0 - 2026-10-23
 ### Added
-- asimov-directory: Wrap `UrisReader` in `UriReader` to read only the first IRI
-- asimov-directory: Read `.uris` files asynchronously as borrowed IRI slices
-- asimov-directory: Track resource collections with reusable `.uri`/`.uris`
-  formats and confined storage under `resources/`
-- asimov-remote: Check remotes with signed OPTIONS requests, verified responses,
-  and round-trip timing
-- asimov-directory, asimov-remote: Manage named HTTP(S) remotes as `.uri`
-  files rooted at a state directory
-- asimov-http: Resolve effective proxy endpoints for Hyper connectors
-- asimov-proxy: Support shared proxy options and bypass overrides with
-  `ProxyConfig::from_options`
-- asimov-installer: Use automatic proxy routing with a custom registry via
-  `Installer::with_registry`
-- asimov-remote: Expose HTTP 429 `Retry-After` delays for execution and identity
-  discovery
-- asimov-remote: Discover static GNOME/KDE proxies and native macOS SOCKS proxies
-- asimov-remote: Configure automatic, direct, or explicit proxies and bypass
-  overrides per executor, alongside transport timeouts
-- asimov-http: Expose shared proxy configuration, native discovery, and an
-  origin-scoped reqwest adapter; available through SDK `http-proxy`/`http-client`
+- asimov-directory: Named resource collections with asynchronous access
+- asimov-remote: Named remote registry and authenticated connectivity checks
+  with round-trip timing
+- asimov-remote: Expose `Retry-After` delays for HTTP rate limits
+- asimov-http: Shared proxy support with GNOME/KDE and macOS SOCKS discovery;
+  available through SDK `http-proxy` and `http-client` features
+- asimov-remote, asimov-proxy: Per-client proxy selection and bypass overrides
 ### Changed
-- asimov-directory, asimov-remote: Store remotes as `NAME.uri` and read through
-  `UriReader`; registry `get`/`list` are now async and require LF line endings
-- asimov-directory: Rename file types to `UriFile`/`UrisFile`, readers to
-  `UriReader`/`UrisReader`, and their error to `InvalidUriFile`; use `uri`/`uris`
-  in accessors and collection methods
-- asimov-directory: Use IANA's `.uri`/`.uris` extensions for URI-list files,
-  with UTF-8 IRIs, LF newlines, and no comments; rename existing files
-- asimov-snapshot: Rename `.url` metadata to `.uri`; new files end with LF.
-  Existing metadata files need renaming.
 - asimov-config, asimov-directory: Rename directory types to `ConfigsDirectory`,
-  `ModulesDirectory`, `ProgramsDirectory`, and `RemotesDirectory`
-- asimov-directory: Return `UriReader` from `read_uri`; single-IRI writes are
-  now async
-- asimov-directory: Stream resource collection reads and updates with bounded
-  memory; appending and removing IRIs are now async
-- asimov-directory: Validate URI-list files as absolute IRIs (RFC 3987)
-- asimov-protocol: Reject method-changing publication redirects and HTTPS
-  downgrades for Pkarr address records
-- asimov-proxy: Default OpenRouter forwarding to automatic proxy discovery;
-  use uppercase-first environment precedence and shared URL/bypass rules
-- asimov-huggingface: Download/cache APIs require `std` (enabled by default);
-  HTTP requests use platform TLS verification
-- asimov-cloud: Reject redirects for native account balance requests
-- asimov-module: Reject redirects when fetching the public module index
-- asimov-http: HTTP integrity APIs now require `integrity` (enabled by default);
-  consumers enabling only `std` must add `integrity`
+  `ModulesDirectory`, and `ProgramsDirectory`
+- asimov-http: Enable `integrity` for signing and verification when disabling
+  default features
+- asimov-huggingface: Download/cache APIs now require `std` (on by default);
+  HTTPS uses platform certificate trust
+- asimov-proxy: Proxy discovery is now automatic; use `ProxyConfig::Direct` for
+  direct connections. Uppercase proxy environment variables take precedence.
+- asimov-cloud, asimov-module: Reject redirects for native balance requests and
+  public module-index downloads
 ### Fixed
 - Update TLS certificate verification and trusted roots for CA security fixes
-- asimov-protocol: Use shared proxy discovery for native Pkarr publication,
-  address resolution, and redirects
-- asimov-proxy: Preserve bytes following CONNECT headers and enforce the header
-  limit even when the terminator arrives in the same read
-- asimov-huggingface: Use shared proxy discovery for metadata, downloads, and
-  redirects; scope saved tokens to the configured Hub origin
-- asimov-huggingface: Honor `HF_HOME` cache hits, pin snapshots to one commit,
-  and return the snapshot root for nested files
-- asimov-huggingface: Reject incomplete or inconsistent downloads before caching
-- asimov-installer: Use shared proxy discovery for GitHub requests and redirects
-- asimov-cloud: Use shared proxy discovery for native balance and credit checks
-- asimov-module: Use shared proxy routing for index downloads and return setup
-  errors instead of panicking
-- asimov-telemetry: Use shared environment/native proxy routing for uploads
-- asimov-telemetry: Keep queued events when uploads receive HTTP redirects
-- asimov-remote: Honor Windows proxy protocol maps and native bypass rules
-- asimov-remote: Bypass all hosts with `NO_PROXY=*`, including IP addresses
-- asimov-remote: Prefer IPv4 for locally resolved SOCKS4 destinations
+- Honor system proxies for cloud, installer, module-index, model-download,
+  telemetry, and peer-discovery requests
+- Fix Windows proxy bypass rules, `NO_PROXY=*` for IP addresses, and SOCKS4
+  connectivity
+- asimov-proxy: Prevent data loss when establishing HTTP proxy tunnels
+- asimov-protocol: Prevent HTTPS downgrades during peer discovery
+- asimov-huggingface: Fix cache reuse, snapshot consistency, and returned paths;
+  reject incomplete downloads and keep tokens scoped to the configured Hub
+- asimov-module: Return HTTP setup errors instead of panicking
+- asimov-telemetry: Preserve queued events when uploads are redirected
 
 ## 25.8.0 - 2026-10-18
 ### Added
