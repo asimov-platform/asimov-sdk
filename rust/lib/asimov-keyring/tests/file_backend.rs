@@ -18,6 +18,7 @@ fn child(home: &Path, output: &Path, backend: Option<&str>) -> Command {
         .args(["--exact", "file_backend_child", "--nocapture"])
         .env("HOME", home)
         .env_remove("ASIMOV_KEYRING_BACKEND")
+        .env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent")
         .env("ASIMOV_KEYRING_TEST_OUTPUT", output)
         .env("ASIMOV_KEYRING_TEST_MODE", "ensure")
         .stdin(Stdio::piped())
@@ -92,19 +93,7 @@ fn concurrent_first_use_and_later_processes_share_one_identity() {
 
 #[cfg(target_os = "linux")]
 #[test]
-#[ignore = "requires blocked Linux keyrings; run in Docker with --include-ignored"]
-fn default_backend_works_with_blocked_kernel_keyrings() {
-    use keyring_core::api::CredentialStoreApi;
-
-    // Check the fixture without reading or writing any native secret.
-    assert!(matches!(
-        linux_keyutils_keyring_store::Store::new().unwrap().build(
-            asimov_keyring::KEYRING_SERVICE,
-            "default",
-            None,
-        ),
-        Err(keyring_core::Error::NoStorageAccess(_))
-    ));
+fn default_backend_without_secret_service_uses_files() {
     check_concurrent_identity(None);
 }
 

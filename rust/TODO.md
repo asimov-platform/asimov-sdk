@@ -104,14 +104,24 @@ Unless marked reproduced, implementation findings are based on source review.
 
 ## P2: Modules, environment, and persistent state
 
-- [ ] **Support GNOME and KDE desktop keyrings over D-Bus.**
-  Add persistent GNOME Keyring and KDE KWallet support to `lib/asimov-keyring/`
-  through their D-Bus interfaces.
+- [ ] **Keep the Secret Service selected after a temporary absence.**
+  `lib/asimov-keyring/src/store.rs::automatic` falls back to files when the
+  session bus socket is missing or no Secret Service is on the bus. A desktop
+  user's run without that bus, such as from cron or a service after logout, is
+  indistinguishable from a headless machine: it creates `.keyring`, which
+  permanently selects files, and `ensure_secret_key` then generates a new
+  identity, orphaning the Secret Service one. Record the selected backend (for
+  example in a marker file) and refuse automatic fallback once the Secret
+  Service has been used.
 
 - [ ] **Provide explicit identity migration between keyring backends.**
   `lib/asimov-keyring/` keeps native and file secrets separate. Add an explicit
   migration API that verifies the destination before switching, preserving the
-  public identity. Cover Linux kernel-key expiry/reboot and existing caches
+  public identity. Review `nuqzzmuw`: switching Linux's native backend to the
+  Secret Service never checks an existing kernel key. With an empty destination,
+  `ensure_secret_key` replaces the cached public identity instead of recovering
+  that key (source review). Migrate it or require an explicit migration before
+  initializing a replacement. Cover kernel-key expiry/reboot and existing caches
   when no secret is available; a public key alone cannot recover the identity.
   `lib/asimov-keyring/src/store.rs::platform_backend` selects a volatile mock
   outside Apple, Linux, and Windows. Use persistent storage or an explicit

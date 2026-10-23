@@ -8,7 +8,9 @@ use alloc::{
     vec::Vec,
 };
 use asimov_core::crates::cap_std::fs::Dir;
+use iroh_base::SecretKey;
 use keyring_core::{CredentialStore, Entry};
+use secrecy::zeroize::Zeroizing;
 use std::sync::Mutex;
 
 /// Shared ownership and in-process coordination for one backend instance.
@@ -45,7 +47,7 @@ impl Store {
         root: &Dir,
         native: impl FnOnce() -> Result<Arc<Self>, KeyringError>,
     ) -> Result<Arc<Self>, KeyringError> {
-        // Retain the file identity if kernel access later becomes available.
+        // Retain the file identity if a Secret Service later becomes available.
         // Invalid or inaccessible file storage must not select a new identity.
         match root.symlink_metadata(crate::file_store::DIRECTORY) {
             Ok(_) => return Self::file(root),
@@ -53,16 +55,8 @@ impl Store {
             Err(error) => return Err(error.into()),
         }
 
-        let native = native().and_then(|store| {
-            // The keyutils store initializes lazily when building an entry.
-            // This opens the kernel keyrings without reading or writing a key.
-            store.entry("default")?;
-            Ok(store)
-        });
-        match native {
-            Err(KeyringError::KeyringError(keyring_core::Error::NoStorageAccess(_))) => {
-                Self::file(root)
-            },
+        match native() {
+            Err(error) if secret_service_absent(&error) => Self::file(root),
             other => other,
         }
     }
@@ -108,6 +102,51 @@ impl Store {
         self.backend.build(crate::KEYRING_SERVICE, user, None)
     }
 
+    pub(crate) fn secret_key(&self, stored: &[u8]) -> Result<SecretKey, KeyringError> {
+        let parse = |bytes: &[u8]| {
+            bytes
+                .try_into()
+                .map(SecretKey::from_bytes)
+                .map_err(|_| KeyringError::CorruptSecret {
+                    length: bytes.len(),
+                })
+        };
+        #[cfg(target_os = "linux")]
+        if self.is_secret_service() {
+            let mut decoded = Zeroizing::new(alloc::vec![0; stored.len()]);
+            let length = bs58::decode(stored).onto(&mut decoded[..]).map_err(|_| {
+                keyring_core::Error::BadStoreFormat("secret key is not Base58".into())
+            })?;
+            return parse(&decoded[..length]);
+        }
+        parse(stored)
+    }
+
+    pub(crate) fn set_secret_key(
+        &self,
+        entry: &Entry,
+        secret_key: &SecretKey,
+    ) -> keyring_core::Result<()> {
+        let secret = Zeroizing::new(secret_key.to_bytes());
+        // KDE Wallet stores only UTF-8 secrets.
+        #[cfg(target_os = "linux")]
+        if self.is_secret_service() {
+            let mut encoded = Zeroizing::new([0; 64]);
+            let length = bs58::encode(secret.as_slice())
+                .onto(&mut encoded[..])
+                .expect("Base58 encodes 32 bytes in at most 44 characters");
+            return entry.set_secret(&encoded[..length]);
+        }
+        entry.set_secret(secret.as_slice())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn is_secret_service(&self) -> bool {
+        self.backend
+            .as_any()
+            .is::<zbus_secret_service_keyring_store::Store>()
+    }
+
     // Keep the file lock through the whole read/modify/cache/rollback operation.
     // Locking individual credential calls would race concurrent first use.
     pub(crate) fn file_lock(&self, _user: &str) -> Result<Option<std::fs::File>, KeyringError> {
@@ -135,13 +174,36 @@ impl Store {
     }
 }
 
+// Only a missing session bus or Secret Service means no identity can be stored
+// there. Other failures, such as denied access or a service restarting, may hide
+// an existing identity, so they must not select the file store.
+#[cfg(target_os = "linux")]
+fn secret_service_absent(error: &KeyringError) -> bool {
+    use secret_service::Error;
+    let KeyringError::KeyringError(keyring_core::Error::PlatformFailure(error)) = error else {
+        return false;
+    };
+    // `Error::Unavailable` also covers a malformed bus address, a configuration
+    // error rather than absence.
+    match error.downcast_ref::<Error>() {
+        Some(Error::Zbus(zbus::Error::Connection(error, _) | zbus::Error::InputOutput(error))) => {
+            error.kind() == std::io::ErrorKind::NotFound
+        },
+        Some(Error::Zbus(zbus::Error::MethodError(name, ..))) => {
+            name.as_str() == "org.freedesktop.DBus.Error.ServiceUnknown"
+        },
+        Some(Error::ZbusFdo(zbus::fdo::Error::ServiceUnknown(_))) => true,
+        _ => false,
+    }
+}
+
 fn platform_backend() -> keyring_core::Result<Arc<CredentialStore>> {
     #[cfg(target_vendor = "apple")]
     let store = apple_native_keyring_store::keychain::Store::new()?;
     #[cfg(target_os = "windows")]
     let store = windows_native_keyring_store::Store::new()?;
     #[cfg(target_os = "linux")]
-    let store = linux_keyutils_keyring_store::Store::new()?;
+    let store = zbus_secret_service_keyring_store::Store::new()?;
     #[cfg(not(any(target_vendor = "apple", target_os = "windows", target_os = "linux")))]
     let store = keyring_core::mock::Store::new()?;
     Ok(store)
@@ -154,32 +216,8 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
-    fn automatically_falls_back_when_lazy_kernel_access_is_denied() {
+    fn automatically_falls_back_without_a_secret_service() {
         use alloc::boxed::Box;
-        use keyring_core::api::CredentialStoreApi;
-
-        struct DeniedStore;
-        impl CredentialStoreApi for DeniedStore {
-            fn vendor(&self) -> String {
-                "test".into()
-            }
-            fn id(&self) -> String {
-                "denied".into()
-            }
-            fn as_any(&self) -> &dyn core::any::Any {
-                self
-            }
-            fn build(
-                &self,
-                _service: &str,
-                _user: &str,
-                _modifiers: Option<&std::collections::HashMap<&str, &str>>,
-            ) -> keyring_core::Result<Entry> {
-                Err(keyring_core::Error::NoStorageAccess(Box::new(
-                    std::io::Error::from(std::io::ErrorKind::PermissionDenied),
-                )))
-            }
-        }
 
         let path = tempfile::tempdir().unwrap();
         let root = Dir::open_ambient_dir(
@@ -187,12 +225,21 @@ mod tests {
             asimov_core::crates::cap_std::ambient_authority(),
         )
         .unwrap();
-        let store = Store::automatic(&root, || Store::shared(Arc::new(DeniedStore))).unwrap();
+        let unavailable = || {
+            let missing = std::io::Error::from(std::io::ErrorKind::NotFound);
+            Err(
+                keyring_core::Error::PlatformFailure(Box::new(secret_service::Error::Zbus(
+                    zbus::Error::InputOutput(Arc::new(missing)),
+                )))
+                .into(),
+            )
+        };
+        let store = Store::automatic(&root, unavailable).unwrap();
         assert!(store.backend.as_any().is::<crate::file_store::FileStore>());
         assert!(path.path().join(".keyring").is_dir());
         drop(store);
 
-        // Changing container permissions must not switch an existing identity.
+        // A Secret Service appearing later must not switch an existing identity.
         let reopened = Store::automatic(&root, || panic!("file store already selected")).unwrap();
         assert!(
             reopened
@@ -205,6 +252,8 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn automatic_selection_keeps_accessible_native_storage_and_other_errors() {
+        use alloc::boxed::Box;
+
         let path = tempfile::tempdir().unwrap();
         let root = Dir::open_ambient_dir(
             path.path(),
@@ -222,6 +271,18 @@ mod tests {
         assert!(matches!(
             Store::automatic(&root, || Err(KeyringError::LockPoisoned)),
             Err(KeyringError::LockPoisoned)
+        ));
+        let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        assert!(matches!(
+            Store::automatic(&root, || Err(keyring_core::Error::PlatformFailure(
+                Box::new(secret_service::Error::Zbus(zbus::Error::InputOutput(
+                    Arc::new(denied)
+                )))
+            )
+            .into())),
+            Err(KeyringError::KeyringError(
+                keyring_core::Error::PlatformFailure(_)
+            ))
         ));
         assert!(matches!(
             Store::automatic(&root, || Err(keyring_core::Error::Invalid(
