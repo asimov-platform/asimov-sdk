@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under the `reqwest` feature
 - asimov-protocol: Relay connections use the system proxy when all default
   relays share one HTTP(S) proxy
+- asimov-proxy: `ProxyOptions::body_timeout` limits request uploads, which
+  receive HTTP 408 on expiry
 ### Fixed
 - asimov-cloud: Bound account balance requests with connect and read limits
 - asimov-protocol: Pkarr requests through SOCKS4 proxies keep the endpoint's

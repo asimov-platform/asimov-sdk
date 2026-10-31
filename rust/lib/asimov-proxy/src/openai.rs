@@ -63,6 +63,9 @@ pub struct ProxyOptions {
     /// Each connection, including one Hyper finishes in the background for its
     /// pool, is also limited separately to this duration.
     pub upstream_timeout: Duration,
+    /// Deadline for receiving the complete request body; defaults to 60
+    /// seconds. Slower uploads receive HTTP 408 without reaching upstream.
+    pub body_timeout: Duration,
     /// Optional request and response body log; disabled by default.
     pub logger: Option<BodyLogger>,
 }
@@ -73,6 +76,7 @@ impl Default for ProxyOptions {
             upstream_proxy: ProxyConfig::Automatic,
             max_body_bytes: DEFAULT_MAX_BODY_BYTES,
             upstream_timeout: Duration::from_secs(120),
+            body_timeout: Duration::from_secs(60),
             logger: None,
         }
     }
@@ -86,6 +90,7 @@ struct ProxyState {
     authorization: HeaderValue,
     max_body_bytes: usize,
     upstream_timeout: Duration,
+    body_timeout: Duration,
 }
 
 /// An OpenAI-compatible proxy forwarding requests to OpenRouter.
@@ -139,14 +144,16 @@ impl Proxy {
                 authorization,
                 max_body_bytes: options.max_body_bytes,
                 upstream_timeout: options.upstream_timeout,
+                body_timeout: options.body_timeout,
             },
         })
     }
 
     /// Creates a router for embedding in an existing Axum application.
     ///
-    /// Invalid bodies return HTTP 400, oversized bodies 413, upstream failures
-    /// 502, and upstream header timeouts 504. Upstream status codes pass through.
+    /// Invalid bodies return HTTP 400, slow uploads 408, oversized bodies 413,
+    /// upstream failures 502, and upstream header timeouts 504. Upstream status
+    /// codes pass through.
     pub fn router(self) -> Router {
         Router::new()
             .route("/{*path}", any(proxy_handler))
@@ -198,7 +205,8 @@ async fn proxy_handler(
 
     let (mut head, body) = req.into_parts();
 
-    let upstream_request_body = read_request_body(body, state.max_body_bytes).await?;
+    let upstream_request_body =
+        read_request_body(body, state.max_body_bytes, state.body_timeout).await?;
 
     if let Some(logger) = &state.logger {
         logger.log_request_body(&upstream_request_body);
@@ -293,9 +301,18 @@ async fn wait_for_upstream<T, E: core::fmt::Display>(
     }
 }
 
-async fn read_request_body(body: Body, limit: usize) -> Result<Bytes, StatusCode> {
+async fn read_request_body(
+    body: Body,
+    limit: usize,
+    deadline: Duration,
+) -> Result<Bytes, StatusCode> {
     use core::error::Error;
-    axum::body::to_bytes(body, limit).await.map_err(|error| {
+    let Ok(result) = tokio::time::timeout(deadline, axum::body::to_bytes(body, limit)).await else {
+        #[cfg(feature = "tracing")]
+        tracing::warn!("Request body upload timed out");
+        return Err(StatusCode::REQUEST_TIMEOUT);
+    };
+    result.map_err(|error| {
         if error
             .source()
             .is_some_and(|cause| cause.is::<http_body_util::LengthLimitError>())
@@ -411,6 +428,7 @@ mod tests {
                 logger: Some(BodyLogger::open(&log_path).unwrap()),
                 max_body_bytes: body.len(),
                 upstream_timeout: Duration::from_secs(2),
+                body_timeout: Duration::from_secs(2),
             },
         };
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -659,14 +677,20 @@ mod tests {
         }
     }
 
+    const BODY_DEADLINE: Duration = Duration::from_secs(2);
+
     #[tokio::test]
     async fn request_body_limits_apply_to_buffered_and_streamed_bodies() {
         assert_eq!(
-            read_request_body(Body::from("1234"), 4).await.unwrap(),
+            read_request_body(Body::from("1234"), 4, BODY_DEADLINE)
+                .await
+                .unwrap(),
             "1234"
         );
         assert_eq!(
-            read_request_body(Body::from("12345"), 4).await.unwrap_err(),
+            read_request_body(Body::from("12345"), 4, BODY_DEADLINE)
+                .await
+                .unwrap_err(),
             StatusCode::PAYLOAD_TOO_LARGE
         );
         let chunks = [
@@ -675,11 +699,11 @@ mod tests {
         ];
         let body = Body::from_stream(futures_lite::stream::iter(chunks));
         assert_eq!(
-            read_request_body(body, 4).await.unwrap_err(),
+            read_request_body(body, 4, BODY_DEADLINE).await.unwrap_err(),
             StatusCode::PAYLOAD_TOO_LARGE
         );
         assert!(
-            read_request_body(Body::empty(), 0)
+            read_request_body(Body::empty(), 0, BODY_DEADLINE)
                 .await
                 .unwrap()
                 .is_empty()
@@ -688,9 +712,66 @@ mod tests {
             std::io::Error::other("interrupted upload"),
         )]));
         assert_eq!(
-            read_request_body(body, 4).await.unwrap_err(),
+            read_request_body(body, 4, BODY_DEADLINE).await.unwrap_err(),
             StatusCode::BAD_REQUEST
         );
+    }
+
+    #[tokio::test]
+    async fn stalled_uploads_time_out_without_reaching_upstream() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let upstream_address = upstream.local_addr().unwrap();
+        let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_root_certificates(rustls::RootCertStore::empty())
+        .with_no_client_auth();
+        let target = url::Url::parse(&format!("http://{upstream_address}/api")).unwrap();
+        let connector =
+            ProxyConnector::new(&target, ProxyConfig::Direct, Arc::new(tls.clone())).unwrap();
+        let connector = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_tls_config(tls)
+            .https_or_http()
+            .enable_http1()
+            .wrap_connector(connector);
+        let router = Proxy {
+            state: ProxyState {
+                client: upstream_client(connector, Duration::from_secs(2)),
+                upstream_base_url: target.as_str().into(),
+                authorization: authorization_header("test-key").unwrap(),
+                logger: None,
+                max_body_bytes: 1024,
+                upstream_timeout: Duration::from_secs(2),
+                body_timeout: Duration::from_millis(100),
+            },
+        }
+        .router();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(axum::serve(listener, router).into_future());
+
+        // Announce ten bytes, send four, and stall.
+        let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+        client
+            .write_all(b"POST /v1/chat/completions HTTP/1.1\r\nHost: proxy\r\nContent-Length: 10\r\n\r\n{\"a\"")
+            .await
+            .unwrap();
+        let mut response = alloc::vec![0; 12];
+        tokio::time::timeout(Duration::from_secs(2), client.read_exact(&mut response))
+            .await
+            .expect("the upload deadline must fire")
+            .unwrap();
+        assert_eq!(response, b"HTTP/1.1 408");
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), upstream.accept())
+                .await
+                .is_err()
+        );
+        server.abort();
     }
 
     #[test]
