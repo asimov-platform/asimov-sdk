@@ -339,8 +339,7 @@ Unless marked reproduced, implementation findings are based on source review.
 - [ ] **Bound OpenAI proxy concurrency and test client disconnection.**
   `lib/asimov-proxy/src/openai.rs` accepts unlimited concurrent requests, each
   buffering up to `max_body_bytes`. Test that client disconnection cancels the
-  upstream request and stream without buffering responses. Inbound header
-  reads rely on Axum's defaults; confirm they are bounded.
+  upstream request and stream without buffering responses.
 
 - [ ] **Complete upstream-proxy interoperability coverage.**
   `lib/asimov-proxy/src/proxy_connector.rs` uses only the first locally resolved

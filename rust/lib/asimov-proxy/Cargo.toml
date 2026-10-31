@@ -65,6 +65,9 @@ hyper-rustls = { workspace = true, features = [
 hyper-util = { workspace = true, features = [
     "client-legacy",
     "http1",
+    "server-auto",
+    "server-graceful",
+    "service",
     "tokio",
 ], optional = true }
 rustls = { workspace = true, features = ["ring", "std", "tls12"], optional = true }

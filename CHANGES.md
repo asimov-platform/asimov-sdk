@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under the `reqwest` feature
 - asimov-protocol: Relay connections use the system proxy when all default
   relays share one HTTP(S) proxy
+- asimov-proxy: `ProxyOptions::header_timeout` disconnects clients that send
+  request headers too slowly; previously these were never limited
 - asimov-proxy: `ProxyOptions::body_timeout` limits request uploads, which
   receive HTTP 408 on expiry
 - asimov-proxy: `ProxyOptions::idle_timeout` aborts stalled response streams,

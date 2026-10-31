@@ -63,6 +63,9 @@ pub struct ProxyOptions {
     /// Each connection, including one Hyper finishes in the background for its
     /// pool, is also limited separately to this duration.
     pub upstream_timeout: Duration,
+    /// Deadline for receiving HTTP/1 request headers in [`Proxy::serve`];
+    /// defaults to 30 seconds. Slower clients are disconnected.
+    pub header_timeout: Duration,
     /// Deadline for receiving the complete request body; defaults to 60
     /// seconds. Slower uploads receive HTTP 408 without reaching upstream.
     pub body_timeout: Duration,
@@ -81,6 +84,7 @@ impl Default for ProxyOptions {
             upstream_proxy: ProxyConfig::Automatic,
             max_body_bytes: DEFAULT_MAX_BODY_BYTES,
             upstream_timeout: Duration::from_secs(120),
+            header_timeout: Duration::from_secs(30),
             body_timeout: Duration::from_secs(60),
             idle_timeout: Duration::from_secs(120),
             logger: None,
@@ -96,6 +100,7 @@ struct ProxyState {
     authorization: HeaderValue,
     max_body_bytes: usize,
     upstream_timeout: Duration,
+    header_timeout: Duration,
     body_timeout: Duration,
     idle_timeout: Duration,
 }
@@ -151,6 +156,7 @@ impl Proxy {
                 authorization,
                 max_body_bytes: options.max_body_bytes,
                 upstream_timeout: options.upstream_timeout,
+                header_timeout: options.header_timeout,
                 body_timeout: options.body_timeout,
                 idle_timeout: options.idle_timeout,
             },
@@ -178,18 +184,77 @@ impl Proxy {
         listener: TcpListener,
         shutdown: impl core::future::Future<Output = ()> + Send + 'static,
     ) -> std::io::Result<()> {
-        serve_until_shutdown(listener, self.router(), shutdown).await
+        let header_timeout = self.state.header_timeout;
+        serve_until_shutdown(listener, self.router(), header_timeout, shutdown).await
     }
 }
 
+/// Serves like `axum::serve` with graceful shutdown, but also enforces a
+/// deadline for HTTP/1 request headers, which requires a Hyper timer that
+/// `axum::serve` does not set.
 async fn serve_until_shutdown(
     listener: TcpListener,
     router: Router,
+    header_timeout: Duration,
     shutdown: impl core::future::Future<Output = ()> + Send + 'static,
 ) -> std::io::Result<()> {
-    axum::serve(listener, router)
-        .with_graceful_shutdown(shutdown)
-        .await
+    use hyper_util::{
+        rt::{TokioIo, TokioTimer},
+        server::{conn::auto::Builder, graceful::GracefulShutdown},
+        service::TowerToHyperService,
+    };
+
+    let mut builder = Builder::new(TokioExecutor::new());
+    builder
+        .http1()
+        .timer(TokioTimer::new())
+        .header_read_timeout(header_timeout);
+    let graceful = GracefulShutdown::new();
+    let mut shutdown = core::pin::pin!(shutdown);
+    loop {
+        let stream = tokio::select! {
+            accepted = listener.accept() => match accepted {
+                Ok((stream, _)) => stream,
+                Err(error) => {
+                    handle_accept_error(error).await;
+                    continue;
+                },
+            },
+            () = &mut shutdown => break,
+        };
+        let service = TowerToHyperService::new(router.clone());
+        let connection = builder
+            .serve_connection_with_upgrades(TokioIo::new(stream), service)
+            .into_owned();
+        let connection = graceful.watch(connection);
+        tokio::spawn(async move {
+            if let Err(_error) = connection.await {
+                #[cfg(feature = "tracing")]
+                tracing::trace!("failed to serve connection: {_error:#}");
+            }
+        });
+    }
+    // Stop accepting, then let in-flight connections finish.
+    drop(listener);
+    graceful.shutdown().await;
+    Ok(())
+}
+
+/// Skips per-connection accept errors and backs off on others, such as file
+/// descriptor exhaustion, as `axum::serve` does.
+async fn handle_accept_error(error: std::io::Error) {
+    use std::io::ErrorKind;
+    if matches!(
+        error.kind(),
+        ErrorKind::ConnectionRefused | ErrorKind::ConnectionAborted | ErrorKind::ConnectionReset
+    ) {
+        return;
+    }
+    #[cfg(feature = "tracing")]
+    tracing::error!("accept error: {error}");
+    #[cfg(not(feature = "tracing"))]
+    let _ = error;
+    tokio::time::sleep(Duration::from_secs(1)).await;
 }
 
 async fn proxy_handler(
@@ -502,6 +567,7 @@ mod tests {
                 logger: Some(BodyLogger::open(&log_path).unwrap()),
                 max_body_bytes: body.len(),
                 upstream_timeout: Duration::from_secs(2),
+                header_timeout: Duration::from_secs(2),
                 body_timeout: Duration::from_secs(2),
                 idle_timeout: Duration::from_secs(2),
             },
@@ -681,7 +747,7 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (stop, stopped) = tokio::sync::oneshot::channel();
-        let server = tokio::spawn(serve_until_shutdown(listener, router, async {
+        let server = tokio::spawn(serve_until_shutdown(listener, router, DEADLINE, async {
             let _ = stopped.await;
         }));
         let client = reqwest::Client::builder()
@@ -753,6 +819,7 @@ mod tests {
     }
 
     const BODY_DEADLINE: Duration = Duration::from_secs(2);
+    const DEADLINE: Duration = Duration::from_secs(2);
 
     #[tokio::test]
     async fn request_body_limits_apply_to_buffered_and_streamed_bodies() {
@@ -817,6 +884,7 @@ mod tests {
                 logger: None,
                 max_body_bytes: 1024,
                 upstream_timeout: Duration::from_secs(2),
+                header_timeout: Duration::from_secs(2),
                 body_timeout: Duration::from_secs(2),
                 idle_timeout: Duration::from_secs(2),
             },
@@ -852,6 +920,46 @@ mod tests {
                 .is_err()
         );
         server.abort();
+    }
+
+    #[tokio::test]
+    async fn slow_request_headers_disconnect_and_release_shutdown() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut proxy = local_proxy(upstream.local_addr().unwrap());
+        proxy.state.header_timeout = Duration::from_millis(200);
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let server = tokio::spawn(proxy.serve(listener, async {
+            let _ = stopped.await;
+        }));
+
+        // Send an incomplete request head and stall. The deadline closes the
+        // connection, cleanly or with a reset, before any response.
+        let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+        client
+            .write_all(b"POST /v1/chat/completions HTTP/1.1\r\nHost: proxy\r\n")
+            .await
+            .unwrap();
+        let mut response = Vec::new();
+        let read = tokio::time::timeout(DEADLINE, client.read_to_end(&mut response))
+            .await
+            .expect("the header deadline must close the connection");
+        assert!(read.is_ok() || read.unwrap_err().kind() == std::io::ErrorKind::ConnectionReset);
+        assert!(!response.starts_with(b"HTTP/1.1 2"));
+        stop.send(()).unwrap();
+        tokio::time::timeout(DEADLINE, server)
+            .await
+            .expect("shutdown must complete")
+            .unwrap()
+            .unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), upstream.accept())
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
