@@ -304,9 +304,13 @@ Unless marked reproduced, implementation findings are based on source review.
   bypass, differing proxies, and SOCKS fall back to direct connections.
   Per-relay selection and SOCKS need upstream Iroh support. A relay mode set
   after `DefaultPreset` keeps the proxy chosen for the default relays. Review
-  HTTP requests owned by Iroh's DNS-over-HTTPS resolver separately. Iroh-relay
-  1.4.1 logs the proxy username and the CONNECT request, including its Basic
-  credentials, at debug level; report upstream and advise filtering meanwhile.
+  HTTP requests owned by Iroh's DNS-over-HTTPS resolver separately.
+
+- [ ] **Deferred: Iroh relay debug logs expose proxy credentials.**
+  `iroh-relay` 1.4.1 `client/tls.rs` logs the proxy username and the whole
+  CONNECT request at debug level, including its base64 `Proxy-Authorization`
+  header. Not yet reported upstream. Until fixed there, debug filters enabling
+  `iroh_relay` can leak proxy passwords; recheck when upgrading Iroh.
 
 - [ ] **Deferred: shared proxy routing for embedded template Git downloads.**
   On hold pending an upstream safe transport hook; do not pursue `git2-rs`
