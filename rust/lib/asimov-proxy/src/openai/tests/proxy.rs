@@ -3,6 +3,7 @@
 use super::*;
 use crate::{ProxyMode, UpstreamProxyOptions};
 use alloc::string::ToString as _;
+use asimov_http::reqwest;
 use std::process::{Command, Output};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 

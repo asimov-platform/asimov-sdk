@@ -353,6 +353,7 @@ pub async fn extract_files(
 mod tests {
     use super::*;
     use crate::installer::test_support::*;
+    use asimov_http::reqwest;
     use core::time::Duration;
     use tokio::io::AsyncBufReadExt as _;
     use tokio::{net::TcpListener, time::timeout};

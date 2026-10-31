@@ -21,7 +21,7 @@ std = ["asimov-directory?/std", "asimov-flow?/std", "asimov-http?/std", "asimov-
 # Tracked remote storage:
 fs = ["std", "dep:asimov-directory", "asimov-directory/fs", "dep:url"]
 # Transport adapters:
-http = ["std", "serde", "dep:asimov-flow", "asimov-flow/tokio", "dep:asimov-http", "asimov-http/integrity", "asimov-http/reqwest", "dep:asimov-id", "dep:asimov-keyring", "dep:agent-detector", "dep:async-trait", "dep:base64", "dep:http-body-util", "dep:httpdate", "dep:reqwest", "dep:rustls", "dep:rustls-platform-verifier", "dep:secrecy", "dep:serde_json", "dep:thiserror", "dep:tokio"]
+http = ["std", "serde", "dep:asimov-flow", "asimov-flow/tokio", "dep:asimov-http", "asimov-http/integrity", "asimov-http/reqwest", "dep:asimov-id", "dep:asimov-keyring", "dep:agent-detector", "dep:async-trait", "dep:base64", "dep:http-body-util", "dep:httpdate", "dep:rustls", "dep:rustls-platform-verifier", "dep:secrecy", "dep:serde_json", "dep:thiserror", "dep:tokio"]
 iroh = []
 # Transport-independent request encodings:
 jcs = ["std", "serde", "dep:serde_json", "dep:serde_json_canonicalizer"]
@@ -41,7 +41,6 @@ base64 = { workspace = true, features = ["alloc"], optional = true }
 clientele = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 httpdate = { workspace = true, optional = true }
-reqwest = { workspace = true, features = ["http2", "json", "stream"], optional = true }
 rustls = { workspace = true, features = ["ring", "tls12"], optional = true }
 rustls-platform-verifier = { workspace = true, optional = true }
 secrecy = { workspace = true, optional = true }

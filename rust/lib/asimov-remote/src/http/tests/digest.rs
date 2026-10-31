@@ -1,6 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
 use super::*;
+use asimov_http::reqwest;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use serde::ser::{Error as _, SerializeStruct as _};

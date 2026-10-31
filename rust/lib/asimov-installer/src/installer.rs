@@ -1,6 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
 use alloc::format;
+use asimov_http::reqwest;
 use asimov_module::{InstalledModuleManifest, ModuleManifest, ModuleName, tracing};
 use std::{
     boxed::Box,

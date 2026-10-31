@@ -3,6 +3,7 @@
 use super::*;
 use crate::http::timeouts as policy;
 use asimov_flow::{Bytes, Stream};
+use asimov_http::reqwest;
 use core::{
     future::{Future, pending},
     pin::Pin,

@@ -3,6 +3,7 @@
 use super::*;
 use crate::installer::{Installer, test_support::*};
 use alloc::format;
+use asimov_http::reqwest;
 use asimov_registry::Registry;
 use tokio::{io::AsyncWriteExt, net::TcpListener, time::timeout};
 

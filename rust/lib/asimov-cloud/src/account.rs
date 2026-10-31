@@ -4,7 +4,10 @@ use crate::error::AccountBalanceError;
 use alloc::{boxed::Box, format};
 use asimov_credit::Credits;
 #[cfg(not(target_family = "wasm"))]
-use asimov_http::proxy::{OriginProxy, ProxyOptions};
+use asimov_http::{
+    proxy::{OriginProxy, ProxyOptions},
+    reqwest,
+};
 use core::{error::Error, str::FromStr};
 use derive_more::Display;
 

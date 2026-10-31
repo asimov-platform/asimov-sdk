@@ -5,11 +5,11 @@ use alloc::{
     format,
     string::{String, ToString as _},
 };
+use asimov_http::reqwest::{StatusCode, header::HeaderMap};
 use hf_hub::{
     Cache, Repo,
     api::{Progress as _, sync::ApiError},
 };
-use reqwest::{StatusCode, header::HeaderMap};
 use std::{
     fs::{self, OpenOptions},
     io::{Seek as _, SeekFrom, Write as _},

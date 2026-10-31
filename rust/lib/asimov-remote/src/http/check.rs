@@ -1,13 +1,13 @@
 // This is free and unencumbered software released into the public domain.
 
 use super::{Error, Executor, ResponseVerification, StreamExt, TimeoutPhase, rate_limit, timeouts};
+use asimov_http::reqwest::{self, Method, header};
 use asimov_http::{
     Message, SignatureParams,
     body::{BodyError, VerifyingBody},
 };
 use core::time::Duration;
 use http_body_util::BodyExt as _;
-use reqwest::{Method, header};
 use secrecy::ExposeSecret as _;
 use tokio::time::Instant;
 

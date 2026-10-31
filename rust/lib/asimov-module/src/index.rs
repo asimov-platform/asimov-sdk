@@ -3,6 +3,7 @@
 use crate::ModuleManifest;
 use alloc::{string::String, vec::Vec};
 use asimov_http::proxy::{OriginProxy, ProxyOptions};
+use asimov_http::reqwest;
 use thiserror::Error;
 
 /// The URL of the public index of ASIMOV modules, in JSONL format.

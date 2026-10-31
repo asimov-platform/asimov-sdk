@@ -4,13 +4,13 @@
 
 use super::{Error, PublicKey, StreamExt, TimeoutOptions, TimeoutPhase, Verifier, timeouts};
 use alloc::{boxed::Box, format, string::String, sync::Arc, vec, vec::Vec};
-use asimov_http::{Component, VerificationPolicy, VerifyingKey, key_id};
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use core::time::Duration;
-use reqwest::{
+use asimov_http::reqwest::{
     Client, StatusCode, Url,
     header::{self, HeaderValue},
 };
+use asimov_http::{Component, VerificationPolicy, VerifyingKey, key_id};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use core::time::Duration;
 use serde::Deserialize;
 use tokio::{
     sync::{Mutex, OnceCell},

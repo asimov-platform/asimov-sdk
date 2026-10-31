@@ -1,5 +1,6 @@
 // This is free and unencumbered software released into the public domain.
 
+use asimov_http::reqwest;
 use hf_hub::api::sync::ApiError;
 use std::path::PathBuf;
 use thiserror::Error;

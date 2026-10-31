@@ -76,7 +76,7 @@ tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
 futures-lite = { workspace = true, features = ["std"] }
-reqwest.workspace = true
+asimov-http = { workspace = true, features = ["reqwest"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
 

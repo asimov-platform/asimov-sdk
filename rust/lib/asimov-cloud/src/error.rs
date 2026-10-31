@@ -1,6 +1,8 @@
 // This is free and unencumbered software released into the public domain.
 
 use asimov_credit::CreditsError;
+#[cfg(not(target_family = "wasm"))]
+use asimov_http::reqwest;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

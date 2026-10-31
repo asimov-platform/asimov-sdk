@@ -1,8 +1,8 @@
 // This is free and unencumbered software released into the public domain.
 
 use super::Error;
+use asimov_http::reqwest::{Response, StatusCode, header::RETRY_AFTER};
 use core::time::Duration;
-use reqwest::{Response, StatusCode, header::RETRY_AFTER};
 use std::time::{Instant, SystemTime};
 
 pub(super) fn check(response: &Response) -> Result<(), Error> {

@@ -4,6 +4,7 @@
 
 use alloc::{boxed::Box, string::ToString, vec::Vec};
 use asimov_http::proxy::{OriginProxy, ProxyOptions};
+use asimov_http::reqwest::{self, Method, Response, StatusCode, Url};
 use core::{fmt, pin::Pin, time::Duration};
 use futures_lite::Stream;
 use iroh::{
@@ -15,7 +16,6 @@ use iroh::{
     },
 };
 use iroh_dns::pkarr::SignedPacket;
-use reqwest::{Method, Response, StatusCode, Url};
 use tokio::{sync::watch, task::JoinHandle};
 
 #[derive(Debug)]

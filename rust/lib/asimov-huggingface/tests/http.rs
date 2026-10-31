@@ -5,6 +5,7 @@
 extern crate alloc;
 
 use alloc::string::String;
+use asimov_http::reqwest;
 use asimov_huggingface::{HuggingfaceError, ensure_file, ensure_snapshot, file_exists};
 use core::time::Duration;
 use hf_hub::{Cache, Repo};

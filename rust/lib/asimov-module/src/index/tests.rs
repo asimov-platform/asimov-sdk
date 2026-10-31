@@ -2,6 +2,7 @@
 
 use super::*;
 use alloc::format;
+use asimov_http::reqwest;
 use core::time::Duration;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt},

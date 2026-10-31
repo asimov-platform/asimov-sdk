@@ -6,8 +6,8 @@
 use super::error::HttpError;
 use alloc::{collections::VecDeque, sync::Arc};
 use asimov_http::proxy::{OriginProxy, ProxyOptions};
+use asimov_http::reqwest::{self, Method, Response, StatusCode, Url, header::LOCATION};
 use core::fmt;
-use reqwest::{Method, Response, StatusCode, Url, header::LOCATION};
 use std::sync::Mutex;
 
 const MAX_ORIGINS: usize = 16;

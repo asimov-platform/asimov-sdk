@@ -24,7 +24,7 @@ default = ["all", "std"]
 all = []
 std = [
     "dep:asimov-core", "asimov-core/std", "dep:asimov-http", "asimov-http/reqwest",
-    "dep:hf-hub", "dep:indicatif", "dep:reqwest", "dep:tempfile",
+    "dep:hf-hub", "dep:indicatif", "dep:tempfile",
     "dep:thiserror", "thiserror/std", "dep:tokio", "tokio/rt", "tokio/time",
 ]
 unstable = []
@@ -38,7 +38,6 @@ asimov-http = { workspace = true, optional = true }
 # Retain hf-hub's cache/types, Progress trait, and public ApiError compatibility.
 hf-hub = { workspace = true, optional = true }
 indicatif = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }

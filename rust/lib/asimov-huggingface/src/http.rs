@@ -3,11 +3,11 @@
 use crate::{HuggingfaceError as Error, Result};
 use alloc::{collections::VecDeque, format};
 use asimov_http::proxy::{OriginProxy, ProxyOptions};
-use hf_hub::{Cache, Repo};
-use reqwest::{
-    Response, StatusCode, Url,
+use asimov_http::reqwest::{
+    self, Response, StatusCode, Url,
     header::{HeaderMap, HeaderValue},
 };
+use hf_hub::{Cache, Repo};
 
 pub(crate) struct Client {
     pub endpoint: Url,

@@ -5,6 +5,7 @@
 use super::*;
 use crate::Execute;
 use alloc::{vec, vec::Vec};
+use asimov_http::reqwest;
 use core::{convert::Infallible, time::Duration};
 use serde_json::{Value, json};
 use tokio::{

@@ -8,8 +8,11 @@ use alloc::{
     vec::Vec,
 };
 use asimov_http::proxy::{OriginProxy, ProxyOptions};
+use asimov_http::reqwest::{
+    self,
+    header::{HeaderMap, HeaderValue},
+};
 use core::time::Duration;
-use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{

@@ -302,6 +302,10 @@
 
 use alloc::{boxed::Box, format, string::String, sync::Arc};
 use asimov_flow::BatchStream;
+use asimov_http::reqwest::{
+    self, Client, Request, Url,
+    header::{ACCEPT, CONTENT_LENGTH, HeaderValue},
+};
 use asimov_http::{
     Component, Message, REQUEST_SIGNATURE_TAG, SignatureInput, SignatureParams, Signer,
     VerificationPolicy,
@@ -310,10 +314,6 @@ use asimov_id::PublicKeyEncoding;
 use asimov_keyring::Keyring;
 use async_trait::async_trait;
 use core::{fmt, time::Duration};
-use reqwest::{
-    Client, Request, Url,
-    header::{ACCEPT, CONTENT_LENGTH, HeaderValue},
-};
 use rustls_platform_verifier::BuilderVerifierExt;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;

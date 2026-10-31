@@ -24,7 +24,7 @@ default = ["all", "std"]
 all = ["csv", "random", "tracing"]
 std = [
     "asimov-core/std", "dep:asimov-http", "asimov-http?/std",
-    "dep:iroh-dns", "dep:reqwest", "dep:rustls", "tracing?/std",
+    "dep:iroh-dns", "dep:rustls", "tracing?/std",
     "tokio/macros", "tokio/rt", "tokio/sync",
 ]
 unstable = []
@@ -63,7 +63,6 @@ tracing = { workspace = true, optional = true }
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 asimov-http = { workspace = true, features = ["reqwest"], optional = true }
 iroh-dns = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
 rustls = { workspace = true, features = ["std"], optional = true }
 
 [dev-dependencies]

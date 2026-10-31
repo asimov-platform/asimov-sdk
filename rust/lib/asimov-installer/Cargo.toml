@@ -51,7 +51,6 @@ asimov-module = { workspace = true, default-features = true }
 asimov-registry = { workspace = true, default-features = true }
 bon.workspace = true
 flate2.workspace = true
-reqwest.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true

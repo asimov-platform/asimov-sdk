@@ -1,6 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
 use super::platform::PlatformInfo;
+use asimov_http::reqwest;
 use asimov_registry::error as registry;
 use std::{
     boxed::Box,

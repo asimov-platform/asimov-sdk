@@ -4,6 +4,7 @@ use super::*;
 use alloc::sync::Arc;
 use asimov_flow::Bytes;
 use asimov_http::body::sign_buffered_response;
+use asimov_http::reqwest;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use core::{
     future::Future,

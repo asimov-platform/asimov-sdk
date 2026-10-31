@@ -320,6 +320,7 @@ fn insert_attribution_headers(headers: &mut HeaderMap<HeaderValue>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use asimov_http::reqwest;
     mod proxy;
 
     #[tokio::test]
