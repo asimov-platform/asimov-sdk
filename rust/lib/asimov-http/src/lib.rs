@@ -17,6 +17,8 @@
 //! - `system-proxy`: origin-scoped environment/native discovery; implies `std`
 //!   and `proxy`.
 //! - `reqwest`: the origin-scoped reqwest proxy adapter; implies `system-proxy`.
+//!   Re-exports `reqwest`, with JSON responses and streaming bodies, so that
+//!   clients built from it need no direct reqwest dependency.
 //! - `hyper`: effective proxy endpoint selection for Hyper connectors, including
 //!   shared bypass handling; implies `system-proxy`.
 //!
@@ -132,3 +134,6 @@ pub mod body;
 
 #[cfg(feature = "proxy")]
 pub mod proxy;
+
+#[cfg(feature = "reqwest")]
+pub use reqwest;

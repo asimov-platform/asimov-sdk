@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - asimov-http: `OriginProxy::client_builder` for origin-scoped reqwest
   clients with standard connect and read limits
+- asimov-http: Re-export `reqwest` (with JSON and streaming bodies) under the
+  `reqwest` feature
 ### Fixed
 - asimov-module: Read configuration values through symlinked configuration,
   profile, and module directories; value files still cannot escape theirs

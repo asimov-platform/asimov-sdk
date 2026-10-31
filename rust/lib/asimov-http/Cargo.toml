@@ -28,7 +28,7 @@ integrity = [
 ]
 proxy = ["dep:thiserror", "dep:url"]
 system-proxy = ["std", "proxy", "dep:plist", "dep:proxy-watch", "dep:system-configuration", "dep:windows-registry"]
-reqwest = ["system-proxy", "dep:reqwest", "reqwest/socks", "dep:tokio", "tokio/rt"]
+reqwest = ["system-proxy", "dep:reqwest", "reqwest/socks", "reqwest/stream", "dep:tokio", "tokio/rt"]
 hyper = ["system-proxy", "dep:http", "dep:hyper-util", "hyper-util/client-proxy"]
 
 [dependencies]
