@@ -265,10 +265,13 @@ fn send(key: HeaderValue, endpoint: &str, events: &[Value]) -> Option<()> {
         "statsig-sdk-version",
         HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
     );
-    let builder = reqwest::Client::builder()
+    let client = proxy
+        .client_builder()
+        .ok()?
         .default_headers(headers)
-        .timeout(Duration::from_secs(10));
-    let client = proxy.configure_reqwest(builder).ok()?.build().ok()?;
+        .timeout(Duration::from_secs(10))
+        .build()
+        .ok()?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

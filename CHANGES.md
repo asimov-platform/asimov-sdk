@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-http: Re-export `reqwest` (with HTTP/2, JSON, and streaming bodies)
   under the `reqwest` feature
 ### Fixed
+- asimov-cloud: Bound account balance requests with connect and read limits
 - asimov-module: Read configuration values through symlinked configuration,
   profile, and module directories; value files still cannot escape theirs
 

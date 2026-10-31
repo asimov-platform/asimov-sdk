@@ -57,14 +57,14 @@ impl Account {
     }
 
     async fn fetch_balance(url: &str) -> Result<Credits, AccountBalanceError> {
-        let builder = reqwest::Client::builder().user_agent("ASIMOV.rs");
         #[cfg(not(target_family = "wasm"))]
         let url = reqwest::Url::parse(url)
             .map_err(|_| asimov_http::proxy::Error::InvalidOrigin("expected an absolute URL"))?;
         #[cfg(not(target_family = "wasm"))]
-        let builder =
-            OriginProxy::resolve(&url, &ProxyOptions::default())?.configure_reqwest(builder)?;
-        let client = builder.build()?;
+        let builder = OriginProxy::resolve(&url, &ProxyOptions::default())?.client_builder()?;
+        #[cfg(target_family = "wasm")]
+        let builder = reqwest::Client::builder();
+        let client = builder.user_agent("ASIMOV.rs").build()?;
 
         // Native requests use the exact URL whose proxy policy was resolved.
         let response = client.get(url).send().await?;
