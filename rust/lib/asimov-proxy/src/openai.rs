@@ -66,6 +66,11 @@ pub struct ProxyOptions {
     /// Deadline for receiving the complete request body; defaults to 60
     /// seconds. Slower uploads receive HTTP 408 without reaching upstream.
     pub body_timeout: Duration,
+    /// Longest wait for each upstream response chunk; defaults to 120 seconds.
+    ///
+    /// A stalled stream is aborted on expiry, so that it cannot delay graceful
+    /// shutdown indefinitely. Total streaming time remains unlimited.
+    pub idle_timeout: Duration,
     /// Optional request and response body log; disabled by default.
     pub logger: Option<BodyLogger>,
 }
@@ -77,6 +82,7 @@ impl Default for ProxyOptions {
             max_body_bytes: DEFAULT_MAX_BODY_BYTES,
             upstream_timeout: Duration::from_secs(120),
             body_timeout: Duration::from_secs(60),
+            idle_timeout: Duration::from_secs(120),
             logger: None,
         }
     }
@@ -91,6 +97,7 @@ struct ProxyState {
     max_body_bytes: usize,
     upstream_timeout: Duration,
     body_timeout: Duration,
+    idle_timeout: Duration,
 }
 
 /// An OpenAI-compatible proxy forwarding requests to OpenRouter.
@@ -145,6 +152,7 @@ impl Proxy {
                 max_body_bytes: options.max_body_bytes,
                 upstream_timeout: options.upstream_timeout,
                 body_timeout: options.body_timeout,
+                idle_timeout: options.idle_timeout,
             },
         })
     }
@@ -163,7 +171,8 @@ impl Proxy {
     /// Serves a caller-owned listener until `shutdown` completes.
     ///
     /// Stops accepting connections on shutdown and waits for in-flight
-    /// responses to finish. The caller controls signals and shutdown deadlines.
+    /// responses to finish; [`ProxyOptions::idle_timeout`] aborts stalled ones.
+    /// The caller controls signals and overall shutdown deadlines.
     pub async fn serve(
         self,
         listener: TcpListener,
@@ -236,12 +245,17 @@ async fn proxy_handler(
     )
     .await?;
 
-    Ok(forward_response(upstream_response, state.logger.clone()))
+    Ok(forward_response(
+        upstream_response,
+        state.logger.clone(),
+        state.idle_timeout,
+    ))
 }
 
 fn forward_response(
     response: http::Response<hyper::body::Incoming>,
     logger: Option<BodyLogger>,
+    idle_timeout: Duration,
 ) -> Response {
     // Stream the upstream response body back to the client, teeing each data
     // frame into the body log (if enabled):
@@ -254,7 +268,67 @@ fn forward_response(
         frame
     });
 
-    Response::from_parts(head, Body::new(upstream_response_body))
+    Response::from_parts(
+        head,
+        Body::new(IdleTimeout::new(upstream_response_body, idle_timeout)),
+    )
+}
+
+/// Ends a response body with an error once `limit` passes without a frame.
+struct IdleTimeout<B> {
+    inner: B,
+    limit: Duration,
+    deadline: core::pin::Pin<alloc::boxed::Box<tokio::time::Sleep>>,
+}
+
+impl<B> IdleTimeout<B> {
+    fn new(inner: B, limit: Duration) -> Self {
+        Self {
+            inner,
+            limit,
+            deadline: alloc::boxed::Box::pin(tokio::time::sleep(limit)),
+        }
+    }
+}
+
+impl<B> hyper::body::Body for IdleTimeout<B>
+where
+    B: hyper::body::Body + Unpin,
+    B::Error: Into<crate::BoxError>,
+{
+    type Data = B::Data;
+    type Error = crate::BoxError;
+
+    fn poll_frame(
+        mut self: core::pin::Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+    ) -> core::task::Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+        use core::{future::Future as _, pin::Pin, task::Poll};
+        let this = &mut *self;
+        match Pin::new(&mut this.inner).poll_frame(cx) {
+            Poll::Ready(frame) => {
+                let next = tokio::time::Instant::now() + this.limit;
+                this.deadline.as_mut().reset(next);
+                Poll::Ready(frame.map(|frame| frame.map_err(Into::into)))
+            },
+            Poll::Pending => match this.deadline.as_mut().poll(cx) {
+                Poll::Ready(()) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("Upstream response stream stalled");
+                    Poll::Ready(Some(Err("upstream response stream stalled".into())))
+                },
+                Poll::Pending => Poll::Pending,
+            },
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> hyper::body::SizeHint {
+        self.inner.size_hint()
+    }
 }
 
 fn strip_hop_by_hop_headers(headers: &mut HeaderMap) {
@@ -429,6 +503,7 @@ mod tests {
                 max_body_bytes: body.len(),
                 upstream_timeout: Duration::from_secs(2),
                 body_timeout: Duration::from_secs(2),
+                idle_timeout: Duration::from_secs(2),
             },
         };
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -557,7 +632,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let mut response = forward_response(upstream, None);
+        let mut response = forward_response(upstream, None, Duration::from_secs(2));
         for name in [
             "connection",
             "x-private",
@@ -717,12 +792,8 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn stalled_uploads_time_out_without_reaching_upstream() {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-        let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let upstream_address = upstream.local_addr().unwrap();
+    /// A proxy for a local cleartext upstream with short limits.
+    fn local_proxy(upstream: core::net::SocketAddr) -> Proxy {
         let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
             rustls::crypto::ring::default_provider(),
         ))
@@ -730,7 +801,7 @@ mod tests {
         .unwrap()
         .with_root_certificates(rustls::RootCertStore::empty())
         .with_no_client_auth();
-        let target = url::Url::parse(&format!("http://{upstream_address}/api")).unwrap();
+        let target = url::Url::parse(&format!("http://{upstream}/api")).unwrap();
         let connector =
             ProxyConnector::new(&target, ProxyConfig::Direct, Arc::new(tls.clone())).unwrap();
         let connector = hyper_rustls::HttpsConnectorBuilder::new()
@@ -738,7 +809,7 @@ mod tests {
             .https_or_http()
             .enable_http1()
             .wrap_connector(connector);
-        let router = Proxy {
+        Proxy {
             state: ProxyState {
                 client: upstream_client(connector, Duration::from_secs(2)),
                 upstream_base_url: target.as_str().into(),
@@ -746,13 +817,22 @@ mod tests {
                 logger: None,
                 max_body_bytes: 1024,
                 upstream_timeout: Duration::from_secs(2),
-                body_timeout: Duration::from_millis(100),
+                body_timeout: Duration::from_secs(2),
+                idle_timeout: Duration::from_secs(2),
             },
         }
-        .router();
+    }
+
+    #[tokio::test]
+    async fn stalled_uploads_time_out_without_reaching_upstream() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut proxy = local_proxy(upstream.local_addr().unwrap());
+        proxy.state.body_timeout = Duration::from_millis(100);
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let server = tokio::spawn(axum::serve(listener, router).into_future());
+        let server = tokio::spawn(axum::serve(listener, proxy.router()).into_future());
 
         // Announce ten bytes, send four, and stall.
         let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
@@ -772,6 +852,47 @@ mod tests {
                 .is_err()
         );
         server.abort();
+    }
+
+    #[tokio::test]
+    async fn stalled_response_streams_abort_and_release_shutdown() {
+        use tokio::io::AsyncWriteExt;
+
+        let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut proxy = local_proxy(upstream.local_addr().unwrap());
+        proxy.state.idle_timeout = Duration::from_millis(200);
+        let upstream_task = tokio::spawn(async move {
+            let (mut socket, _) = upstream.accept().await.unwrap();
+            read_request_headers(&mut socket).await;
+            socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\nd\r\ndata: first\n\n\r\n").await.unwrap();
+            // Hold the connection open without sending anything further.
+            core::future::pending::<()>().await;
+        });
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let server = tokio::spawn(proxy.serve(listener, async {
+            let _ = stopped.await;
+        }));
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let mut response = client
+            .get(format!("http://{address}/v1/stream"))
+            .send()
+            .await
+            .unwrap();
+        let first = response.chunk().await.unwrap().unwrap();
+        assert_eq!(first, "data: first\n\n");
+        stop.send(()).unwrap();
+        let rest = tokio::time::timeout(Duration::from_secs(2), response.chunk())
+            .await
+            .expect("the idle limit must fire");
+        assert!(rest.is_err(), "{rest:?}");
+        tokio::time::timeout(Duration::from_secs(2), server)
+            .await
+            .expect("shutdown must not wait for the stalled stream")
+            .unwrap()
+            .unwrap();
+        upstream_task.abort();
     }
 
     #[test]

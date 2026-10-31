@@ -74,6 +74,7 @@ fn fixture(target: &url::Url, config: ProxyConfig) -> Result<Proxy, Error> {
             max_body_bytes: BODY.len(),
             upstream_timeout: Duration::from_secs(3),
             body_timeout: Duration::from_secs(3),
+            idle_timeout: Duration::from_secs(3),
         },
     })
 }
