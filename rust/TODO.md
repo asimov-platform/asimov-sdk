@@ -336,11 +336,6 @@ Unless marked reproduced, implementation findings are based on source review.
   and origin: expose additional executor roots honestly; independent proxy-only
   trust and client certificates need separate connector support.
 
-- [ ] **Test OpenAI proxy client disconnection.**
-  In `lib/asimov-proxy/src/openai.rs`, test that client disconnection cancels
-  the upstream request and stream without buffering responses, and releases
-  its concurrency permit.
-
 - [ ] **Complete upstream-proxy interoperability coverage.**
   `lib/asimov-proxy/src/proxy_connector.rs` uses only the first locally resolved
   SOCKS address. Add multi-address fallback and HTTPS-proxy TLS fixtures. Extend

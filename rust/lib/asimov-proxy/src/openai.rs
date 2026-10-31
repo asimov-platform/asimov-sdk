@@ -1052,6 +1052,95 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn client_disconnection_cancels_upstream_and_releases_its_permit() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        for streaming in [false, true] {
+            let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let mut proxy = local_proxy(upstream.local_addr().unwrap());
+            proxy.state.permits = permits(1);
+            let (entered, entered_rx) = tokio::sync::oneshot::channel();
+            let (closed, closed_rx) = tokio::sync::oneshot::channel();
+            let upstream_task = tokio::spawn(async move {
+                let (mut socket, _) = upstream.accept().await.unwrap();
+                read_request_headers(&mut socket).await;
+                if streaming {
+                    socket
+                        .write_all(
+                            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nfirst\r\n",
+                        )
+                        .await
+                        .unwrap();
+                }
+                entered.send(()).unwrap();
+                // The proxy must close this connection after its client leaves.
+                let mut buffer = [0; 64];
+                let read = tokio::time::timeout(DEADLINE, socket.read(&mut buffer)).await;
+                assert!(
+                    matches!(read, Ok(Ok(0) | Err(_))),
+                    "streaming={streaming}: upstream request was not cancelled"
+                );
+                closed.send(()).unwrap();
+                let (mut socket, _) = upstream.accept().await.unwrap();
+                read_request_headers(&mut socket).await;
+                socket
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nnext")
+                    .await
+                    .unwrap();
+            });
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = tokio::spawn(proxy.serve(listener, core::future::pending()));
+
+            let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+            client
+                .write_all(b"GET /v1/stream HTTP/1.1\r\nHost: proxy\r\n\r\n")
+                .await
+                .unwrap();
+            tokio::time::timeout(DEADLINE, entered_rx)
+                .await
+                .unwrap()
+                .unwrap();
+            if streaming {
+                // Receive the first chunk before disconnecting mid-stream.
+                let mut received = Vec::new();
+                while !received.windows(5).any(|window| window == b"first") {
+                    let mut buffer = [0; 256];
+                    let count = tokio::time::timeout(DEADLINE, client.read(&mut buffer))
+                        .await
+                        .unwrap()
+                        .unwrap();
+                    assert!(count > 0);
+                    received.extend_from_slice(&buffer[..count]);
+                }
+            }
+            drop(client);
+            tokio::time::timeout(DEADLINE, closed_rx)
+                .await
+                .unwrap_or_else(|_| panic!("streaming={streaming}: upstream left open"))
+                .unwrap_or_else(|_| panic!("streaming={streaming}: upstream task failed"));
+
+            // The single permit must be available again.
+            let after = reqwest::Client::builder()
+                .no_proxy()
+                .timeout(DEADLINE)
+                .build()
+                .unwrap()
+                .get(format!("http://{address}/v1/models"))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(after.status(), StatusCode::OK, "streaming={streaming}");
+            assert_eq!(after.text().await.unwrap(), "next");
+            tokio::time::timeout(DEADLINE, upstream_task)
+                .await
+                .unwrap()
+                .unwrap();
+            server.abort();
+        }
+    }
+
+    #[tokio::test]
     async fn stalled_response_streams_abort_and_release_shutdown() {
         use tokio::io::AsyncWriteExt;
 
