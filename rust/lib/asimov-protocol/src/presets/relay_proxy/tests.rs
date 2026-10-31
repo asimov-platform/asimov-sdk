@@ -65,14 +65,12 @@ fn parse_endpoint(endpoint: &str) -> Url {
 }
 
 #[tokio::test]
-async fn iroh_dials_relays_through_the_selected_proxy() {
+async fn iroh_dials_relays_through_the_selected_proxy_with_credentials() {
     let proxy = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let relay: Url = "https://relay.example/".parse().unwrap();
-    let selected = select(
-        [relay.clone()],
-        &explicit(&format!("http://{}", proxy.local_addr().unwrap()), ""),
-    )
-    .unwrap();
+    // Reserved characters in credentials are percent-encoded in the URL.
+    let endpoint = format!("http://user:p%40ss@{}", proxy.local_addr().unwrap());
+    let selected = select([relay.clone()], &explicit(&endpoint, "")).unwrap();
     let endpoint = Endpoint::builder(Minimal)
         .relay_mode(RelayMode::Custom(RelayMap::from(RelayUrl::from(relay))))
         .proxy_url(selected)
@@ -82,15 +80,29 @@ async fn iroh_dials_relays_through_the_selected_proxy() {
 
     let request = timeout(Duration::from_secs(10), async {
         let (stream, _) = proxy.accept().await.unwrap();
-        let mut line = String::new();
-        BufReader::new(stream).read_line(&mut line).await.unwrap();
-        line
+        let mut stream = BufReader::new(stream);
+        let mut lines = Vec::new();
+        loop {
+            let mut line = String::new();
+            stream.read_line(&mut line).await.unwrap();
+            if line.trim_end().is_empty() {
+                break lines;
+            }
+            lines.push(String::from(line.trim_end()));
+        }
     })
     .await
     .expect("Iroh should dial the relay through the proxy");
     endpoint.close().await;
     assert!(
-        request.starts_with("CONNECT relay.example:443 "),
+        request[0].starts_with("CONNECT relay.example:443 "),
         "{request:?}"
     );
+    // RFC 7617 Basic credentials for `user:p@ss`, decoded from the URL.
+    let authorization = request.iter().find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        name.eq_ignore_ascii_case("proxy-authorization")
+            .then(|| value.trim())
+    });
+    assert_eq!(authorization, Some("Basic dXNlcjpwQHNz"));
 }
