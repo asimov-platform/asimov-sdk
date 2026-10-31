@@ -371,7 +371,7 @@ mod transport {
     ) -> Result<ClientBuilder, Box<dyn core::error::Error>> {
         let configuration =
             crate::proxy::system::resolve_environment(env, || select_native(url, env, read))?;
-        Ok(crate::proxy::reqwest::apply(builder, &configuration)?)
+        Ok(crate::proxy::reqwest::apply(builder, &configuration, None)?)
     }
 
     struct Peer {

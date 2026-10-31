@@ -320,7 +320,7 @@ async fn environment_fallback_and_bypass_control_the_actual_connection() {
             Ok(native)
         })
         .unwrap();
-        let client = crate::proxy::reqwest::apply(reqwest::Client::builder(), &configuration)
+        let client = crate::proxy::reqwest::apply(reqwest::Client::builder(), &configuration, None)
             .unwrap()
             .build()
             .unwrap();

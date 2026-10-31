@@ -392,7 +392,11 @@ async fn client_builder_limits_stalled_reads() {
         };
         let policy = OriginProxy::resolve(&url, &options).unwrap();
         let client = policy
-            .client_builder_with(DEADLINE, Duration::from_millis(50))
+            .client_builder_with(&ClientOptions {
+                connect_timeout: Some(DEADLINE),
+                read_timeout: Some(Duration::from_millis(50)),
+                dns_resolver: None,
+            })
             .unwrap()
             .build()
             .unwrap();
@@ -415,4 +419,83 @@ async fn client_builder_limits_stalled_reads() {
         task.abort();
         assert!(result.unwrap_err().is_timeout(), "headers sent: {respond}");
     }
+}
+
+/// Resolves every name to fixed addresses, so that `service.invalid` resolves
+/// only through this resolver.
+struct Fixed(Vec<std::net::SocketAddr>);
+
+impl Resolve for Fixed {
+    fn resolve(&self, _: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let addresses = self.0.clone();
+        Box::pin(async move { Ok(Box::new(addresses.into_iter()) as reqwest::dns::Addrs) })
+    }
+}
+
+async fn respond(mut io: Stream) {
+    headers(&mut io).await;
+    io.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn client_builder_uses_the_given_resolver() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let url = Url::parse(&format!("http://service.invalid:{}/", address.port())).unwrap();
+    let options = ProxyOptions {
+        mode: ProxyMode::Direct,
+        no_proxy: None,
+    };
+    let client = OriginProxy::resolve(&url, &options)
+        .unwrap()
+        .client_builder_with(&ClientOptions {
+            dns_resolver: Some(Arc::new(Fixed(vec![address]))),
+            ..ClientOptions::default()
+        })
+        .unwrap()
+        .build()
+        .unwrap();
+    let task = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.unwrap();
+        respond(Box::new(socket)).await;
+    });
+    let response = timeout(DEADLINE, client.get(url).send()).await.unwrap();
+    assert!(response.unwrap().status().is_success());
+    timeout(DEADLINE, task).await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn socks4_prefers_ipv4_from_the_given_resolver() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let proxy = format!("socks4://{}", listener.local_addr().unwrap());
+    let url = Url::parse("http://service.invalid/").unwrap();
+    let options = ProxyOptions {
+        mode: ProxyMode::Explicit(proxy),
+        no_proxy: Some(String::new()),
+    };
+    // IPv6 first: the SOCKS4 wrapper must still send the IPv4 address.
+    let resolver = Fixed(vec![
+        "[::1]:0".parse().unwrap(),
+        "127.0.0.1:0".parse().unwrap(),
+    ]);
+    let client = OriginProxy::resolve(&url, &options)
+        .unwrap()
+        .client_builder_with(&ClientOptions {
+            dns_resolver: Some(Arc::new(resolver)),
+            ..ClientOptions::default()
+        })
+        .unwrap()
+        .build()
+        .unwrap();
+    let task = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.unwrap();
+        let mut io: Stream = Box::new(socket);
+        socks(&mut io, "socks4", "service.invalid", 80).await;
+        respond(io).await;
+    });
+    let response = timeout(DEADLINE, client.get(url).send()).await.unwrap();
+    assert!(response.unwrap().status().is_success());
+    timeout(DEADLINE, task).await.unwrap().unwrap();
 }

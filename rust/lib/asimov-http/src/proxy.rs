@@ -3,7 +3,8 @@
 //! Shared HTTP proxy options and endpoint validation (`proxy` feature).
 //!
 //! `system-proxy` adds `OriginProxy` for construction-time environment/native
-//! discovery. `reqwest` adds its `configure_reqwest` adapter. A resolved policy
+//! discovery. `reqwest` adds its `client_builder` and `configure_reqwest`
+//! adapters, with `ClientOptions` for client limits. A resolved policy
 //! belongs to one HTTP(S) origin; it must not configure a multi-origin client.
 //! `hyper` adds `proxy_for_hyper`, including the effective bypass decision.
 //! Native bypass grammars remain separate from `NO_PROXY` syntax.
@@ -20,6 +21,8 @@ pub use system::OriginProxy;
 mod hyper;
 #[cfg(feature = "reqwest")]
 mod reqwest;
+#[cfg(feature = "reqwest")]
+pub use self::reqwest::ClientOptions;
 #[cfg(all(test, feature = "reqwest"))]
 mod test_support;
 

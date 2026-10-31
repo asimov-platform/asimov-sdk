@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - asimov-http: `OriginProxy::client_builder` for origin-scoped reqwest
   clients with standard connect and read limits
+- asimov-http: `OriginProxy::client_builder_with` and `ClientOptions` for
+  other client limits and custom DNS resolvers
 - asimov-http: Re-export `reqwest` (with HTTP/2, JSON, and streaming bodies)
   under the `reqwest` feature
 - asimov-protocol: Relay connections use the system proxy when all default
