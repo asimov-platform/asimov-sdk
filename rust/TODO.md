@@ -299,7 +299,7 @@ Unless marked reproduced, implementation findings are based on source review.
   `asimov-cloud` keeps a direct reqwest dependency for WebAssembly builds.
 
 - [ ] **Integrate shared proxy policy with Iroh relay connections.**
-  Iroh 1.3 exposes one endpoint-wide `proxy_url`; `proxy_from_env` uses
+  Iroh 1.4 exposes one endpoint-wide `proxy_url`; `proxy_from_env` uses
   HTTP-first precedence without shared bypass handling. Relay connections in
   `lib/asimov-protocol/src/presets.rs` need per-destination proxy selection,
   not one origin's policy copied to the endpoint-wide setting. Review HTTP

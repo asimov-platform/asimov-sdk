@@ -2355,9 +2355,9 @@ dependencies = [
 
 [[package]]
 name = "bao-tree"
-version = "0.16.1"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "149a2a6017771141e2cd5d0c55b3892d8ff1958df5c318b2e496bf3544b426ed"
+checksum = "50d0e17303b78c9bb240014f3f401ecae5c0460438ace49a171e5f97e3ae57ba"
 dependencies = [
  "blake3",
  "bytes",
@@ -4468,18 +4468,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fastbloom"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef975e30683b2d965054bb0a836f8973857c4ebf6acf274fe46617cd285060d8"
-dependencies = [
- "foldhash",
- "libm",
- "portable-atomic",
- "siphasher",
-]
-
-[[package]]
 name = "faster-hex"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6123,11 +6111,10 @@ dependencies = [
 
 [[package]]
 name = "iroh-blobs"
-version = "0.103.1"
+version = "0.104.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3148ad01585eb6b7cfb641e4100564f4f56db644f4cbed8c10ab2478663161f"
+checksum = "7880fd27004f713cfb220b494036613a439cff4e9c17d16d5179e8440f90cb0d"
 dependencies = [
- "arrayvec",
  "bao-tree",
  "bytes",
  "cfg_aliases",
@@ -6148,7 +6135,6 @@ dependencies = [
  "n0-error",
  "n0-future",
  "nested_enum_utils",
- "noq",
  "postcard",
  "rand 0.10.3",
  "range-collections",
@@ -6297,21 +6283,21 @@ dependencies = [
 
 [[package]]
 name = "iroh-services"
-version = "1.0.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1a88cd95fbd20abd9eadc4df91c722915dc943412b964e915f35b0b0a46a1fd"
+checksum = "7e03fe6d35ad303cf364941cba65946f2ad1eb9d531f17954f1cf7b6885fc4ea"
 dependencies = [
- "anyhow",
  "base64 0.22.1",
  "built 0.8.1",
  "bytes",
+ "cfg_aliases",
  "data-encoding",
- "derive_more",
  "ed25519-dalek 3.0.0-rc.0",
  "futures-buffered",
  "getrandom 0.4.3",
  "iroh",
  "iroh-metrics",
+ "iroh-services-proto",
  "iroh-tickets",
  "irpc",
  "irpc-iroh",
@@ -6323,11 +6309,28 @@ dependencies = [
  "rcan",
  "serde",
  "serde_json",
- "strum 0.28.0",
- "thiserror 2.0.21",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "iroh-services-proto"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9c8f9110c270a6079bacb2b0fc4b59ed84555692edbe89cb6a9cec4c48b1eb2"
+dependencies = [
+ "derive_more",
+ "iroh",
+ "iroh-metrics",
+ "irpc",
+ "n0-error",
+ "rcan",
+ "serde",
+ "strum 0.28.0",
+ "tracing",
  "uuid",
 ]
 
@@ -6347,9 +6350,9 @@ dependencies = [
 
 [[package]]
 name = "iroh-util"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20e41eb982f15230c55f0a70a74a514360e1f565b07861924fd0e8db172b3d00"
+checksum = "889d5cc9da2eaac9f63657237c491db17d1fe9fffdc7c0f2f0e04c49d5d45053"
 dependencies = [
  "derive_more",
  "iroh",
@@ -7853,7 +7856,6 @@ dependencies = [
  "bytes",
  "derive_more",
  "enum-assoc",
- "fastbloom 0.17.0",
  "getrandom 0.4.3",
  "identity-hash",
  "lru-slab",
@@ -7863,7 +7865,6 @@ dependencies = [
  "rustc-hash 2.1.3",
  "rustls",
  "rustls-pki-types",
- "rustls-platform-verifier",
  "slab",
  "sorted-index-buffer",
  "thiserror 2.0.21",
@@ -11734,7 +11735,7 @@ dependencies = [
  "crossbeam-skiplist",
  "either",
  "fallible-iterator",
- "fastbloom 0.14.1",
+ "fastbloom",
  "hex",
  "intrusive-collections",
  "io-uring",
