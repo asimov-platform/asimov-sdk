@@ -2,8 +2,8 @@
 
 //! Pkarr's wire format stays with Iroh; HTTP routing belongs to the SDK.
 
-use alloc::{boxed::Box, string::ToString, vec::Vec};
-use asimov_http::proxy::{OriginProxy, ProxyOptions};
+use alloc::{boxed::Box, string::ToString, sync::Arc, vec::Vec};
+use asimov_http::proxy::{ClientOptions, OriginProxy, ProxyOptions};
 use asimov_http::reqwest::{self, Method, Response, StatusCode, Url};
 use core::{fmt, pin::Pin, time::Duration};
 use futures_lite::Stream;
@@ -186,13 +186,16 @@ impl Client {
         tls: &rustls::ClientConfig,
         dns: &iroh::dns::DnsResolver,
     ) -> Result<reqwest::Client, Error> {
-        let builder = reqwest::Client::builder()
+        let options = ClientOptions {
+            dns_resolver: Some(Arc::new(DnsResolver(dns.clone()))),
+            ..ClientOptions::default()
+        };
+        Ok(proxy
+            .client_builder_with(&options)?
             .user_agent("ASIMOV.rs")
             .tls_backend_preconfigured(tls.clone())
-            .dns_resolver(DnsResolver(dns.clone()))
-            .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(30));
-        Ok(proxy.configure_reqwest(builder)?.build()?)
+            .timeout(Duration::from_secs(30))
+            .build()?)
     }
 
     async fn request(

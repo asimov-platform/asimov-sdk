@@ -656,9 +656,15 @@ impl Executor {
         }
         base_url.set_query(None);
         let proxy = asimov_http::proxy::OriginProxy::resolve(&base_url, &options.proxy)?;
-        let builder = proxy.configure_reqwest(client_builder(timeouts)?)?;
+        // Header and body budgets are enforced separately below reqwest's API:
+        // its read_timeout also limits headers, and timeout caps the entire body.
+        let builder = proxy.client_builder_with(&asimov_http::proxy::ClientOptions {
+            connect_timeout: timeouts.connect,
+            read_timeout: None,
+            dns_resolver: None,
+        })?;
         Ok(Self {
-            client: builder.build()?,
+            client: configure_client(builder)?.build()?,
             service_url,
             base_url,
             api_token: match api_token {
@@ -1065,13 +1071,14 @@ impl<T: Clone + fmt::Display + Send + Sync, F: fmt::Display + Send + Sync>
 {
 }
 
-fn client_builder(timeouts: TimeoutOptions) -> Result<reqwest::ClientBuilder, Error> {
+/// Applies the user agent, TLS, redirect, and decoding settings of executors.
+fn configure_client(builder: reqwest::ClientBuilder) -> Result<reqwest::ClientBuilder, Error> {
     let user_agent = agent_detector::agent_name()
         .and_then(|name| HeaderValue::try_from(name).ok())
         .unwrap_or_else(|| {
             HeaderValue::from_static(concat!("asimov-remote/", env!("CARGO_PKG_VERSION")))
         });
-    let mut builder = Client::builder()
+    Ok(builder
         .user_agent(user_agent)
         // Keep system DNS even if another dependency enables Hickory.
         .no_hickory_dns()
@@ -1082,13 +1089,7 @@ fn client_builder(timeouts: TimeoutOptions) -> Result<reqwest::ClientBuilder, Er
         .no_gzip()
         .no_brotli()
         .no_deflate()
-        .no_zstd();
-    if let Some(connect) = timeouts.connect {
-        builder = builder.connect_timeout(connect);
-    }
-    // Header and body budgets are enforced separately below reqwest's API:
-    // its read_timeout also limits headers, and timeout caps the entire body.
-    Ok(builder)
+        .no_zstd())
 }
 
 fn tls_config() -> Result<rustls::ClientConfig, rustls::Error> {

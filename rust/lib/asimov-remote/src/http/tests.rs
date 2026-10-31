@@ -15,6 +15,15 @@ use tokio::{
     time::timeout,
 };
 
+/// Builds a client as executors do, without resolving a proxy policy.
+fn client_builder(timeouts: TimeoutOptions) -> Result<reqwest::ClientBuilder, Error> {
+    let mut builder = Client::builder();
+    if let Some(connect) = timeouts.connect {
+        builder = builder.connect_timeout(connect);
+    }
+    configure_client(builder)
+}
+
 mod check;
 mod digest;
 mod proxy;

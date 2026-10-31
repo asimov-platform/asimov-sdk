@@ -48,10 +48,9 @@ impl Index {
     /// Fetches an index using a caller-configured HTTP client.
     ///
     /// The caller owns proxy, redirect, TLS, and timeout policy. For shared proxy
-    /// routing, resolve [`OriginProxy`] for `url` and apply
-    /// [`OriginProxy::configure_reqwest`] before building the client. Reusing an
-    /// origin-scoped client requires checking each URL with
-    /// [`OriginProxy::check_origin`].
+    /// routing, resolve [`OriginProxy`] for `url` and start the client from
+    /// [`OriginProxy::client_builder`]. Reusing an origin-scoped client requires
+    /// checking each URL with [`OriginProxy::check_origin`].
     ///
     /// # Errors
     ///

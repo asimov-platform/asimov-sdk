@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relays share one HTTP(S) proxy
 ### Fixed
 - asimov-cloud: Bound account balance requests with connect and read limits
+- asimov-protocol: Pkarr requests through SOCKS4 proxies keep the endpoint's
+  DNS resolver
 - asimov-module: Read configuration values through symlinked configuration,
   profile, and module directories; value files still cannot escape theirs
 

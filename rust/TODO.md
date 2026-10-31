@@ -291,12 +291,10 @@ Unless marked reproduced, implementation findings are based on source review.
   for redirects. Never reuse an origin-scoped policy for another origin.
   Skip `asimov-module-kit` while its embedded transport integration is deferred.
 
-- [ ] **Start Pkarr and remote reqwest clients from `client_builder()`.**
-  Both still call `configure_reqwest`. `asimov-remote` needs optional connect
-  and no read limit for long JSONL streams, which `client_builder()` forbids.
-  Pkarr's custom DNS resolver set afterward would replace the SOCKS4 IPv4
-  resolver. Consider a `client_builder` variant taking limits and a resolver.
-  `asimov-cloud` keeps a direct reqwest dependency for WebAssembly builds.
+- [ ] **Make `asimov_http::reqwest` available to WebAssembly builds.**
+  `lib/asimov-cloud` keeps a direct reqwest dependency for WebAssembly, where
+  the `reqwest` feature's native proxy discovery and SOCKS4 resolver are absent.
+  Gate those parts by target so the re-export alone serves browser builds.
 
 - [ ] **Complete proxy support for Iroh relay connections.**
   `lib/asimov-protocol/src/presets/relay_proxy.rs` sets Iroh's endpoint-wide
