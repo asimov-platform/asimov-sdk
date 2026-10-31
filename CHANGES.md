@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clients with standard connect and read limits
 - asimov-http: Re-export `reqwest` (with HTTP/2, JSON, and streaming bodies)
   under the `reqwest` feature
+- asimov-protocol: Relay connections use the system proxy when all default
+  relays share one HTTP(S) proxy
 ### Fixed
 - asimov-cloud: Bound account balance requests with connect and read limits
 - asimov-module: Read configuration values through symlinked configuration,
