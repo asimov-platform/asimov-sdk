@@ -32,10 +32,14 @@ use core::time::Duration;
 use http_body_util::{BodyExt, Full};
 use hyper_rustls::{ConfigBuilderExt as _, HttpsConnector};
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
-use tokio::net::TcpListener;
+use tokio::{
+    net::TcpListener,
+    sync::{OwnedSemaphorePermit, Semaphore},
+};
 
 const UPSTREAM_BASE_URL: &str = "https://openrouter.ai/api";
 const DEFAULT_MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
+const DEFAULT_MAX_CONCURRENT_REQUESTS: usize = 32;
 
 /// The upstream HTTP client: a hyper client speaking rustls-based TLS to the
 /// target, over a connection that is either direct or tunneled through a
@@ -57,6 +61,9 @@ pub struct ProxyOptions {
     pub upstream_proxy: ProxyConfig,
     /// Maximum buffered request body size; defaults to 16 MiB.
     pub max_body_bytes: usize,
+    /// Maximum requests in progress, including streaming responses; defaults
+    /// to 32. Further requests receive HTTP 503 immediately.
+    pub max_concurrent_requests: usize,
     /// Deadline for upstream response headers; defaults to 120 seconds.
     ///
     /// Includes connection establishment, but does not limit response streaming.
@@ -83,6 +90,7 @@ impl Default for ProxyOptions {
         Self {
             upstream_proxy: ProxyConfig::Automatic,
             max_body_bytes: DEFAULT_MAX_BODY_BYTES,
+            max_concurrent_requests: DEFAULT_MAX_CONCURRENT_REQUESTS,
             upstream_timeout: Duration::from_secs(120),
             header_timeout: Duration::from_secs(30),
             body_timeout: Duration::from_secs(60),
@@ -99,6 +107,7 @@ struct ProxyState {
     logger: Option<BodyLogger>,
     authorization: HeaderValue,
     max_body_bytes: usize,
+    permits: Arc<Semaphore>,
     upstream_timeout: Duration,
     header_timeout: Duration,
     body_timeout: Duration,
@@ -155,6 +164,7 @@ impl Proxy {
                 logger: options.logger,
                 authorization,
                 max_body_bytes: options.max_body_bytes,
+                permits: permits(options.max_concurrent_requests),
                 upstream_timeout: options.upstream_timeout,
                 header_timeout: options.header_timeout,
                 body_timeout: options.body_timeout,
@@ -166,8 +176,8 @@ impl Proxy {
     /// Creates a router for embedding in an existing Axum application.
     ///
     /// Invalid bodies return HTTP 400, slow uploads 408, oversized bodies 413,
-    /// upstream failures 502, and upstream header timeouts 504. Upstream status
-    /// codes pass through.
+    /// upstream failures 502, requests over the concurrency limit 503, and
+    /// upstream header timeouts 504. Upstream status codes pass through.
     pub fn router(self) -> Router {
         Router::new()
             .route("/{*path}", any(proxy_handler))
@@ -257,10 +267,21 @@ async fn handle_accept_error(error: std::io::Error) {
     tokio::time::sleep(Duration::from_secs(1)).await;
 }
 
+/// Creates the concurrency limit, clamped to Tokio's maximum permit count.
+fn permits(limit: usize) -> Arc<Semaphore> {
+    Arc::new(Semaphore::new(limit.min(Semaphore::MAX_PERMITS)))
+}
+
 async fn proxy_handler(
     State(state): State<ProxyState>,
     req: Request,
 ) -> Result<Response, StatusCode> {
+    let Ok(permit) = Arc::clone(&state.permits).try_acquire_owned() else {
+        #[cfg(feature = "tracing")]
+        tracing::warn!("Rejecting request over the concurrency limit");
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    };
+
     let request_path = req.uri().path();
     let request_query = req
         .uri()
@@ -314,6 +335,7 @@ async fn proxy_handler(
         upstream_response,
         state.logger.clone(),
         state.idle_timeout,
+        permit,
     ))
 }
 
@@ -321,12 +343,15 @@ fn forward_response(
     response: http::Response<hyper::body::Incoming>,
     logger: Option<BodyLogger>,
     idle_timeout: Duration,
+    permit: OwnedSemaphorePermit,
 ) -> Response {
     // Stream the upstream response body back to the client, teeing each data
     // frame into the body log (if enabled):
     let (mut head, upstream_response_body) = response.into_parts();
     strip_hop_by_hop_headers(&mut head.headers);
     let upstream_response_body = upstream_response_body.map_frame(move |frame| {
+        // Hold the concurrency permit until the response body is dropped.
+        let _permit = &permit;
         if let (Some(logger), Some(data)) = (&logger, frame.data_ref()) {
             logger.log_response_chunk(data);
         }
@@ -566,6 +591,7 @@ mod tests {
                 authorization: authorization_header("test-key").unwrap(),
                 logger: Some(BodyLogger::open(&log_path).unwrap()),
                 max_body_bytes: body.len(),
+                permits: permits(8),
                 upstream_timeout: Duration::from_secs(2),
                 header_timeout: Duration::from_secs(2),
                 body_timeout: Duration::from_secs(2),
@@ -698,7 +724,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let mut response = forward_response(upstream, None, Duration::from_secs(2));
+        let permit = permits(1).try_acquire_owned().unwrap();
+        let mut response = forward_response(upstream, None, Duration::from_secs(2), permit);
         for name in [
             "connection",
             "x-private",
@@ -883,6 +910,7 @@ mod tests {
                 authorization: authorization_header("test-key").unwrap(),
                 logger: None,
                 max_body_bytes: 1024,
+                permits: permits(8),
                 upstream_timeout: Duration::from_secs(2),
                 header_timeout: Duration::from_secs(2),
                 body_timeout: Duration::from_secs(2),
@@ -960,6 +988,67 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn requests_over_the_concurrency_limit_are_rejected() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+        use futures_lite::StreamExt as _;
+
+        let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut proxy = local_proxy(upstream.local_addr().unwrap());
+        proxy.state.permits = permits(1);
+        // The first upstream response streams one chunk, then waits for
+        // `release` before ending; later responses complete immediately.
+        let release = Arc::new(tokio::sync::Notify::new());
+        let calls = Arc::new(AtomicUsize::new(0));
+        let upstream_router = Router::new().route(
+            "/{*path}",
+            any({
+                let (release, calls) = (release.clone(), calls.clone());
+                move || {
+                    let (release, calls) = (release.clone(), calls.clone());
+                    async move {
+                        if calls.fetch_add(1, Ordering::SeqCst) > 0 {
+                            return Body::from("next");
+                        }
+                        let first = futures_lite::stream::once(Ok::<_, std::io::Error>(
+                            Bytes::from_static(b"first"),
+                        ));
+                        let end = futures_lite::stream::once_future(async move {
+                            release.notified().await;
+                            Ok(Bytes::new())
+                        });
+                        Body::from_stream(first.chain(end))
+                    }
+                }
+            }),
+        );
+        let upstream_server = tokio::spawn(axum::serve(upstream, upstream_router).into_future());
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(axum::serve(listener, proxy.router()).into_future());
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .timeout(DEADLINE)
+            .build()
+            .unwrap();
+        let url = format!("http://{address}/v1/models");
+
+        // While the first response streams, it holds the only permit.
+        let mut first = client.get(&url).send().await.unwrap();
+        assert_eq!(first.chunk().await.unwrap().unwrap(), "first");
+        let rejected = client.get(&url).send().await.unwrap();
+        assert_eq!(rejected.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(calls.load(Ordering::SeqCst), 1, "rejected before upstream");
+
+        // Completing the first response body releases the permit.
+        release.notify_one();
+        assert_eq!(first.text().await.unwrap(), "");
+        let after = client.get(&url).send().await.unwrap();
+        assert_eq!(after.text().await.unwrap(), "next");
+        server.abort();
+        upstream_server.abort();
     }
 
     #[tokio::test]

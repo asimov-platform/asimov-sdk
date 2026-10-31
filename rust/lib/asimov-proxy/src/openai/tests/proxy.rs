@@ -72,6 +72,7 @@ fn fixture(target: &url::Url, config: ProxyConfig) -> Result<Proxy, Error> {
             authorization: authorization_header("service-key")?,
             logger: None,
             max_body_bytes: BODY.len(),
+            permits: permits(8),
             upstream_timeout: Duration::from_secs(3),
             header_timeout: Duration::from_secs(3),
             body_timeout: Duration::from_secs(3),
