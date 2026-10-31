@@ -129,30 +129,53 @@ fn manifest_names_are_checked_before_reading_and_extensions_are_appended() {
 
 #[cfg(unix)]
 #[test]
-fn configuration_symlinks_cannot_escape_any_directory_boundary() {
+fn configuration_directories_may_be_symlinks() {
     use std::os::unix::fs::symlink;
     for component in [
-        "configs",
-        "configs/default",
-        "configs/default/example",
-        "configs/default/example/api_key",
+        "root",
+        "root/configs",
+        "root/configs/default",
+        "root/configs/default/example",
     ] {
-        let root = tempfile::tempdir().unwrap();
+        let parent = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();
-        let link = root.path().join(component);
+        let root = parent.path().join("root");
+        let link = parent.path().join(component);
         std::fs::create_dir_all(link.parent().unwrap()).unwrap();
         symlink(outside.path(), &link).unwrap();
+        let directory = root.join("configs/default/example");
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(directory.join("api_key"), "linked").unwrap();
+        let result = manifest().variable_with_root("api_key", None, || root.clone());
+        assert_eq!(result.unwrap(), "linked", "{component:?}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn configuration_values_cannot_escape_the_module_directory() {
+    use std::os::unix::fs::symlink;
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let directory = root.path().join("configs/default/example");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(outside.path().join("secret"), "outside").unwrap();
+    std::fs::write(root.path().join("configs/default/secret"), "sibling").unwrap();
+    for target in [
+        outside.path().join("secret"),
+        "../secret".into(),
+        outside.path().into(),
+    ] {
+        symlink(&target, directory.join("api_key")).unwrap();
         // Even with a default configured, escaping links must not look absent.
         let result = manifest().variable_with_root("api_key", None, || root.path().into());
         assert!(
             matches!(result, Err(ReadVarError::Io { .. })),
-            "{component}: {result:?}"
+            "{target:?}: {result:?}"
         );
+        std::fs::remove_file(directory.join("api_key")).unwrap();
     }
 
-    let root = tempfile::tempdir().unwrap();
-    let directory = root.path().join("configs/default/example");
-    std::fs::create_dir_all(&directory).unwrap();
     std::fs::write(directory.join("actual"), "inside").unwrap();
     symlink("actual", directory.join("api_key")).unwrap();
     assert_eq!(

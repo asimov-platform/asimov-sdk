@@ -194,9 +194,11 @@ impl ModuleManifest {
 
     /// Reads a configuration value after validating all filename components.
     ///
-    /// Invalid names are rejected even for environment/default values. File
-    /// access is confined to the selected profile and module directories;
-    /// symlinks cannot escape them. I/O errors other than absence propagate.
+    /// Invalid names are rejected even for environment/default values. The
+    /// configuration directories (`configs`, the profile, and the module) may
+    /// be symlinks, as may the state root; the value file is then read within
+    /// the module's directory, which its symlinks cannot escape. I/O errors
+    /// other than absence propagate.
     #[cfg(feature = "std")]
     pub fn variable(&self, key: &str, profile: Option<&str>) -> Result<String, ReadVarError> {
         self.variable_with_root(key, profile, asimov_env::paths::asimov_root)
@@ -237,10 +239,8 @@ impl ModuleManifest {
         }
 
         let read = || -> std::io::Result<String> {
-            let root = cap_std::fs::Dir::open_ambient_dir(root(), cap_std::ambient_authority())?;
-            root.open_dir("configs")?
-                .open_dir(profile)?
-                .open_dir(&self.name)?
+            let directory = root().join("configs").join(profile).join(&self.name);
+            cap_std::fs::Dir::open_ambient_dir(directory, cap_std::ambient_authority())?
                 .read_to_string(key)
         };
         read().or_else(|err| {
