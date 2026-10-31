@@ -298,13 +298,15 @@ Unless marked reproduced, implementation findings are based on source review.
   resolver. Consider a `client_builder` variant taking limits and a resolver.
   `asimov-cloud` keeps a direct reqwest dependency for WebAssembly builds.
 
-- [ ] **Integrate shared proxy policy with Iroh relay connections.**
-  Iroh 1.4 exposes one endpoint-wide `proxy_url`; `proxy_from_env` uses
-  HTTP-first precedence without shared bypass handling. Relay connections in
-  `lib/asimov-protocol/src/presets.rs` need per-destination proxy selection,
-  not one origin's policy copied to the endpoint-wide setting. Review HTTP
-  requests owned by Iroh's DNS-over-HTTPS resolver separately. Cover each
-  transport with local fixtures, including proxy failure and bypass behavior.
+- [ ] **Complete proxy support for Iroh relay connections.**
+  `lib/asimov-protocol/src/presets/relay_proxy.rs` sets Iroh's endpoint-wide
+  `proxy_url` only when all default relays share one HTTP(S) proxy; mixed
+  bypass, differing proxies, and SOCKS fall back to direct connections.
+  Per-relay selection and SOCKS need upstream Iroh support. A relay mode set
+  after `DefaultPreset` keeps the proxy chosen for the default relays. Review
+  HTTP requests owned by Iroh's DNS-over-HTTPS resolver separately. Iroh-relay
+  1.4.1 logs the proxy username and the CONNECT request, including its Basic
+  credentials, at debug level; report upstream and advise filtering meanwhile.
 
 - [ ] **Deferred: shared proxy routing for embedded template Git downloads.**
   On hold pending an upstream safe transport hook; do not pursue `git2-rs`
@@ -466,7 +468,8 @@ Unless marked reproduced, implementation findings are based on source review.
   and SOCKS5, with redacted diagnostics and lossless credential encoding.
   Reqwest 0.13.5 `Proxy::basic_auth` writes credentials through URL setters;
   test literal percent escapes as well as `@`, `:`, and non-ASCII characters.
-  Keep proxy authentication separate from the service bearer token.
+  Keep proxy authentication separate from the service bearer token. Iroh's
+  relay proxy accepts credentials only as URL userinfo; re-encode them there.
 
 - [ ] **Expose proxy headers and explicit HTTP proxy authorization.**
   Curl's `--proxy-header` maps to reqwest's `Proxy::headers` and
