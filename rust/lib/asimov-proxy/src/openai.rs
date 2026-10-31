@@ -15,7 +15,10 @@
 //! # }
 //! ```
 
-use crate::{BodyLogger, Error, ProxyConfig, proxy_connector::ProxyConnector};
+use crate::{
+    BodyLogger, Error, ProxyConfig,
+    proxy_connector::{ConnectTimeout, ProxyConnector},
+};
 use alloc::{format, string::String, sync::Arc, vec::Vec};
 use axum::{
     Router,
@@ -37,7 +40,15 @@ const DEFAULT_MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
 /// The upstream HTTP client: a hyper client speaking rustls-based TLS to the
 /// target, over a connection that is either direct or tunneled through a
 /// proxy (see the `proxy_connector` module).
-type UpstreamClient = Client<HttpsConnector<ProxyConnector>, Full<Bytes>>;
+type UpstreamClient = Client<ConnectTimeout<HttpsConnector<ProxyConnector>>, Full<Bytes>>;
+
+/// Builds the upstream client, bounding each connection by `connect_limit`.
+fn upstream_client(
+    connector: HttpsConnector<ProxyConnector>,
+    connect_limit: Duration,
+) -> UpstreamClient {
+    Client::builder(TokioExecutor::new()).build(ConnectTimeout::new(connector, connect_limit))
+}
 
 /// Transport, resource limits, and optional logging for a [`Proxy`].
 #[derive(Clone)]
@@ -49,6 +60,8 @@ pub struct ProxyOptions {
     /// Deadline for upstream response headers; defaults to 120 seconds.
     ///
     /// Includes connection establishment, but does not limit response streaming.
+    /// Each connection, including one Hyper finishes in the background for its
+    /// pool, is also limited separately to this duration.
     pub upstream_timeout: Duration,
     /// Optional request and response body log; disabled by default.
     pub logger: Option<BodyLogger>,
@@ -116,7 +129,7 @@ impl Proxy {
             .https_only()
             .enable_http1()
             .wrap_connector(connector);
-        let client = Client::builder(TokioExecutor::new()).build(https_connector);
+        let client = upstream_client(https_connector, options.upstream_timeout);
 
         Ok(Self {
             state: ProxyState {
@@ -392,7 +405,7 @@ mod tests {
         let log_path = root.path().join("bodies.log");
         let proxy = Proxy {
             state: ProxyState {
-                client: Client::builder(TokioExecutor::new()).build(connector),
+                client: upstream_client(connector, Duration::from_secs(2)),
                 upstream_base_url: format!("http://{upstream_address}/api"),
                 authorization: authorization_header("test-key").unwrap(),
                 logger: Some(BodyLogger::open(&log_path).unwrap()),

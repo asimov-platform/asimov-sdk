@@ -67,7 +67,7 @@ fn fixture(target: &url::Url, config: ProxyConfig) -> Result<Proxy, Error> {
         .wrap_connector(connector);
     Ok(Proxy {
         state: ProxyState {
-            client: Client::builder(TokioExecutor::new()).build(connector),
+            client: upstream_client(connector, Duration::from_secs(3)),
             upstream_base_url: target.as_str().into(),
             authorization: authorization_header("service-key")?,
             logger: None,

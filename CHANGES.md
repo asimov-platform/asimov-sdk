@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - asimov-cloud: Bound account balance requests with connect and read limits
 - asimov-protocol: Pkarr requests through SOCKS4 proxies keep the endpoint's
   DNS resolver
+- asimov-proxy: Limit every upstream connection, including ones completed in
+  the background, by the upstream timeout
 - asimov-module: Read configuration values through symlinked configuration,
   profile, and module directories; value files still cannot escape theirs
 

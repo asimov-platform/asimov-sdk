@@ -11,6 +11,7 @@ use core::{
     future::Future,
     pin::Pin,
     task::{Context, Poll},
+    time::Duration,
 };
 use hyper::Uri;
 use rustls::pki_types::ServerName;
@@ -156,6 +157,50 @@ impl Service<Uri> for ProxyConnector {
     }
 }
 
+/// Bounds connection establishment by an inner connector, including TLS.
+///
+/// Hyper's pooled client may finish a started connection in the background
+/// once another request frees an idle one, without any request deadline. This
+/// limit therefore applies to every stage: TCP, proxy TLS, the CONNECT or
+/// SOCKS handshake, and target TLS. Expiry drops, and so closes, the socket.
+#[derive(Clone)]
+pub(crate) struct ConnectTimeout<C> {
+    inner: C,
+    limit: Duration,
+}
+
+impl<C> ConnectTimeout<C> {
+    pub fn new(inner: C, limit: Duration) -> Self {
+        Self { inner, limit }
+    }
+}
+
+impl<C> Service<Uri> for ConnectTimeout<C>
+where
+    C: Service<Uri>,
+    C::Error: Into<BoxError>,
+    C::Future: Send + 'static,
+{
+    type Response = C::Response;
+    type Error = BoxError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx).map_err(Into::into)
+    }
+
+    fn call(&mut self, dst: Uri) -> Self::Future {
+        let connecting = self.inner.call(dst);
+        let limit = self.limit;
+        Box::pin(async move {
+            match tokio::time::timeout(limit, connecting).await {
+                Ok(result) => result.map_err(Into::into),
+                Err(_) => Err("upstream connection timed out".into()),
+            }
+        })
+    }
+}
+
 /// Performs an HTTP/1.1 `CONNECT` handshake over `stream`, returning the
 /// stream once the tunnel to `host:port` is established.
 async fn http_connect<S>(
@@ -215,6 +260,57 @@ where
 mod tests {
     use super::*;
     use alloc::string::String;
+
+    #[tokio::test]
+    async fn connect_deadline_closes_stalled_proxy_handshakes() {
+        let target = url::Url::parse("https://service.invalid/").unwrap();
+        let tls = Arc::new(
+            rustls::ClientConfig::builder_with_provider(Arc::new(
+                rustls::crypto::ring::default_provider(),
+            ))
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_root_certificates(rustls::RootCertStore::empty())
+            .with_no_client_auth(),
+        );
+        for stage in ["CONNECT", "proxy TLS", "SOCKS"] {
+            // The proxy accepts and reads, but never replies.
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let host = String::from("127.0.0.1");
+            let config = match stage {
+                "SOCKS" => ProxyConfig::Socks5 {
+                    host,
+                    port,
+                    auth: None,
+                    remote_dns: true,
+                },
+                _ => ProxyConfig::HttpConnect {
+                    host,
+                    port,
+                    tls: stage == "proxy TLS",
+                    basic_auth: None,
+                },
+            };
+            let connector = ProxyConnector::new(&target, config, Arc::clone(&tls)).unwrap();
+            let mut connector = ConnectTimeout::new(connector, Duration::from_millis(100));
+            let proxy = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = [0; 1024];
+                while socket.read(&mut buffer).await.unwrap() > 0 {}
+            });
+            let connecting = connector.call("https://service.invalid/".parse().unwrap());
+            let result = tokio::time::timeout(Duration::from_secs(2), connecting)
+                .await
+                .unwrap_or_else(|_| panic!("{stage}: the deadline must fire"));
+            assert!(result.is_err(), "{stage}");
+            // Expiry must close the socket, ending the proxy's read loop.
+            tokio::time::timeout(Duration::from_secs(2), proxy)
+                .await
+                .unwrap_or_else(|_| panic!("{stage}: the socket must close"))
+                .unwrap();
+        }
+    }
 
     #[tokio::test]
     async fn connect_tunnels_authenticate_and_format_ipv6_authorities() {
