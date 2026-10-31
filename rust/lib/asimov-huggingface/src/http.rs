@@ -3,7 +3,6 @@
 use crate::{HuggingfaceError as Error, Result};
 use alloc::{collections::VecDeque, format};
 use asimov_http::proxy::{OriginProxy, ProxyOptions};
-use core::time::Duration;
 use hf_hub::{Cache, Repo};
 use reqwest::{
     Response, StatusCode, Url,
@@ -138,15 +137,14 @@ impl Client {
             return Ok(client);
         }
         let proxy = OriginProxy::resolve(url, &ProxyOptions::default())?;
-        let builder = reqwest::Client::builder()
+        let client = proxy
+            .client_builder()?
             .user_agent("ASIMOV.rs")
-            .connect_timeout(Duration::from_secs(10))
-            .read_timeout(Duration::from_secs(30))
             .no_gzip()
             .no_brotli()
             .no_deflate()
-            .no_zstd();
-        let client = proxy.configure_reqwest(builder)?.build()?;
+            .no_zstd()
+            .build()?;
         if self.origins.len() == 16 {
             self.origins.pop_front();
         }

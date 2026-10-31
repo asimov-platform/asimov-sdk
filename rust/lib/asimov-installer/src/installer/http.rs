@@ -6,7 +6,7 @@
 use super::error::HttpError;
 use alloc::{collections::VecDeque, sync::Arc};
 use asimov_http::proxy::{OriginProxy, ProxyOptions};
-use core::{fmt, time::Duration};
+use core::fmt;
 use reqwest::{Method, Response, StatusCode, Url, header::LOCATION};
 use std::sync::Mutex;
 
@@ -126,11 +126,10 @@ impl Client {
 
         let proxy = OriginProxy::resolve(url, &ProxyOptions::default())?;
         // TODO: retry support
-        let builder = reqwest::Client::builder()
+        let client = proxy
+            .client_builder()?
             .user_agent("asimov-module-installer")
-            .connect_timeout(Duration::from_secs(10))
-            .read_timeout(Duration::from_secs(30));
-        let client = proxy.configure_reqwest(builder)?.build()?;
+            .build()?;
         if origins.len() == MAX_ORIGINS {
             origins.pop_front();
         }

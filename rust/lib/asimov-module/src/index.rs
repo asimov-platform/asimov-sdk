@@ -3,7 +3,6 @@
 use crate::ModuleManifest;
 use alloc::{string::String, vec::Vec};
 use asimov_http::proxy::{OriginProxy, ProxyOptions};
-use core::time::Duration;
 use thiserror::Error;
 
 /// The URL of the public index of ASIMOV modules, in JSONL format.
@@ -36,11 +35,10 @@ impl Index {
         let url = reqwest::Url::parse(url)
             .map_err(|_| asimov_http::proxy::Error::InvalidOrigin("expected an absolute URL"))?;
         let proxy = OriginProxy::resolve(&url, &ProxyOptions::default())?;
-        let builder = reqwest::Client::builder()
+        let client = proxy
+            .client_builder()?
             .user_agent("asimov-module-registry")
-            .connect_timeout(Duration::from_secs(10))
-            .read_timeout(Duration::from_secs(30));
-        let client = proxy.configure_reqwest(builder)?.build()?;
+            .build()?;
 
         // Use the exact URL whose origin-scoped proxy policy was resolved.
         Self::fetch_from(&client, url.as_str()).await
