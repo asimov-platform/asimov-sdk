@@ -380,3 +380,39 @@ async fn origin_scoped_configuration_disables_redirects() {
     );
     timeout(DEADLINE, task).await.unwrap().unwrap();
 }
+
+#[tokio::test]
+async fn client_builder_limits_stalled_reads() {
+    for respond in [false, true] {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
+        let options = ProxyOptions {
+            mode: ProxyMode::Direct,
+            no_proxy: None,
+        };
+        let policy = OriginProxy::resolve(&url, &options).unwrap();
+        let client = policy
+            .client_builder_with(DEADLINE, Duration::from_millis(50))
+            .unwrap()
+            .build()
+            .unwrap();
+        let task = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            let mut io: Stream = Box::new(socket);
+            headers(&mut io).await;
+            if respond {
+                io.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n")
+                    .await
+                    .unwrap();
+            }
+            core::future::pending::<()>().await;
+        });
+        let result = timeout(DEADLINE, async {
+            client.get(url).send().await?.bytes().await
+        })
+        .await
+        .expect("the read limit must fire");
+        task.abort();
+        assert!(result.unwrap_err().is_timeout(), "headers sent: {respond}");
+    }
+}

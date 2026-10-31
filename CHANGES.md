@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+### Added
+- asimov-http: `OriginProxy::client_builder` for origin-scoped reqwest
+  clients with standard connect and read limits
 ### Fixed
 - asimov-module: Read configuration values through symlinked configuration,
   profile, and module directories; value files still cannot escape theirs

@@ -4,7 +4,14 @@
 
 use super::{OriginProxy, system::Configuration};
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::time::Duration;
 use reqwest::{ClientBuilder, NoProxy, Proxy};
+
+/// The connect limit of [`OriginProxy::client_builder`].
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The per-read limit of [`OriginProxy::client_builder`].
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
 impl OriginProxy {
     /// Installs this origin's proxy policy on a reqwest builder (`reqwest`).
@@ -39,6 +46,33 @@ impl OriginProxy {
         builder: ClientBuilder,
     ) -> Result<ClientBuilder, reqwest::Error> {
         apply(builder, &self.configuration)
+    }
+
+    /// Starts a reqwest client builder for this origin with standard limits.
+    ///
+    /// Connecting may take 10 seconds and each read, including the wait for
+    /// response headers, 30 seconds; there is no total limit. This policy is
+    /// installed via [`Self::configure_reqwest`], whose origin restriction
+    /// applies. Callers may add a user agent, decoding preferences, or a total
+    /// `timeout`, but must not change proxy or redirect settings.
+    ///
+    /// # Errors
+    ///
+    /// Returns reqwest's error if the selected endpoint cannot configure a proxy.
+    pub fn client_builder(&self) -> Result<ClientBuilder, reqwest::Error> {
+        self.client_builder_with(CONNECT_TIMEOUT, READ_TIMEOUT)
+    }
+
+    fn client_builder_with(
+        &self,
+        connect: Duration,
+        read: Duration,
+    ) -> Result<ClientBuilder, reqwest::Error> {
+        self.configure_reqwest(
+            ClientBuilder::new()
+                .connect_timeout(connect)
+                .read_timeout(read),
+        )
     }
 }
 
